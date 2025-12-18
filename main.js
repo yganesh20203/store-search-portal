@@ -1,82 +1,109 @@
 // Global State
-let userEmail = "";
 let accessToken = ""; 
-let tokenClient;
 
-// 1. Initialize the Token Client (run this immediately)
-function initTokenClient() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CONFIG.CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.readonly',
-        callback: (response) => {
-            if (response.error !== undefined) {
-                throw (response);
-            }
-            console.log("Access Token Received!");
-            accessToken = response.access_token;
-            
-            // UI Update: Hide Auth, Show Dashboard
-            document.getElementById("auth-overlay").classList.add("hidden");
-            document.getElementById("dashboard").classList.remove("hidden");
-            
-            // Ready to work!
-            console.log("Ready to fetch files.");
-        },
-    });
-}
+// 1. Unlock and Login Function
+async function unlockAndLogin() {
+    // Get the password the user typed
+    const userPass = document.getElementById("access-key").value;
+    const errorMsg = document.getElementById("error-msg");
+    const btn = document.querySelector("button");
 
-// 2. Handle the "Identity" Login (The Zero-Click part)
-function handleCredentialResponse(response) {
-    const responsePayload = decodeJwtResponse(response.credential);
-    userEmail = responsePayload.email;
-    document.getElementById("user-info").innerText = `User: ${userEmail}`;
-    
-    // After we know WHO they are, we ask for PERMISSION (Access Token)
-    // We cannot auto-trigger this without a user click due to browser popup blockers.
-    // So we change the overlay text to ask for a click.
-    document.querySelector("#auth-overlay h1").innerText = "Welcome, " + responsePayload.given_name;
-    document.querySelector("#auth-overlay p").innerText = "Click below to grant Drive access.";
-    
-    // Create a button dynamically to trigger the permission popup
-    let btn = document.createElement("button");
-    btn.innerText = "Connect to Google Drive";
-    btn.onclick = () => tokenClient.requestAccessToken();
-    btn.style.padding = "10px 20px";
-    btn.style.fontSize = "16px";
-    btn.style.marginTop = "20px";
-    
-    // Replace the old Google button with our new Permission button
-    const container = document.getElementById("auth-overlay");
-    const oldBtn = document.getElementById("g_id_onload");
-    if(oldBtn) oldBtn.remove(); // Clean up
-    container.appendChild(btn);
-}
+    if(!userPass) return;
 
-// 3. JWT Decoder Helper
-function decodeJwtResponse(token) {
-    var base64Url = token.split('.')[1];
-    var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
-}
+    btn.innerText = "Unlocking...";
 
-// 4. Load Sections (Placeholder for now)
-function loadSection(section) {
-    console.log("Loading section:", section);
-    const content = document.getElementById("content-area");
-    content.innerHTML = `<h3>Active Section: ${section}</h3><p>Engine not connected yet.</p>`;
-}
-
-// Wait for window load to init the token client logic
-window.onload = function() {
-    // We can't init the client until the Google Script is loaded.
-    // Usually it loads fast, but robust apps check for 'google' object.
-    const checkGoogle = setInterval(() => {
-        if (typeof google !== 'undefined') {
-            clearInterval(checkGoogle);
-            initTokenClient();
+    try {
+        // Ensure CONFIG is loaded
+        if (typeof CONFIG === 'undefined') {
+            throw new Error("Config file not loaded. Check connection.");
         }
-    }, 100);
+
+        // --- DECRYPTION STEP ---
+        // We use the password to unlock the hidden string in config.js
+        const bytes = CryptoJS.AES.decrypt(CONFIG.ENCRYPTED_CREDS, userPass);
+        const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+
+        // If the password was wrong, the result will be empty
+        if (!decryptedString) {
+            throw new Error("Incorrect Access Key");
+        }
+
+        // Parse the hidden JSON data
+        const creds = JSON.parse(decryptedString);
+        if (creds.type !== "service_account") {
+            throw new Error("Invalid Credentials Data");
+        }
+
+        console.log("Decryption Successful. Authenticating...");
+
+        // --- AUTHENTICATION STEP ---
+        // Generate a Google Token using the service account keys
+        accessToken = await generateAccessToken(creds);
+        
+        // --- SUCCESS UI ---
+        document.getElementById("auth-overlay").classList.add("hidden");
+        document.getElementById("dashboard").classList.remove("hidden");
+
+    } catch (e) {
+        console.error(e);
+        if(errorMsg) {
+            errorMsg.innerText = "Error: " + (e.message || "Unknown error");
+            errorMsg.style.display = "block";
+        }
+        btn.innerText = "Unlock & Connect";
+        document.getElementById("access-key").value = ""; 
+    }
+}
+
+// 2. Helper: Exchange Service Account for Token
+// This manually signs a JWT to get an access token from Google
+async function generateAccessToken(creds) {
+    const header = { alg: "RS256", typ: "JWT" };
+    const now = Math.floor(Date.now() / 1000);
+    const claim = {
+        iss: creds.client_email,
+        scope: "https://www.googleapis.com/auth/drive.readonly",
+        aud: "https://oauth2.googleapis.com/token",
+        exp: now + 3600,
+        iat: now
+    };
+
+    const sHeader = JSON.stringify(header);
+    const sClaim = JSON.stringify(claim);
+    const sJWS = KJUR.jws.JWS.sign(null, sHeader, sClaim, creds.private_key);
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${sJWS}`
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error_description);
+    return data.access_token;
+}
+
+// 3. Test Function (Click the "Test Connection" button to run this)
+async function testDriveConnection() {
+    const contentDiv = document.getElementById("content-area");
+    contentDiv.innerHTML = "Querying Google Drive...";
+    
+    try {
+        const response = await fetch("https://www.googleapis.com/drive/v3/files?pageSize=5", {
+            headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        const data = await response.json();
+        
+        let html = "<h3>Drive Connection Successful!</h3><ul>";
+        if(data.files) {
+            data.files.forEach(file => {
+                html += `<li>📄 ${file.name} (ID: ${file.id})</li>`;
+            });
+        }
+        html += "</ul>";
+        contentDiv.innerHTML = html;
+        
+    } catch (e) {
+        contentDiv.innerHTML = `<p style="color:red">Connection Failed: ${e.message}</p>`;
+    }
 }
