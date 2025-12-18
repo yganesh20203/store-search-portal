@@ -7,5 +7,5 @@ const CONFIG = {
     // API_KEY: "YOUR_API_KEY_HERE", 
 
     // 3. The exact folder ID where your data lives (we will need this later)
-    ROOT_FOLDER_ID: "THE_ID_FROM_YOUR_DRIVE_URL" 
+    ROOT_FOLDER_ID: "https://drive.google.com/drive/folders/1jguubICcAtMijiaNETV7B35G2YZlyM5O" 
 };
