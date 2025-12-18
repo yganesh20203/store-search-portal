@@ -3,69 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Store & Member Search Portal</title>
+    <title>Store Portal</title>
     <link rel="stylesheet" href="styles.css">
     
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
 
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
 </head>
 <body>
 
     <div id="app-container">
         <div id="auth-overlay">
             <h1>Internal Data Portal</h1>
-            <p id="status-text">Please Sign In to Access Data</p>
+            <p>Enter the Team Access Key to unlock data.</p>
             
-            <div id="g_id_onload"
-                 data-context="signin"
-                 data-ux_mode="popup"
-                 data-callback="handleCredentialResponse"
-                 data-auto_select="false" 
-                 data-itp_support="true"
-                 data-use_fedcm_for_prompt="false">
+            <div class="login-box">
+                <input type="password" id="access-key" placeholder="Enter Access Key..." />
+                <button onclick="unlockAndLogin()">Unlock & Connect</button>
+                <p id="error-msg" style="color: red; display: none;"></p>
             </div>
-
-            <div class="g_id_signin"
-                 data-type="standard"
-                 data-shape="rectangular"
-                 data-theme="outline"
-                 data-text="signin_with"
-                 data-size="large"
-                 data-logo_alignment="left">
-            </div>
-
         </div>
 
         <div id="dashboard" class="hidden">
             <header>
                 <h2>Store Search App</h2>
-                <div id="user-info"></div>
+                <div id="user-info">Service Account Connected</div>
             </header>
             
             <main>
-                <button onclick="loadSection('sales')">📂 Search Store Reports</button>
-                <button onclick="loadSection('members')">👥 Search Member DB</button>
-                
-                <div id="content-area"></div>
+                <div class="control-panel">
+                    <button onclick="testDriveConnection()">📂 Test Drive Connection</button>
+                </div>
+                <div id="content-area">Ready to load data.</div>
             </main>
         </div>
     </div>
 
     <script src="config.js"></script>
     <script src="main.js"></script>
-
-    <script>
-        window.onload = function() {
-            const checkConfig = setInterval(() => {
-                if (typeof CONFIG !== 'undefined') {
-                    clearInterval(checkConfig);
-                    // Dynamically set the Client ID from config.js
-                    const googleDiv = document.getElementById('g_id_onload');
-                    googleDiv.setAttribute('data-client_id', CONFIG.CLIENT_ID);
-                }
-            }, 100);
-        }
-    </script>
 </body>
 </html>
