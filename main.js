@@ -6,6 +6,7 @@ let currentMonthFolderId = "";
 let currentReportData = []; // Raw Data
 let currentSortColumn = ""; // Which column is currently sorted
 let currentSortOrder = "asc"; // "asc" or "desc"
+let currentDisplayData = [];
 
 // ==========================================
 // 2. AUTHENTICATION
