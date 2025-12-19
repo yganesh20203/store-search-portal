@@ -5,36 +5,35 @@ import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0
 // ==========================================
 let accessToken = ""; 
 let currentMonthFolderId = "";
-let db = null; // DuckDB Instance
-let conn = null; // DuckDB Connection
-let currentTableName = "current_data"; // Table name in SQL
+let db = null; 
+let conn = null; 
+let currentTableName = "current_data"; 
 
-// Attach functions to window so HTML buttons can see them
+// Attach to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
+window.loadTrackerDashboard = loadTrackerDashboard; 
 window.findAndLoadReport = findAndLoadReport;
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
 window.closeModal = closeModal;
+window.summarizeData = summarizeData; // NEW
 
 // ==========================================
-// 2. INITIALIZE DUCKDB (The Engine)
+// 2. INITIALIZE DUCKDB
 // ==========================================
 async function initDuckDB() {
-    if (db) return; // Already loaded
+    if (db) return; 
     console.log("Initializing DuckDB...");
-    
     try {
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-        
         const worker = await duckdb.createWorker(bundle.mainWorker);
         const logger = new duckdb.ConsoleLogger();
         db = new duckdb.AsyncDuckDB(logger, worker);
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
         conn = await db.connect();
-        
         console.log("🦆 DuckDB Ready!");
     } catch (e) {
         console.error("DuckDB Init Failed:", e);
@@ -66,7 +65,6 @@ async function unlockAndLogin() {
         document.getElementById("auth-overlay").classList.add("hidden");
         document.getElementById("dashboard").classList.remove("hidden");
         
-        // Start DuckDB in background
         initDuckDB();
 
     } catch (e) {
@@ -104,15 +102,21 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 4. DASHBOARD LOGIC
+// 4. DASHBOARD SWITCHING
 // ==========================================
 
-async function loadSalesDashboard() {
-    document.getElementById("sales-ui").classList.remove("hidden");
+function resetUI() {
+    document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
+    document.getElementById("tracker-ui").classList.add("hidden");
     document.getElementById("filter-box").classList.add("hidden");
     document.getElementById("content-area").innerHTML = "";
+    document.getElementById("sheet-link-container").innerHTML = "";
+}
 
+async function loadSalesDashboard() {
+    resetUI();
+    document.getElementById("sales-ui").classList.remove("hidden");
     const listContainer = document.getElementById("month-list");
     listContainer.innerHTML = "Loading...";
 
@@ -146,18 +150,13 @@ function selectMonth(folderId, btnElement) {
     btnElement.classList.add("active");
     document.getElementById("store-search-box").classList.remove("hidden");
     document.getElementById("content-area").innerHTML = "";
-    document.getElementById("filter-box").classList.add("hidden");
 }
 
-// Load MEMBER Dashboard (Parquet Files)
 async function loadMemberDashboard() {
+    resetUI();
     document.getElementById("member-ui").classList.remove("hidden");
-    document.getElementById("sales-ui").classList.add("hidden");
-    document.getElementById("filter-box").classList.add("hidden");
-    document.getElementById("content-area").innerHTML = "";
-
     const listContainer = document.getElementById("member-file-list");
-    listContainer.innerHTML = "Loading Files...";
+    listContainer.innerHTML = "Loading...";
 
     const query = `'${CONFIG.MEMBERS_FOLDER_ID}' in parents and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
@@ -173,65 +172,107 @@ async function loadMemberDashboard() {
                 btn.className = "folder-btn";
                 btn.style.background = "#d1e7dd"; 
                 btn.innerText = "📦 " + file.name; 
-                btn.onclick = () => loadParquetFile(file.id, file.name);
+                btn.onclick = () => loadFileIntoDuckDB(file.id, file.name, 'parquet');
                 listContainer.appendChild(btn);
             });
         } else {
-            listContainer.innerHTML = "No files found in Member DB.";
+            listContainer.innerHTML = "No files found.";
         }
     } catch (e) {
         listContainer.innerHTML = "Error: " + e.message;
     }
 }
 
+// --- TRACKER DASHBOARD (UPDATED) ---
+async function loadTrackerDashboard() {
+    resetUI();
+    document.getElementById("tracker-ui").classList.remove("hidden");
+    const listContainer = document.getElementById("tracker-file-list");
+    
+    // Load from Config instead of API
+    listContainer.innerHTML = "";
+    
+    if (CONFIG.TRACKER_SHEETS && CONFIG.TRACKER_SHEETS.length > 0) {
+        CONFIG.TRACKER_SHEETS.forEach(sheet => {
+            const btn = document.createElement("button");
+            btn.className = "folder-btn";
+            btn.style.background = "#fff3cd"; 
+            btn.innerText = "📊 " + sheet.name; 
+            btn.onclick = () => loadFileIntoDuckDB(sheet.id, sheet.name, 'sheet');
+            listContainer.appendChild(btn);
+        });
+    } else {
+        listContainer.innerHTML = "No sheets configured in config.js";
+    }
+}
+
+
 // ==========================================
-// 5. PARQUET & CSV LOADING (Dual Engine)
+// 5. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
-    // Logic for Sales CSV (Reuse CSV Parsing)
-    // For simplicity, we can route CSVs through DuckDB too!
-    alert("Please ensure Sales logic is using DuckDB or kept separate. Focus on Member DB for now.");
+    alert("Sales logic separate. Use Member/Trackers.");
 }
 
-async function loadParquetFile(fileId, fileName) {
+async function loadFileIntoDuckDB(fileId, fileName, type) {
     const statusDiv = document.getElementById("loading-status");
     document.getElementById("filter-box").classList.remove("hidden");
-    statusDiv.innerHTML = "⏳ Downloading file... (This may take a minute for 400MB)";
+    statusDiv.innerHTML = "⏳ Fetching Data...";
     document.getElementById("content-area").innerHTML = "";
+    
+    // Reset Buttons
+    document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
-        // 1. Download File as BLOB
-        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-            headers: { "Authorization": `Bearer ${accessToken}` }
-        });
+        let downloadUrl = "";
         
-        if (!response.ok) throw new Error("Download failed");
-
-        statusDiv.innerHTML = "💾 File Downloaded. Loading into DuckDB Engine...";
-        
-        // 2. Load into DuckDB
-        const arrayBuffer = await response.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        
-        // Register file in DuckDB virtual filesystem
-        await db.registerFileBuffer(fileName, uint8Array);
-        
-        // Create Table from Parquet
-        // DuckDB automatically detects Parquet vs CSV based on content/extension usually,
-        // but explicit is better. Assuming Parquet here.
-        if (fileName.endsWith('.parquet')) {
-             await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM parquet_scan('${fileName}')`);
+        if (type === 'sheet') {
+            // Sheets: Export as CSV
+            downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`;
+            
+            // --- ADD BUTTONS ---
+            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
+            document.getElementById("sheet-link-container").innerHTML = `
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <a href="${editUrl}" target="_blank" style="text-decoration:none;">
+                        <button style="background:#28a745; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                            ✏️ Open in Google Sheets
+                        </button>
+                    </a>
+                    <button onclick="window.summarizeData()" style="background:#6f42c1; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                        🤖 Summarize Info (AI)
+                    </button>
+                </div>`;
         } else {
-             // Fallback for CSV
-             await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
+            downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
         }
 
-        statusDiv.innerHTML = "✅ Data Ready! Rendering...";
-        
-        // 3. Setup UI
+        const response = await fetch(downloadUrl, {
+            headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+
+        if (!response.ok) throw new Error("Download failed");
+
+        if (type === 'sheet') {
+            const csvText = await response.text();
+            await db.registerFileText('live_sheet.csv', csvText);
+            await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('live_sheet.csv')`);
+        } else {
+            const arrayBuffer = await response.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            await db.registerFileBuffer(fileName, uint8Array);
+            
+            if (fileName.endsWith('.parquet')) {
+                 await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM parquet_scan('${fileName}')`);
+            } else {
+                 await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
+            }
+        }
+
+        statusDiv.innerHTML = "✅ Data Loaded!";
         await setupFilterDropdown();
-        await applyTableFilter(); // Initial Render
+        await applyTableFilter(); 
         statusDiv.innerHTML = "";
 
     } catch (e) {
@@ -240,17 +281,20 @@ async function loadParquetFile(fileId, fileName) {
     }
 }
 
+// --- NEW: AI SUMMARY FUNCTION ---
+function summarizeData() {
+    alert("🤖 AI Summary Module\n\nThis feature will be built in the next phase!\n\nIt will read the displayed data and provide key insights (Top Performers, Anomalies, Totals).");
+}
+
 // ==========================================
-// 6. SQL FILTERING & RENDERING
+// 6. SQL FILTERING & RENDERING (Shared)
 // ==========================================
 
 async function setupFilterDropdown() {
-    // Get Columns using SQL
     const schema = await conn.query(`DESCRIBE ${currentTableName}`);
     const dropdown = document.getElementById("column-select");
     dropdown.innerHTML = '<option value="all">All Columns</option>';
     
-    // Convert Apache Arrow result to array
     const rows = schema.toArray();
     rows.forEach(row => {
         const colName = row.column_name;
@@ -262,30 +306,22 @@ async function setupFilterDropdown() {
 }
 
 async function applyTableFilter() {
-    const filterText = document.getElementById("filter-input").value.replace(/'/g, "''"); // Escape quotes
+    const filterText = document.getElementById("filter-input").value.replace(/'/g, "''"); 
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
     
     let query = `SELECT * FROM ${currentTableName}`;
     
-    // Add WHERE clause if searching
     if (filterText) {
         if (column === "all") {
-            // This is harder in SQL without knowing all columns. 
-            // Simplified: Force user to pick a column OR just search the first few text columns?
-            // For stability, let's just warn if "All" is picked, or search a known text column.
-            // Better: Iterate columns and build "OR col LIKE"
-            // For now, let's stick to simple single column search or basic generic
-             query += ` WHERE CAST(Store_No AS VARCHAR) LIKE '%${filterText}%' OR CAST(Article_Description AS VARCHAR) LIKE '%${filterText}%'`;
+             // Search first text column as fallback
+             query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
         } else {
             query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
         }
     }
     
-    // Add Limit
-    if (limit !== "all") {
-        query += ` LIMIT ${limit}`;
-    }
+    if (limit !== "all") query += ` LIMIT ${limit}`;
 
     try {
         const result = await conn.query(query);
@@ -295,14 +331,12 @@ async function applyTableFilter() {
     }
 }
 
-let currentArrowData = null; // Store for modal
+let currentArrowData = null; 
 
 function renderTableFromArrow(arrowResult) {
     const container = document.getElementById("content-area");
-    
-    // Arrow Objects are complex, convert to simple JSON for rendering (LIMIT is low so this is fine)
     const rows = arrowResult.toArray().map(r => r.toJSON());
-    currentArrowData = rows; // Save for modal
+    currentArrowData = rows; 
 
     if (rows.length === 0) {
         container.innerHTML = "<p>No matches found.</p>";
@@ -310,7 +344,6 @@ function renderTableFromArrow(arrowResult) {
     }
 
     const headers = Object.keys(rows[0]);
-
     let html = `<table><thead><tr>`;
     headers.forEach(h => html += `<th>${h}</th>`);
     html += `</tr></thead><tbody>`;
@@ -318,37 +351,13 @@ function renderTableFromArrow(arrowResult) {
     rows.forEach((row, index) => {
         html += `<tr onclick="window.showRowDetails(${index})" title="Click details">`;
         headers.forEach(h => {
-             // Handle BigInt logic for arrow if needed
              let val = row[h];
              html += `<td>${val !== null ? val : ''}</td>`;
         });
         html += `</tr>`;
     });
     html += `</tbody></table>`;
-    
     container.innerHTML = html;
 }
 
-// Modal Logic
-window.showRowDetails = function(index) {
-    const rowData = currentArrowData[index];
-    const modalBody = document.getElementById("modal-body");
-    
-    let html = `<table class="detail-table"><tbody>`;
-    Object.keys(rowData).forEach(key => {
-        html += `<tr><th>${key}</th><td>${rowData[key]}</td></tr>`;
-    });
-    html += `</tbody></table>`;
-    modalBody.innerHTML = html;
-    document.getElementById("detail-modal").classList.remove("hidden");
-}
-
-function closeModal() {
-    document.getElementById("detail-modal").classList.add("hidden");
-}
-
-// Click outside close
-window.onclick = function(event) {
-    const modal = document.getElementById("detail-modal");
-    if (event.target == modal) closeModal();
-}
+window.showRowDetails = function
