@@ -69,13 +69,27 @@
                                 <option value="500">500 Rows</option>
                                 <option value="all">Show All</option>
                             </select>
-                            <span style="font-size: 12px; color: #666; margin-left: 10px;">*Click any table header below to Sort.</span>
+                            <span style="font-size: 12px; color: #666; margin-left: 10px;">*Click any table header below to Sort. Click a row to view details.</span>
                         </div>
                     </div>
                 </div>
 
                 <div id="content-area" style="margin-top: 20px; overflow-x: auto;"></div>
             </main>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📄 Row Details</h3>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="modal-body" class="modal-body">
+                </div>
+            <div class="modal-footer">
+                <button onclick="closeModal()">Close</button>
+            </div>
         </div>
     </div>
 
