@@ -144,8 +144,15 @@ async function loadSalesDashboard() {
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        const data = await response.json();
 
+        // --- NEW ERROR CHECKING LOGIC ---
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Google Error ${response.status}: ${errText}`);
+        }
+        // --------------------------------
+
+        const data = await response.json();
         const listContainer = document.getElementById("month-list");
         listContainer.innerHTML = ""; // Clear loading text
 
@@ -161,11 +168,16 @@ async function loadSalesDashboard() {
                 listContainer.appendChild(btn);
             });
         } else {
-            document.getElementById("content-area").innerHTML = "No Month folders found in the Sales directory.";
+            document.getElementById("content-area").innerHTML = `
+                <p>No Month folders found.</p>
+                <p style="font-size:12px; color: #666;">
+                   Troubleshoot: Ensure folder ID <b>${CONFIG.SALES_FOLDER_ID}</b> is correct and shared with 
+                   <b>analytics-fkw@analytics-fkw.iam.gserviceaccount.com</b>.
+                </p>`;
         }
     } catch (e) {
         console.error(e);
-        document.getElementById("content-area").innerHTML = "Error loading folders: " + e.message;
+        document.getElementById("content-area").innerHTML = `<span style="color:red">Error loading folders: ${e.message}</span>`;
     }
 }
 
