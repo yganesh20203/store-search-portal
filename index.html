@@ -6,7 +6,7 @@
     <title>Store Portal</title>
     <link rel="stylesheet" href="styles.css">
     
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
@@ -17,7 +17,6 @@
         <div id="auth-overlay">
             <h1>Internal Data Portal</h1>
             <p>Enter the Team Access Key to unlock data.</p>
-            
             <div class="login-box">
                 <input type="password" id="access-key" placeholder="Enter Access Key..." />
                 <button onclick="unlockAndLogin()">Unlock & Connect</button>
@@ -53,8 +52,8 @@
                         <h3>Step 3: Filter Data</h3>
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <label>Filter by:</label>
-                            <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-                                <option>Select Column...</option>
+                            <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; max-width: 200px;">
+                                <option value="all">All Columns</option>
                             </select>
                             <input type="text" id="filter-input" placeholder="Type to search..." onkeyup="applyTableFilter()" style="padding: 8px; flex-grow: 1;">
                         </div>
