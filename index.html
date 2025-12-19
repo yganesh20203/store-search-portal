@@ -41,13 +41,28 @@
                     <hr>
                     <div id="month-list" class="folder-grid">Loading Months...</div>
                     
-                    <div id="store-search-box" class="hidden" style="margin-top: 20px;">
-                        <input type="text" id="store-id-input" placeholder="Enter Store ID (e.g. 4702)">
-                        <button onclick="findAndLoadReport()">🔍 Search Report</button>
+                    <div id="store-search-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+                        <h3>Step 2: Load Report</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="store-id-input" placeholder="Enter Store ID (e.g. 4702)" style="padding: 8px;">
+                            <button onclick="findAndLoadReport()">🚀 Load Data</button>
+                        </div>
+                    </div>
+
+                    <div id="filter-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
+                        <h3>Step 3: Filter Data</h3>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label>Filter by:</label>
+                            <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                <option>Select Column...</option>
+                            </select>
+                            <input type="text" id="filter-input" placeholder="Type to search..." onkeyup="applyTableFilter()" style="padding: 8px; flex-grow: 1;">
+                        </div>
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">*Typing instantly filters the table below.</p>
                     </div>
                 </div>
 
-                <div id="content-area" style="margin-top: 20px;"></div>
+                <div id="content-area" style="margin-top: 20px; overflow-x: auto;"></div>
             </main>
         </div>
     </div>
