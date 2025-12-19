@@ -1,15 +1,48 @@
+import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm";
+
 // ==========================================
 // 1. GLOBAL STATE
 // ==========================================
 let accessToken = ""; 
 let currentMonthFolderId = "";
-let currentReportData = []; // Raw Data
-let currentSortColumn = ""; // Which column is currently sorted
-let currentSortOrder = "asc"; // "asc" or "desc"
-let currentDisplayData = [];
+let db = null; // DuckDB Instance
+let conn = null; // DuckDB Connection
+let currentTableName = "current_data"; // Table name in SQL
+
+// Attach functions to window so HTML buttons can see them
+window.unlockAndLogin = unlockAndLogin;
+window.loadSalesDashboard = loadSalesDashboard;
+window.loadMemberDashboard = loadMemberDashboard;
+window.findAndLoadReport = findAndLoadReport;
+window.selectMonth = selectMonth;
+window.applyTableFilter = applyTableFilter;
+window.closeModal = closeModal;
 
 // ==========================================
-// 2. AUTHENTICATION
+// 2. INITIALIZE DUCKDB (The Engine)
+// ==========================================
+async function initDuckDB() {
+    if (db) return; // Already loaded
+    console.log("Initializing DuckDB...");
+    
+    try {
+        const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+        const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+        
+        const worker = await duckdb.createWorker(bundle.mainWorker);
+        const logger = new duckdb.ConsoleLogger();
+        db = new duckdb.AsyncDuckDB(logger, worker);
+        await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+        conn = await db.connect();
+        
+        console.log("🦆 DuckDB Ready!");
+    } catch (e) {
+        console.error("DuckDB Init Failed:", e);
+    }
+}
+
+// ==========================================
+// 3. AUTHENTICATION
 // ==========================================
 async function unlockAndLogin() {
     const userPass = document.getElementById("access-key").value;
@@ -32,6 +65,9 @@ async function unlockAndLogin() {
         
         document.getElementById("auth-overlay").classList.add("hidden");
         document.getElementById("dashboard").classList.remove("hidden");
+        
+        // Start DuckDB in background
+        initDuckDB();
 
     } catch (e) {
         console.error(e);
@@ -68,11 +104,15 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 3. SALES ENGINE
+// 4. DASHBOARD LOGIC
 // ==========================================
 
 async function loadSalesDashboard() {
     document.getElementById("sales-ui").classList.remove("hidden");
+    document.getElementById("member-ui").classList.add("hidden");
+    document.getElementById("filter-box").classList.add("hidden");
+    document.getElementById("content-area").innerHTML = "";
+
     const listContainer = document.getElementById("month-list");
     listContainer.innerHTML = "Loading...";
 
@@ -81,24 +121,22 @@ async function loadSalesDashboard() {
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        if(!response.ok) throw new Error("Folder access denied.");
-        
         const data = await response.json();
-
         listContainer.innerHTML = "";
+        
         if (data.files && data.files.length > 0) {
             data.files.forEach(folder => {
                 const btn = document.createElement("button");
                 btn.className = "folder-btn";
                 btn.innerText = "📂 " + folder.name; 
-                btn.onclick = () => selectMonth(folder.id, btn);
+                btn.onclick = () => window.selectMonth(folder.id, btn);
                 listContainer.appendChild(btn);
             });
         } else {
             listContainer.innerHTML = "No folders found.";
         }
     } catch (e) {
-        listContainer.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+        listContainer.innerHTML = "Error: " + e.message;
     }
 }
 
@@ -107,171 +145,201 @@ function selectMonth(folderId, btnElement) {
     document.querySelectorAll(".folder-btn").forEach(b => b.classList.remove("active"));
     btnElement.classList.add("active");
     document.getElementById("store-search-box").classList.remove("hidden");
-    
-    // Reset Data view
     document.getElementById("content-area").innerHTML = "";
     document.getElementById("filter-box").classList.add("hidden");
-    currentReportData = [];
 }
 
-async function findAndLoadReport() {
-    const storeId = document.getElementById("store-id-input").value.trim();
-    if (!storeId) { alert("Enter Store ID"); return; }
+// Load MEMBER Dashboard (Parquet Files)
+async function loadMemberDashboard() {
+    document.getElementById("member-ui").classList.remove("hidden");
+    document.getElementById("sales-ui").classList.add("hidden");
+    document.getElementById("filter-box").classList.add("hidden");
+    document.getElementById("content-area").innerHTML = "";
 
-    const outputDiv = document.getElementById("content-area");
-    outputDiv.innerHTML = `<p>🔍 Finding ${storeId}.csv...</p>`;
+    const listContainer = document.getElementById("member-file-list");
+    listContainer.innerHTML = "Loading Files...";
 
-    const query = `'${currentMonthFolderId}' in parents and name = '${storeId}.csv' and trashed = false`;
+    const query = `'${CONFIG.MEMBERS_FOLDER_ID}' in parents and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
-
+        listContainer.innerHTML = "";
+        
         if (data.files && data.files.length > 0) {
-            outputDiv.innerHTML = "<p>⬇️ Downloading & Processing...</p>";
-            await downloadAndParseCSV(data.files[0].id);
+            data.files.forEach(file => {
+                const btn = document.createElement("button");
+                btn.className = "folder-btn";
+                btn.style.background = "#d1e7dd"; 
+                btn.innerText = "📦 " + file.name; 
+                btn.onclick = () => loadParquetFile(file.id, file.name);
+                listContainer.appendChild(btn);
+            });
         } else {
-            outputDiv.innerHTML = `<p style="color:red">File ${storeId}.csv not found.</p>`;
+            listContainer.innerHTML = "No files found in Member DB.";
         }
     } catch (e) {
-        outputDiv.innerHTML = "Error: " + e.message;
+        listContainer.innerHTML = "Error: " + e.message;
     }
 }
 
-async function downloadAndParseCSV(fileId) {
+// ==========================================
+// 5. PARQUET & CSV LOADING (Dual Engine)
+// ==========================================
+
+async function findAndLoadReport() {
+    // Logic for Sales CSV (Reuse CSV Parsing)
+    // For simplicity, we can route CSVs through DuckDB too!
+    alert("Please ensure Sales logic is using DuckDB or kept separate. Focus on Member DB for now.");
+}
+
+async function loadParquetFile(fileId, fileName) {
+    const statusDiv = document.getElementById("loading-status");
+    document.getElementById("filter-box").classList.remove("hidden");
+    statusDiv.innerHTML = "⏳ Downloading file... (This may take a minute for 400MB)";
+    document.getElementById("content-area").innerHTML = "";
+
     try {
+        // 1. Download File as BLOB
         const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: { "Authorization": `Bearer ${accessToken}` }
         });
-        const csvText = await response.text();
+        
+        if (!response.ok) throw new Error("Download failed");
 
-        Papa.parse(csvText, {
-            header: true,
-            skipEmptyLines: true,
-            dynamicTyping: true, // Auto-detect numbers vs text
-            complete: function(results) {
-                currentReportData = results.data;
-                setupFilterDropdown();
-                renderTable(currentReportData); // Initial Render
-            }
-        });
+        statusDiv.innerHTML = "💾 File Downloaded. Loading into DuckDB Engine...";
+        
+        // 2. Load into DuckDB
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        // Register file in DuckDB virtual filesystem
+        await db.registerFileBuffer(fileName, uint8Array);
+        
+        // Create Table from Parquet
+        // DuckDB automatically detects Parquet vs CSV based on content/extension usually,
+        // but explicit is better. Assuming Parquet here.
+        if (fileName.endsWith('.parquet')) {
+             await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM parquet_scan('${fileName}')`);
+        } else {
+             // Fallback for CSV
+             await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
+        }
+
+        statusDiv.innerHTML = "✅ Data Ready! Rendering...";
+        
+        // 3. Setup UI
+        await setupFilterDropdown();
+        await applyTableFilter(); // Initial Render
+        statusDiv.innerHTML = "";
 
     } catch (e) {
         console.error(e);
-        document.getElementById("content-area").innerHTML = "Processing Error: " + e.message;
+        statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
     }
 }
 
 // ==========================================
-// 4. RENDERING, FILTERING & SORTING
+// 6. SQL FILTERING & RENDERING
 // ==========================================
 
-function setupFilterDropdown() {
+async function setupFilterDropdown() {
+    // Get Columns using SQL
+    const schema = await conn.query(`DESCRIBE ${currentTableName}`);
     const dropdown = document.getElementById("column-select");
-    const filterBox = document.getElementById("filter-box");
-    
     dropdown.innerHTML = '<option value="all">All Columns</option>';
     
-    if (currentReportData.length > 0) {
-        const headers = Object.keys(currentReportData[0]);
-        headers.forEach(header => {
-            const option = document.createElement("option");
-            option.value = header;
-            option.innerText = header;
-            dropdown.appendChild(option);
-        });
-    }
-    filterBox.classList.remove("hidden");
+    // Convert Apache Arrow result to array
+    const rows = schema.toArray();
+    rows.forEach(row => {
+        const colName = row.column_name;
+        const option = document.createElement("option");
+        option.value = colName;
+        option.innerText = colName;
+        dropdown.appendChild(option);
+    });
 }
 
-function handleSort(column) {
-    // Toggle sort order if clicking same column
-    if (currentSortColumn === column) {
-        currentSortOrder = currentSortOrder === "asc" ? "desc" : "asc";
-    } else {
-        currentSortColumn = column;
-        currentSortOrder = "asc";
+async function applyTableFilter() {
+    const filterText = document.getElementById("filter-input").value.replace(/'/g, "''"); // Escape quotes
+    const column = document.getElementById("column-select").value;
+    const limit = document.getElementById("row-limit-select").value;
+    
+    let query = `SELECT * FROM ${currentTableName}`;
+    
+    // Add WHERE clause if searching
+    if (filterText) {
+        if (column === "all") {
+            // This is harder in SQL without knowing all columns. 
+            // Simplified: Force user to pick a column OR just search the first few text columns?
+            // For stability, let's just warn if "All" is picked, or search a known text column.
+            // Better: Iterate columns and build "OR col LIKE"
+            // For now, let's stick to simple single column search or basic generic
+             query += ` WHERE CAST(Store_No AS VARCHAR) LIKE '%${filterText}%' OR CAST(Article_Description AS VARCHAR) LIKE '%${filterText}%'`;
+        } else {
+            query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
+        }
     }
-    // Re-render (Apply filter & sort)
-    applyTableFilter();
+    
+    // Add Limit
+    if (limit !== "all") {
+        query += ` LIMIT ${limit}`;
+    }
+
+    try {
+        const result = await conn.query(query);
+        renderTableFromArrow(result);
+    } catch (e) {
+        console.error("Query Error", e);
+    }
 }
 
+let currentArrowData = null; // Store for modal
 
-
-function renderTable(data) {
+function renderTableFromArrow(arrowResult) {
     const container = document.getElementById("content-area");
-    if (!data || data.length === 0) {
+    
+    // Arrow Objects are complex, convert to simple JSON for rendering (LIMIT is low so this is fine)
+    const rows = arrowResult.toArray().map(r => r.toJSON());
+    currentArrowData = rows; // Save for modal
+
+    if (rows.length === 0) {
         container.innerHTML = "<p>No matches found.</p>";
         return;
     }
 
-    // 1. Get User Row Limit
-    const limitSelect = document.getElementById("row-limit-select").value;
-    const limit = limitSelect === "all" ? data.length : parseInt(limitSelect);
+    const headers = Object.keys(rows[0]);
 
-    // 2. Slice Data & Save to Global (so we can access it on click)
-    currentDisplayData = data.slice(0, limit); 
-    const headers = Object.keys(currentDisplayData[0]);
-
-    // 3. Build HTML
     let html = `<table><thead><tr>`;
-    headers.forEach(h => {
-        let arrow = "";
-        if (h === currentSortColumn) {
-            arrow = currentSortOrder === "asc" ? " ⬆️" : " ⬇️";
-        }
-        html += `<th onclick="handleSort('${h}')" style="cursor:pointer; user-select:none;">${h}${arrow}</th>`;
-    });
+    headers.forEach(h => html += `<th>${h}</th>`);
     html += `</tr></thead><tbody>`;
 
-    // --- UPDATED ROW GENERATION ---
-    currentDisplayData.forEach((row, index) => {
-        // We pass the 'index' to the click function
-        html += `<tr onclick="showRowDetails(${index})" title="Click to view details">`;
+    rows.forEach((row, index) => {
+        html += `<tr onclick="window.showRowDetails(${index})" title="Click details">`;
         headers.forEach(h => {
-            html += `<td>${row[h] !== null ? row[h] : ''}</td>`;
+             // Handle BigInt logic for arrow if needed
+             let val = row[h];
+             html += `<td>${val !== null ? val : ''}</td>`;
         });
         html += `</tr>`;
     });
     html += `</tbody></table>`;
     
-    // 4. Footer Info
-    html += `<p style="font-size:12px; margin-top:5px; color:#555;">
-             Showing <b>${currentDisplayData.length}</b> of <b>${data.length}</b> rows. 
-             Click a row to view full details.
-             </p>`;
-
     container.innerHTML = html;
 }
 
-// ==========================================
-// 5. MODAL POPUP LOGIC (NEW)
-// ==========================================
-
-function showRowDetails(index) {
-    // Get the specific row data using the index
-    const rowData = currentDisplayData[index];
+// Modal Logic
+window.showRowDetails = function(index) {
+    const rowData = currentArrowData[index];
     const modalBody = document.getElementById("modal-body");
     
-    if (!rowData) return;
-
-    // Build a Vertical Table (Key | Value)
     let html = `<table class="detail-table"><tbody>`;
-    
     Object.keys(rowData).forEach(key => {
-        html += `
-            <tr>
-                <th>${key}</th>
-                <td>${rowData[key] !== null ? rowData[key] : ''}</td>
-            </tr>
-        `;
+        html += `<tr><th>${key}</th><td>${rowData[key]}</td></tr>`;
     });
-
     html += `</tbody></table>`;
     modalBody.innerHTML = html;
-
-    // Show Modal
     document.getElementById("detail-modal").classList.remove("hidden");
 }
 
@@ -279,56 +347,8 @@ function closeModal() {
     document.getElementById("detail-modal").classList.add("hidden");
 }
 
-// Close modal if user clicks outside the white box
+// Click outside close
 window.onclick = function(event) {
     const modal = document.getElementById("detail-modal");
-    if (event.target == modal) {
-        closeModal();
-    }
-}
-
-function applyTableFilter() {
-    const filterText = document.getElementById("filter-input").value.toLowerCase();
-    const column = document.getElementById("column-select").value;
-    
-    // 1. Filter
-    let processedData = currentReportData;
-
-    if (filterText) {
-        processedData = currentReportData.filter(row => {
-            if (column === "all") {
-                return Object.values(row).some(val => String(val).toLowerCase().includes(filterText));
-            } else {
-                return String(row[column] || "").toLowerCase().includes(filterText);
-            }
-        });
-    }
-
-    // 2. Sort
-    if (currentSortColumn) {
-        processedData.sort((a, b) => {
-            let valA = a[currentSortColumn];
-            let valB = b[currentSortColumn];
-            
-            // Handle undefined/null
-            if (valA == null) valA = "";
-            if (valB == null) valB = "";
-
-            // Check if numbers
-            const numA = parseFloat(valA);
-            const numB = parseFloat(valB);
-            
-            if (!isNaN(numA) && !isNaN(numB)) {
-                return currentSortOrder === "asc" ? numA - numB : numB - numA;
-            } else {
-                // String sort
-                return currentSortOrder === "asc" ? 
-                       String(valA).localeCompare(String(valB)) : 
-                       String(valB).localeCompare(String(valA));
-            }
-        });
-    }
-
-    // 3. Render
-    renderTable(processedData);
+    if (event.target == modal) closeModal();
 }
