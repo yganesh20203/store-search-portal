@@ -33,9 +33,21 @@
             
             <main>
                 <div class="control-panel">
-                    <button onclick="testDriveConnection()">📂 Test Drive Connection</button>
+                    <button onclick="loadSalesDashboard()" class="nav-btn">📊 Sales Reports</button>
+                    <button onclick="alert('Coming in Phase 4!')" class="nav-btn">👥 Member DB</button>
                 </div>
-                <div id="content-area">Ready to load data.</div>
+                
+                <div id="sales-ui" class="hidden">
+                    <hr>
+                    <div id="month-list" class="folder-grid">Loading Months...</div>
+                    
+                    <div id="store-search-box" class="hidden" style="margin-top: 20px;">
+                        <input type="text" id="store-id-input" placeholder="Enter Store ID (e.g. 4702)">
+                        <button onclick="findAndLoadReport()">🔍 Search Report</button>
+                    </div>
+                </div>
+
+                <div id="content-area" style="margin-top: 20px;"></div>
             </main>
         </div>
     </div>
