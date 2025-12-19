@@ -18,7 +18,7 @@ window.findAndLoadReport = findAndLoadReport;
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
 window.closeModal = closeModal;
-window.summarizeData = summarizeData; // NEW
+window.summarizeData = summarizeData; 
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -82,7 +82,7 @@ async function generateAccessToken(creds) {
     const now = Math.floor(Date.now() / 1000);
     const claim = {
         iss: creds.client_email,
-        scope: "https://www.googleapis.com/auth/drive.readonly",
+        scope: "https://www.googleapis.com/auth/drive",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
         iat: now
@@ -183,13 +183,11 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- TRACKER DASHBOARD (UPDATED) ---
+// --- TRACKER DASHBOARD (WITH TABS SUPPORT) ---
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
     const listContainer = document.getElementById("tracker-file-list");
-    
-    // Load from Config instead of API
     listContainer.innerHTML = "";
     
     if (CONFIG.TRACKER_SHEETS && CONFIG.TRACKER_SHEETS.length > 0) {
@@ -198,11 +196,13 @@ async function loadTrackerDashboard() {
             btn.className = "folder-btn";
             btn.style.background = "#fff3cd"; 
             btn.innerText = "📊 " + sheet.name; 
-            btn.onclick = () => loadFileIntoDuckDB(sheet.id, sheet.name, 'sheet');
+            
+            // Pass the gid if it exists
+            btn.onclick = () => loadFileIntoDuckDB(sheet.id, sheet.name, 'sheet', sheet.gid);
             listContainer.appendChild(btn);
         });
     } else {
-        listContainer.innerHTML = "No sheets configured in config.js";
+        listContainer.innerHTML = "No sheets configured.";
     }
 }
 
@@ -215,24 +215,28 @@ async function findAndLoadReport() {
     alert("Sales logic separate. Use Member/Trackers.");
 }
 
-async function loadFileIntoDuckDB(fileId, fileName, type) {
+async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     const statusDiv = document.getElementById("loading-status");
     document.getElementById("filter-box").classList.remove("hidden");
     statusDiv.innerHTML = "⏳ Fetching Data...";
     document.getElementById("content-area").innerHTML = "";
-    
-    // Reset Buttons
     document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
         let downloadUrl = "";
         
         if (type === 'sheet') {
-            // Sheets: Export as CSV
-            downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`;
+            // Google Sheets: Export Specific Tab using GID
+            // Note: We use docs.google.com endpoint for specific tabs
+            if (gid) {
+                downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv&gid=${gid}`;
+            } else {
+                // Fallback to default (first sheet)
+                downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv`;
+            }
             
-            // --- ADD BUTTONS ---
-            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit`;
+            // Buttons
+            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${gid || 0}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
                     <a href="${editUrl}" target="_blank" style="text-decoration:none;">
@@ -281,13 +285,12 @@ async function loadFileIntoDuckDB(fileId, fileName, type) {
     }
 }
 
-// --- NEW: AI SUMMARY FUNCTION ---
 function summarizeData() {
-    alert("🤖 AI Summary Module\n\nThis feature will be built in the next phase!\n\nIt will read the displayed data and provide key insights (Top Performers, Anomalies, Totals).");
+    alert("🤖 AI Summary Module\n\nComing in Phase 5!");
 }
 
 // ==========================================
-// 6. SQL FILTERING & RENDERING (Shared)
+// 6. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown() {
@@ -314,7 +317,8 @@ async function applyTableFilter() {
     
     if (filterText) {
         if (column === "all") {
-             // Search first text column as fallback
+             // Fallback: search first column. True "Search All" in SQL requires building a huge OR statement.
+             // For now, we search column0 as a basic check.
              query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
         } else {
             query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
@@ -360,4 +364,23 @@ function renderTableFromArrow(arrowResult) {
     container.innerHTML = html;
 }
 
-window.showRowDetails = function
+window.showRowDetails = function(index) {
+    const rowData = currentArrowData[index];
+    const modalBody = document.getElementById("modal-body");
+    let html = `<table class="detail-table"><tbody>`;
+    Object.keys(rowData).forEach(key => {
+        html += `<tr><th>${key}</th><td>${rowData[key]}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    modalBody.innerHTML = html;
+    document.getElementById("detail-modal").classList.remove("hidden");
+}
+
+function closeModal() {
+    document.getElementById("detail-modal").classList.add("hidden");
+}
+
+window.onclick = function(event) {
+    const modal = document.getElementById("detail-modal");
+    if (event.target == modal) closeModal();
+}
