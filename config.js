@@ -1,14 +1,13 @@
 // config.js
 const CONFIG = {
-    // 1. Credentials (Keep existing)
+    // 1. Encrypted Credentials
     ENCRYPTED_CREDS: "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",
     
     // 2. Folder IDs
     SALES_FOLDER_ID: "1jguubICcAtMijiaNETV7B35G2YZlyM5O", 
     MEMBERS_FOLDER_ID: "1ViTdGxZu-mAMiUOyBCliV8uMNy30clNt",
 
-    // 3. TRACKERS LIST (Separate Entries for Each Tab)
-    // Note: Use the SAME 'id' (File ID) but different 'gid' (Tab ID)
+    // 3. TRACKERS LIST (Target Specific Tabs by gid)
     TRACKER_SHEETS: [
         { 
             name: "May 25", 
@@ -18,10 +17,10 @@ const CONFIG = {
         { 
             name: "June 25", 
             id: "1eYd1U5ooBjdgjwL3g4wWnUocNgnhaH6defIccVtx4CI", 
-            gid: "141081355" // The first tab is usually 0, check your URL to be sure
+            gid: "141081355" 
         },
         {
-            name: "July 24",
+            name: "July 25",
             id: "1eYd1U5ooBjdgjwL3g4wWnUocNgnhaH6defIccVtx4CI",
             gid: "1576983784"
         },
@@ -50,6 +49,5 @@ const CONFIG = {
             id: "1eYd1U5ooBjdgjwL3g4wWnUocNgnhaH6defIccVtx4CI",
             gid: "1616527984"
         }
-        // Add more tabs as needed...
     ]
 };
