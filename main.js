@@ -4,65 +4,45 @@
 let accessToken = ""; 
 let pyodide = null;
 let currentMonthFolderId = "";
+let currentReportData = []; // Store raw data here for fast filtering
 
 // ==========================================
-// 2. AUTHENTICATION & SECURITY (Phase 2)
+// 2. AUTHENTICATION (Phase 2)
 // ==========================================
-
-// Unlock and Login Function
 async function unlockAndLogin() {
     const userPass = document.getElementById("access-key").value;
-    const errorMsg = document.getElementById("error-msg");
     const btn = document.querySelector("button");
+    const errorMsg = document.getElementById("error-msg");
 
     if(!userPass) return;
-
     btn.innerText = "Unlocking...";
 
     try {
-        // Ensure CONFIG is loaded
-        if (typeof CONFIG === 'undefined') {
-            throw new Error("Config file not loaded. Check connection.");
-        }
+        if (typeof CONFIG === 'undefined') throw new Error("Config not loaded.");
 
-        // --- DECRYPTION STEP ---
         const bytes = CryptoJS.AES.decrypt(CONFIG.ENCRYPTED_CREDS, userPass);
         const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
 
-        if (!decryptedString) {
-            throw new Error("Incorrect Access Key");
-        }
+        if (!decryptedString) throw new Error("Incorrect Access Key");
 
-        // Parse the hidden JSON data
         const creds = JSON.parse(decryptedString);
-        if (creds.type !== "service_account") {
-            throw new Error("Invalid Credentials Data");
-        }
-
-        console.log("Decryption Successful. Authenticating...");
-
-        // --- AUTHENTICATION STEP ---
         accessToken = await generateAccessToken(creds);
         
-        // --- SUCCESS UI ---
         document.getElementById("auth-overlay").classList.add("hidden");
         document.getElementById("dashboard").classList.remove("hidden");
         
-        // Start loading Python immediately in background
-        initPyodideEngine();
+        initPyodideEngine(); // Start Python in background
 
     } catch (e) {
         console.error(e);
         if(errorMsg) {
-            errorMsg.innerText = "Error: " + (e.message || "Unknown error");
+            errorMsg.innerText = "Error: " + e.message;
             errorMsg.style.display = "block";
         }
         btn.innerText = "Unlock & Connect";
-        document.getElementById("access-key").value = ""; 
     }
 }
 
-// Helper: Exchange Service Account for Token
 async function generateAccessToken(creds) {
     const header = { alg: "RS256", typ: "JWT" };
     const now = Math.floor(Date.now() / 1000);
@@ -83,83 +63,39 @@ async function generateAccessToken(creds) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${sJWS}`
     });
-
     const data = await response.json();
-    if (data.error) throw new Error(data.error_description);
     return data.access_token;
 }
 
-// Test Function (Optional Debugging)
-async function testDriveConnection() {
-    const contentDiv = document.getElementById("content-area");
-    contentDiv.innerHTML = "Querying Google Drive...";
-    
-    try {
-        const response = await fetch("https://www.googleapis.com/drive/v3/files?pageSize=5", {
-            headers: { "Authorization": `Bearer ${accessToken}` }
-        });
-        const data = await response.json();
-        
-        let html = "<h3>Drive Connection Successful!</h3><ul>";
-        if(data.files) {
-            data.files.forEach(file => {
-                html += `<li>📄 ${file.name} (ID: ${file.id})</li>`;
-            });
-        }
-        html += "</ul>";
-        contentDiv.innerHTML = html;
-        
-    } catch (e) {
-        contentDiv.innerHTML = `<p style="color:red">Connection Failed: ${e.message}</p>`;
-    }
-}
-
 // ==========================================
-// 3. SALES ENGINE (Phase 3)
+// 3. SALES ENGINE (Phase 3 - OPTIMIZED)
 // ==========================================
 
-// A. Initialize Python Engine (Runs in background)
 async function initPyodideEngine() {
-    if (pyodide) return; // Already loaded
-    console.log("Starting Python initialization...");
+    if (pyodide) return;
     try {
         pyodide = await loadPyodide();
         await pyodide.loadPackage("pandas");
-        console.log("Python & Pandas Ready!");
+        console.log("Python Ready!");
     } catch (e) {
-        console.error("Failed to load Pyodide:", e);
+        console.error("Pyodide Load Failed", e);
     }
 }
 
-// B. Load the Sales Dashboard (List Months)
 async function loadSalesDashboard() {
-    // UI Reset
     document.getElementById("sales-ui").classList.remove("hidden");
-    document.getElementById("content-area").innerHTML = "Loading Folders...";
-    document.getElementById("month-list").innerHTML = "Loading...";
+    const listContainer = document.getElementById("month-list");
+    listContainer.innerHTML = "Loading...";
 
-    // Query Drive for folders inside SALES_FOLDER_ID
     const query = `'${CONFIG.SALES_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-
-        // --- NEW ERROR CHECKING LOGIC ---
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Google Error ${response.status}: ${errText}`);
-        }
-        // --------------------------------
-
         const data = await response.json();
-        const listContainer = document.getElementById("month-list");
-        listContainer.innerHTML = ""; // Clear loading text
 
+        listContainer.innerHTML = "";
         if (data.files && data.files.length > 0) {
-            document.getElementById("content-area").innerHTML = "<h3>Select a Month above to start.</h3>";
-            
-            // Create Buttons for each month
             data.files.forEach(folder => {
                 const btn = document.createElement("button");
                 btn.className = "folder-btn";
@@ -168,44 +104,27 @@ async function loadSalesDashboard() {
                 listContainer.appendChild(btn);
             });
         } else {
-            document.getElementById("content-area").innerHTML = `
-                <p>No Month folders found.</p>
-                <p style="font-size:12px; color: #666;">
-                   Troubleshoot: Ensure folder ID <b>${CONFIG.SALES_FOLDER_ID}</b> is correct and shared with 
-                   <b>analytics-fkw@analytics-fkw.iam.gserviceaccount.com</b>.
-                </p>`;
+            listContainer.innerHTML = "No folders found.";
         }
     } catch (e) {
-        console.error(e);
-        document.getElementById("content-area").innerHTML = `<span style="color:red">Error loading folders: ${e.message}</span>`;
+        listContainer.innerHTML = "Error: " + e.message;
     }
 }
 
-// C. User Selected a Month
 function selectMonth(folderId, btnElement) {
     currentMonthFolderId = folderId;
-    
-    // Visual Highlight logic
     document.querySelectorAll(".folder-btn").forEach(b => b.classList.remove("active"));
     btnElement.classList.add("active");
-
-    // Show Search Bar
     document.getElementById("store-search-box").classList.remove("hidden");
-    document.getElementById("content-area").innerHTML = "Folder Selected. Enter Store ID (e.g., 4702) to view report.";
 }
 
-// D. Find & Load the CSV Report
 async function findAndLoadReport() {
     const storeId = document.getElementById("store-id-input").value.trim();
-    if (!storeId) {
-        alert("Please enter a Store ID");
-        return;
-    }
+    if (!storeId) { alert("Enter Store ID"); return; }
 
     const outputDiv = document.getElementById("content-area");
-    outputDiv.innerHTML = `Searching for <b>${storeId}.csv</b>...`;
+    outputDiv.innerHTML = `<p>🔍 Finding ${storeId}.csv...</p>`;
 
-    // Search for file inside the SELECTED Month Folder
     const query = `'${currentMonthFolderId}' in parents and name = '${storeId}.csv' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
@@ -214,55 +133,141 @@ async function findAndLoadReport() {
         const data = await response.json();
 
         if (data.files && data.files.length > 0) {
-            const fileId = data.files[0].id;
-            outputDiv.innerHTML = "File Found! Downloading & Processing with Python...";
-            await processCsvWithPython(fileId);
+            outputDiv.innerHTML = "<p>⬇️ Downloading & Processing...</p>";
+            await processCsvOptimized(data.files[0].id);
         } else {
-            outputDiv.innerHTML = `<span style="color:red">File <b>${storeId}.csv</b> not found in this folder.</span>`;
+            outputDiv.innerHTML = `<p style="color:red">File ${storeId}.csv not found.</p>`;
         }
     } catch (e) {
-        outputDiv.innerHTML = "Error searching file: " + e.message;
+        outputDiv.innerHTML = "Error: " + e.message;
     }
 }
 
-// E. The Magic: Python (Pandas) Processing
-async function processCsvWithPython(fileId) {
-    if (!pyodide) {
-        document.getElementById("content-area").innerHTML = "Python is still loading... please wait 5 seconds and try again.";
-        return;
-    }
+// --- THE NEW OPTIMIZED PROCESSOR ---
+async function processCsvOptimized(fileId) {
+    if (!pyodide) { alert("Python is still loading. Wait 5s."); return; }
 
     try {
-        // 1. Download file content as Text from Google Drive
+        // 1. Download CSV
         const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: { "Authorization": `Bearer ${accessToken}` }
         });
         const csvText = await response.text();
 
-        // 2. Pass to Python environment
+        // 2. Python converts CSV -> JSON (Much lighter than HTML)
         pyodide.globals.set("csv_content", csvText);
-
-        // 3. Run Python Script: Read CSV -> HTML Table
         const pythonScript = `
 import pandas as pd
 import io
+import json
 
-# Read the string as a CSV
 data = io.StringIO(csv_content)
 df = pd.read_csv(data)
-
-# Convert to HTML (clean table)
-# classes='report-table' allows us to style it in CSS later
-df.to_html(index=False, classes='report-table', border=0)
+# Convert to JSON string (records format: [{"col": val}, ...])
+df.to_json(orient='records')
         `;
 
-        const htmlTable = await pyodide.runPythonAsync(pythonScript);
+        const jsonString = await pyodide.runPythonAsync(pythonScript);
+        
+        // 3. Store Data in JS Memory
+        currentReportData = JSON.parse(jsonString);
 
-        // 4. Display Result
-        document.getElementById("content-area").innerHTML = htmlTable;
+        // 4. Initialize the Filter UI
+        setupFilterDropdown();
+
+        // 5. Render Table (First 100 rows for speed)
+        renderTable(currentReportData);
 
     } catch (e) {
         console.error(e);
-        document.getElementById("content-area").innerHTML = "Python Processing Error: " + e.message;
+        document.getElementById("content-area").innerHTML = "Processing Error: " + e.message;
     }
+}
+
+// --- JAVASCRIPT RENDERING & FILTERING (ZERO LATENCY) ---
+
+function setupFilterDropdown() {
+    const dropdown = document.getElementById("column-select");
+    const filterBox = document.getElementById("filter-box");
+    
+    // Clear old options
+    dropdown.innerHTML = '<option value="all">All Columns</option>';
+    
+    // Get headers from first row
+    if (currentReportData.length > 0) {
+        const headers = Object.keys(currentReportData[0]);
+        headers.forEach(header => {
+            const option = document.createElement("option");
+            option.value = header;
+            option.innerText = header;
+            dropdown.appendChild(option);
+        });
+    }
+
+    // Show Filter UI
+    filterBox.classList.remove("hidden");
+}
+
+function renderTable(data) {
+    if (data.length === 0) {
+        document.getElementById("content-area").innerHTML = "<p>No matches found.</p>";
+        return;
+    }
+
+    // Limit display to 500 rows to prevent browser freeze
+    const displayData = data.slice(0, 500); 
+    const headers = Object.keys(displayData[0]);
+
+    let html = `<table><thead><tr>`;
+    
+    // Build Headers
+    headers.forEach(h => html += `<th>${h}</th>`);
+    html += `</tr></thead><tbody>`;
+
+    // Build Rows
+    displayData.forEach(row => {
+        html += `<tr>`;
+        headers.forEach(h => {
+            html += `<td>${row[h] !== null ? row[h] : ''}</td>`;
+        });
+        html += `</tr>`;
+    });
+
+    html += `</tbody></table>`;
+    
+    if (data.length > 500) {
+        html += `<p style="color:blue; font-size:12px;">*Showing first 500 rows of ${data.length}. Filter to see specific data.</p>`;
+    }
+
+    document.getElementById("content-area").innerHTML = html;
+}
+
+// Called instantly when user types
+function applyTableFilter() {
+    const filterText = document.getElementById("filter-input").value.toLowerCase();
+    const column = document.getElementById("column-select").value;
+
+    if (!filterText) {
+        renderTable(currentReportData); // Show all if empty
+        return;
+    }
+
+    const filtered = currentReportData.filter(row => {
+        if (column === "all") {
+            // Search ALL columns
+            return Object.values(row).some(val => 
+                String(val).toLowerCase().includes(filterText)
+            );
+        } else {
+            // Search SPECIFIC column
+            return String(row[column]).toLowerCase().includes(filterText);
+        }
+    });
+
+    renderTable(filtered);
+}
+
+// Optional: Test connection
+async function testDriveConnection() {
+    // Keep your existing test logic here if you want
 }
