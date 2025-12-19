@@ -197,6 +197,8 @@ function handleSort(column) {
     applyTableFilter();
 }
 
+
+
 function renderTable(data) {
     const container = document.getElementById("content-area");
     if (!data || data.length === 0) {
@@ -208,27 +210,25 @@ function renderTable(data) {
     const limitSelect = document.getElementById("row-limit-select").value;
     const limit = limitSelect === "all" ? data.length : parseInt(limitSelect);
 
-    // 2. Slice Data
-    const displayData = data.slice(0, limit); 
-    const headers = Object.keys(displayData[0]);
+    // 2. Slice Data & Save to Global (so we can access it on click)
+    currentDisplayData = data.slice(0, limit); 
+    const headers = Object.keys(currentDisplayData[0]);
 
     // 3. Build HTML
     let html = `<table><thead><tr>`;
     headers.forEach(h => {
-        // Add sorting arrow indicator
         let arrow = "";
         if (h === currentSortColumn) {
             arrow = currentSortOrder === "asc" ? " ⬆️" : " ⬇️";
         }
-        // Make header clickable
-        html += `<th onclick="handleSort('${h}')" style="cursor:pointer; user-select:none;">
-                    ${h}${arrow}
-                 </th>`;
+        html += `<th onclick="handleSort('${h}')" style="cursor:pointer; user-select:none;">${h}${arrow}</th>`;
     });
     html += `</tr></thead><tbody>`;
 
-    displayData.forEach(row => {
-        html += `<tr>`;
+    // --- UPDATED ROW GENERATION ---
+    currentDisplayData.forEach((row, index) => {
+        // We pass the 'index' to the click function
+        html += `<tr onclick="showRowDetails(${index})" title="Click to view details">`;
         headers.forEach(h => {
             html += `<td>${row[h] !== null ? row[h] : ''}</td>`;
         });
@@ -238,10 +238,53 @@ function renderTable(data) {
     
     // 4. Footer Info
     html += `<p style="font-size:12px; margin-top:5px; color:#555;">
-             Showing <b>${displayData.length}</b> of <b>${data.length}</b> matching rows.
+             Showing <b>${currentDisplayData.length}</b> of <b>${data.length}</b> rows. 
+             Click a row to view full details.
              </p>`;
 
     container.innerHTML = html;
+}
+
+// ==========================================
+// 5. MODAL POPUP LOGIC (NEW)
+// ==========================================
+
+function showRowDetails(index) {
+    // Get the specific row data using the index
+    const rowData = currentDisplayData[index];
+    const modalBody = document.getElementById("modal-body");
+    
+    if (!rowData) return;
+
+    // Build a Vertical Table (Key | Value)
+    let html = `<table class="detail-table"><tbody>`;
+    
+    Object.keys(rowData).forEach(key => {
+        html += `
+            <tr>
+                <th>${key}</th>
+                <td>${rowData[key] !== null ? rowData[key] : ''}</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table>`;
+    modalBody.innerHTML = html;
+
+    // Show Modal
+    document.getElementById("detail-modal").classList.remove("hidden");
+}
+
+function closeModal() {
+    document.getElementById("detail-modal").classList.add("hidden");
+}
+
+// Close modal if user clicks outside the white box
+window.onclick = function(event) {
+    const modal = document.getElementById("detail-modal");
+    if (event.target == modal) {
+        closeModal();
+    }
 }
 
 function applyTableFilter() {
