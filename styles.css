@@ -30,3 +30,8 @@ tr:hover { background-color: #ddd; }
 /* Filter Box Styling */
 select, input { border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
 input:focus { outline: 2px solid #007bff; }
+
+th:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+    cursor: pointer;
+}
