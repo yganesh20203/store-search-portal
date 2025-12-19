@@ -3,7 +3,9 @@
 // ==========================================
 let accessToken = ""; 
 let currentMonthFolderId = "";
-let currentReportData = []; // Stores the raw data for filtering
+let currentReportData = []; // Raw Data
+let currentSortColumn = ""; // Which column is currently sorted
+let currentSortOrder = "asc"; // "asc" or "desc"
 
 // ==========================================
 // 2. AUTHENTICATION
@@ -65,7 +67,7 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 3. SALES ENGINE (Pure JS - Ultra Fast)
+// 3. SALES ENGINE
 // ==========================================
 
 async function loadSalesDashboard() {
@@ -78,8 +80,7 @@ async function loadSalesDashboard() {
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        
-        if(!response.ok) throw new Error("Folder access denied. Check ID/Permissions.");
+        if(!response.ok) throw new Error("Folder access denied.");
         
         const data = await response.json();
 
@@ -109,6 +110,7 @@ function selectMonth(folderId, btnElement) {
     // Reset Data view
     document.getElementById("content-area").innerHTML = "";
     document.getElementById("filter-box").classList.add("hidden");
+    currentReportData = [];
 }
 
 async function findAndLoadReport() {
@@ -136,7 +138,6 @@ async function findAndLoadReport() {
     }
 }
 
-// --- NEW: PapaParse Logic (Instant) ---
 async function downloadAndParseCSV(fileId) {
     try {
         const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
@@ -144,14 +145,14 @@ async function downloadAndParseCSV(fileId) {
         });
         const csvText = await response.text();
 
-        // Parse CSV using PapaParse (No Python needed!)
         Papa.parse(csvText, {
             header: true,
             skipEmptyLines: true,
+            dynamicTyping: true, // Auto-detect numbers vs text
             complete: function(results) {
                 currentReportData = results.data;
                 setupFilterDropdown();
-                renderTable(currentReportData);
+                renderTable(currentReportData); // Initial Render
             }
         });
 
@@ -162,17 +163,15 @@ async function downloadAndParseCSV(fileId) {
 }
 
 // ==========================================
-// 4. RENDERING & FILTERING
+// 4. RENDERING, FILTERING & SORTING
 // ==========================================
 
 function setupFilterDropdown() {
     const dropdown = document.getElementById("column-select");
     const filterBox = document.getElementById("filter-box");
     
-    // Clear old options
     dropdown.innerHTML = '<option value="all">All Columns</option>';
     
-    // Get headers from first row of data
     if (currentReportData.length > 0) {
         const headers = Object.keys(currentReportData[0]);
         headers.forEach(header => {
@@ -182,9 +181,19 @@ function setupFilterDropdown() {
             dropdown.appendChild(option);
         });
     }
-
-    // Unhide the Filter UI
     filterBox.classList.remove("hidden");
+}
+
+function handleSort(column) {
+    // Toggle sort order if clicking same column
+    if (currentSortColumn === column) {
+        currentSortOrder = currentSortOrder === "asc" ? "desc" : "asc";
+    } else {
+        currentSortColumn = column;
+        currentSortOrder = "asc";
+    }
+    // Re-render (Apply filter & sort)
+    applyTableFilter();
 }
 
 function renderTable(data) {
@@ -194,26 +203,42 @@ function renderTable(data) {
         return;
     }
 
-    // Limit to 500 rows for performance
-    const displayData = data.slice(0, 500); 
+    // 1. Get User Row Limit
+    const limitSelect = document.getElementById("row-limit-select").value;
+    const limit = limitSelect === "all" ? data.length : parseInt(limitSelect);
+
+    // 2. Slice Data
+    const displayData = data.slice(0, limit); 
     const headers = Object.keys(displayData[0]);
 
+    // 3. Build HTML
     let html = `<table><thead><tr>`;
-    headers.forEach(h => html += `<th>${h}</th>`);
+    headers.forEach(h => {
+        // Add sorting arrow indicator
+        let arrow = "";
+        if (h === currentSortColumn) {
+            arrow = currentSortOrder === "asc" ? " ⬆️" : " ⬇️";
+        }
+        // Make header clickable
+        html += `<th onclick="handleSort('${h}')" style="cursor:pointer; user-select:none;">
+                    ${h}${arrow}
+                 </th>`;
+    });
     html += `</tr></thead><tbody>`;
 
     displayData.forEach(row => {
         html += `<tr>`;
         headers.forEach(h => {
-            html += `<td>${row[h] || ''}</td>`;
+            html += `<td>${row[h] !== null ? row[h] : ''}</td>`;
         });
         html += `</tr>`;
     });
     html += `</tbody></table>`;
     
-    if (data.length > 500) {
-        html += `<p style="color:blue; font-size:12px; margin-top:5px;">*Displaying first 500 rows. Use filter to narrow down results.</p>`;
-    }
+    // 4. Footer Info
+    html += `<p style="font-size:12px; margin-top:5px; color:#555;">
+             Showing <b>${displayData.length}</b> of <b>${data.length}</b> matching rows.
+             </p>`;
 
     container.innerHTML = html;
 }
@@ -221,19 +246,45 @@ function renderTable(data) {
 function applyTableFilter() {
     const filterText = document.getElementById("filter-input").value.toLowerCase();
     const column = document.getElementById("column-select").value;
+    
+    // 1. Filter
+    let processedData = currentReportData;
 
-    if (!filterText) {
-        renderTable(currentReportData);
-        return;
+    if (filterText) {
+        processedData = currentReportData.filter(row => {
+            if (column === "all") {
+                return Object.values(row).some(val => String(val).toLowerCase().includes(filterText));
+            } else {
+                return String(row[column] || "").toLowerCase().includes(filterText);
+            }
+        });
     }
 
-    const filtered = currentReportData.filter(row => {
-        if (column === "all") {
-            return Object.values(row).some(val => String(val).toLowerCase().includes(filterText));
-        } else {
-            return String(row[column] || "").toLowerCase().includes(filterText);
-        }
-    });
+    // 2. Sort
+    if (currentSortColumn) {
+        processedData.sort((a, b) => {
+            let valA = a[currentSortColumn];
+            let valB = b[currentSortColumn];
+            
+            // Handle undefined/null
+            if (valA == null) valA = "";
+            if (valB == null) valB = "";
 
-    renderTable(filtered);
+            // Check if numbers
+            const numA = parseFloat(valA);
+            const numB = parseFloat(valB);
+            
+            if (!isNaN(numA) && !isNaN(numB)) {
+                return currentSortOrder === "asc" ? numA - numB : numB - numA;
+            } else {
+                // String sort
+                return currentSortOrder === "asc" ? 
+                       String(valA).localeCompare(String(valB)) : 
+                       String(valB).localeCompare(String(valA));
+            }
+        });
+    }
+
+    // 3. Render
+    renderTable(processedData);
 }
