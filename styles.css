@@ -82,3 +82,61 @@ tbody tr:hover { background-color: #e6f7ff !important; border-left: 3px solid #0
 .detail-table { width: 100%; border-collapse: collapse; }
 .detail-table th { width: 40%; background: #007bff; color: white; text-align: right; padding: 10px; border: 1px solid #ddd; }
 .detail-table td { width: 60%; background: #fff; text-align: left; padding: 10px; border: 1px solid #ddd; word-break: break-word; }
+
+
+/* =========================
+   NEW DATA TABLE STYLES
+   ========================= */
+
+/* The Table Itself */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 13px;
+    background-color: white;
+}
+
+/* 1. THE HEADER (Distinct & Sticky) */
+.data-table thead th {
+    position: sticky;      /* Keeps header at top while scrolling */
+    top: 0;
+    background-color: #0056b3; /* Professional Dark Blue */
+    color: #ffffff;        /* White Text */
+    padding: 12px 10px;
+    text-align: left;
+    font-weight: 600;
+    z-index: 100;          /* Ensures it sits on top of data */
+    border-right: 1px solid rgba(255,255,255,0.2); /* Subtle separator */
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Shadow below header */
+}
+
+/* 2. THE CELLS */
+.data-table tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e0e0e0;
+    color: #333;
+    white-space: nowrap; /* Prevents ugly wrapping */
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Adds "..." if text is too long */
+}
+
+/* 3. ALTERNATING COLORS (Zebra Striping) */
+.data-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa; /* Very light gray */
+}
+
+/* 4. HOVER EFFECT (Highlight row on mouseover) */
+.data-table tbody tr:hover {
+    background-color: #e8f0fe; /* Light blue highlight */
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+/* Active Pane Scrolling Fix */
+.content-area {
+    overflow: auto;
+    height: 100%;
+    max-height: 80vh; /* Prevents growing too large */
+}
