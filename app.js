@@ -8,7 +8,7 @@ let currentMonthFolderId = "";
 let db = null; 
 let conn = null; 
 
-// NEW: Multi-Pane State
+// Multi-Pane State
 let activePaneId = "pane-0"; // Default active pane
 
 // Attach functions to Window
@@ -106,7 +106,7 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 4. SPLIT SCREEN LOGIC (NEW)
+// 4. SPLIT SCREEN LOGIC
 // ==========================================
 
 function changeLayout(numPanes) {
@@ -145,8 +145,6 @@ function setActivePane(id) {
     
     // 2. State Update
     activePaneId = id;
-    
-    // 3. Optional: Refresh Filter UI if we tracked filters per pane (Skipped for simplicity)
 }
 
 // ==========================================
@@ -157,7 +155,6 @@ function resetUI() {
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
-    // We do NOT clear content-area anymore because we have multiple panes
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -281,11 +278,7 @@ function openTrackerCategory(groupName) {
 
 
 // ==========================================
-// 6. DATA LOADING ENGINE (UPDATED FOR SPLIT VIEW)
-// ==========================================
-
-// ==========================================
-// SEARCH & LOAD SALES REPORT
+// 6. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
@@ -312,7 +305,6 @@ async function findAndLoadReport() {
     contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:#666;">🔍 Searching Drive for ${storeId}...</div>`;
 
     // 4. Search Google Drive
-    // Query: Inside the selected folder AND filename contains the Store ID
     const query = `'${currentMonthFolderId}' in parents and name contains '${storeId}' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
@@ -321,14 +313,11 @@ async function findAndLoadReport() {
         const data = await response.json();
 
         if (data.files && data.files.length > 0) {
-            // Found a match! Take the first one.
             const file = data.files[0];
             statusDiv.innerHTML = `✅ Found: ${file.name}`;
-            
-            // Load it using our existing engine
             await loadFileIntoDuckDB(file.id, file.name, 'parquet'); 
         } else {
-            statusDiv.innerHTML = `❌ No report found for "${storeId}" in this folder.`;
+            statusDiv.innerHTML = `❌ No report found for "${storeId}"`;
             contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:red;">❌ File not found.<br>Check Store ID or try a different Month.</div>`;
         }
     } catch (e) {
@@ -341,12 +330,11 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Fetching Data...";
     
-    // 1. Identify Target Pane & Table Name
     const pane = document.getElementById(activePaneId);
     if (!pane) { alert("Error: No active view selected"); return; }
     
     const contentArea = pane.querySelector(".content-area");
-    const tableName = `table_${activePaneId.replace('-', '_')}`; // e.g., table_pane_0
+    const tableName = `table_${activePaneId.replace('-', '_')}`;
 
     contentArea.innerHTML = "<p>⏳ Loading...</p>";
     document.getElementById("sheet-link-container").innerHTML = "";
@@ -355,7 +343,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         if (type === 'sheet') {
             statusDiv.innerHTML = "⏳ Identifying Tab...";
             
-            // API Call: Metadata
+            // Metadata
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
@@ -364,30 +352,53 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             let sheetTitle = "";
             const targetGid = gid ? parseInt(gid) : 0;
             const foundSheet = metaData.sheets.find(s => s.properties.sheetId === targetGid);
-            
             if (foundSheet) sheetTitle = foundSheet.properties.title;
             else throw new Error("Tab not found");
 
             statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
 
-            // API Call: Data
+            // Data
             const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
             const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             const dataJson = await dataResp.json();
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            // Convert & Load
-            const csvText = arrayToCSV(dataJson.values);
+            // --- SMART HEADER FIX (Flattens 2-Row Headers) ---
+            let finalValues = dataJson.values;
+
+            // Logic: If Row 1 contains specific keywords, assume it's a double header
+            if (finalValues.length > 2 && finalValues[1].includes("Store Code1")) {
+                console.log("🛠️ Detected Complex Header... Flattening.");
+                
+                const rowDates = finalValues[0];
+                const rowMetrics = finalValues[1];
+                let newHeader = [];
+                let lastDate = "";
+
+                for (let i = 0; i < rowMetrics.length; i++) {
+                    let dateVal = rowDates[i] || "";
+                    let metricVal = rowMetrics[i] || `col${i}`;
+
+                    if (dateVal !== "") lastDate = dateVal;
+
+                    if (lastDate && i > 2) newHeader.push(`${lastDate} - ${metricVal}`);
+                    else newHeader.push(metricVal);
+                }
+                finalValues = [newHeader, ...finalValues.slice(2)];
+            }
+            // -------------------------------------------------
+
+            // Load to DuckDB
+            const csvText = arrayToCSV(finalValues);
             const csvFileName = `temp_${tableName}.csv`;
             
             await db.registerFileText(csvFileName, csvText);
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}')`);
             
-            // Update Label
-            pane.querySelector(".pane-label").innerText = `${sheetTitle} (Sheet)`;
+            pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
-            // Add Buttons (Global area, applies to active pane)
+            // Buttons
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -417,7 +428,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
             }
             
-            // Update Label
             pane.querySelector(".pane-label").innerText = fileName;
         }
 
@@ -511,7 +521,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 8. SQL FILTERING & RENDERING (TARGETS ACTIVE PANE)
+// 8. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
