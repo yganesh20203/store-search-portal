@@ -553,6 +553,7 @@ async function applyTableFilter() {
 
 let currentArrowData = null; 
 
+// RENDER TABLE (Cleaned for CSS Styling)
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
@@ -562,20 +563,25 @@ function renderTableFromArrow(arrowResult) {
     currentArrowData = rows; 
 
     if (rows.length === 0) {
-        container.innerHTML = "<p style='text-align:center; padding:20px;'>No matches found.</p>";
+        container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>No matches found.</p>";
         return;
     }
 
     const headers = Object.keys(rows[0]);
-    let html = `<table style="width:100%; border-collapse:collapse;"><thead><tr>`;
-    headers.forEach(h => html += `<th style="text-align:left; background:#f1f1f1; padding:8px; border-bottom:2px solid #ddd; position:sticky; top:0;">${h}</th>`);
+    
+    // We added class="data-table" so styles.css can make it beautiful
+    let html = `<table class="data-table"><thead><tr>`;
+    
+    // Clean Headers (Styles handled by CSS now)
+    headers.forEach(h => html += `<th>${h}</th>`);
     html += `</tr></thead><tbody>`;
 
     rows.forEach((row, index) => {
-        html += `<tr onclick="window.showRowDetails(${index})" title="Click details" style="border-bottom:1px solid #eee; cursor:pointer;">`;
+        // Row Click Logic
+        html += `<tr onclick="window.showRowDetails(${index})" title="Click to view full details">`;
         headers.forEach(h => {
              let val = row[h];
-             html += `<td style="padding:8px;">${val !== null ? val : ''}</td>`;
+             html += `<td>${val !== null ? val : ''}</td>`;
         });
         html += `</tr>`;
     });
