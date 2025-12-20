@@ -183,9 +183,9 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- TRACKER DASHBOARD (Layered) ---
+// --- TRACKER DASHBOARD (Dynamic Groups) ---
 
-// Level 1: Categories
+// Level 1: Show Folder Groups
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
@@ -193,19 +193,24 @@ async function loadTrackerDashboard() {
     
     listContainer.innerHTML = "";
 
-    // "Vehicle Dispatch Summary" Folder Button
-    const btn = document.createElement("button");
-    btn.className = "folder-btn";
-    btn.style.background = "#ffe082"; 
-    btn.style.fontWeight = "bold";
-    btn.innerText = "🚛 Vehicle Dispatch Summary"; 
-    btn.onclick = () => renderVehicleDispatchSheets();
-    
-    listContainer.appendChild(btn);
+    // Loop through groups defined in config.js
+    if (CONFIG.TRACKER_GROUPS) {
+        Object.keys(CONFIG.TRACKER_GROUPS).forEach(groupName => {
+            const btn = document.createElement("button");
+            btn.className = "folder-btn";
+            btn.style.background = "#ffe082"; 
+            btn.style.fontWeight = "bold";
+            btn.innerText = groupName; 
+            btn.onclick = () => openTrackerCategory(groupName);
+            listContainer.appendChild(btn);
+        });
+    } else {
+        listContainer.innerHTML = "<p>No trackers configured in config.js</p>";
+    }
 }
 
-// Level 2: Sheets
-function renderVehicleDispatchSheets() {
+// Level 2: Show Sheets inside a Group
+function openTrackerCategory(groupName) {
     const listContainer = document.getElementById("tracker-file-list");
     listContainer.innerHTML = ""; 
 
@@ -213,13 +218,15 @@ function renderVehicleDispatchSheets() {
     const backBtn = document.createElement("button");
     backBtn.className = "folder-btn";
     backBtn.style.background = "#e0e0e0"; 
-    backBtn.innerText = "⬅️ Back";
+    backBtn.innerText = "⬅️ Back to Categories";
     backBtn.onclick = () => loadTrackerDashboard();
     listContainer.appendChild(backBtn);
 
-    // Render Sheets
-    if (CONFIG.TRACKER_SHEETS && CONFIG.TRACKER_SHEETS.length > 0) {
-        CONFIG.TRACKER_SHEETS.forEach(sheet => {
+    // List Sheets in this Group
+    const sheets = CONFIG.TRACKER_GROUPS[groupName];
+    
+    if (sheets && sheets.length > 0) {
+        sheets.forEach(sheet => {
             const btn = document.createElement("button");
             btn.className = "folder-btn";
             btn.style.background = "#fff3cd"; 
@@ -228,7 +235,7 @@ function renderVehicleDispatchSheets() {
             listContainer.appendChild(btn);
         });
     } else {
-        listContainer.innerHTML += "<p>No sheets configured.</p>";
+        listContainer.innerHTML += `<p>No sheets added to "${groupName}" yet.</p>`;
     }
 }
 
@@ -341,7 +348,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 7. AI SUMMARY ENGINE (New!)
+// 6. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -423,7 +430,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 6. SQL FILTERING & RENDERING
+// 7. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown() {
