@@ -284,8 +284,57 @@ function openTrackerCategory(groupName) {
 // 6. DATA LOADING ENGINE (UPDATED FOR SPLIT VIEW)
 // ==========================================
 
+// ==========================================
+// SEARCH & LOAD SALES REPORT
+// ==========================================
+
 async function findAndLoadReport() {
-    alert("Sales logic separate. Use Member/Trackers.");
+    const storeId = document.getElementById("store-id-input").value.trim();
+    const statusDiv = document.getElementById("loading-status");
+
+    // 1. Validation
+    if (!currentMonthFolderId) {
+        alert("⚠️ Please select a Month folder first (Step 1).");
+        return;
+    }
+    if (!storeId) {
+        alert("⚠️ Please enter a Store ID.");
+        return;
+    }
+
+    // 2. Identify Active Pane
+    const pane = document.getElementById(activePaneId);
+    if (!pane) { alert("Error: No active view selected"); return; }
+    
+    // 3. UI Feedback
+    statusDiv.innerHTML = `🔍 Searching for Store ${storeId}...`;
+    const contentArea = pane.querySelector(".content-area");
+    contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:#666;">🔍 Searching Drive for ${storeId}...</div>`;
+
+    // 4. Search Google Drive
+    // Query: Inside the selected folder AND filename contains the Store ID
+    const query = `'${currentMonthFolderId}' in parents and name contains '${storeId}' and trashed = false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
+
+    try {
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (data.files && data.files.length > 0) {
+            // Found a match! Take the first one.
+            const file = data.files[0];
+            statusDiv.innerHTML = `✅ Found: ${file.name}`;
+            
+            // Load it using our existing engine
+            await loadFileIntoDuckDB(file.id, file.name, 'parquet'); 
+        } else {
+            statusDiv.innerHTML = `❌ No report found for "${storeId}" in this folder.`;
+            contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:red;">❌ File not found.<br>Check Store ID or try a different Month.</div>`;
+        }
+    } catch (e) {
+        console.error(e);
+        statusDiv.innerHTML = `Error: ${e.message}`;
+    }
 }
 
 async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
