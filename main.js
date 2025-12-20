@@ -345,8 +345,111 @@ function arrayToCSV(data) {
     ).join('\n');
 }
 
-function summarizeData() {
-    alert("🤖 AI Summary Module\n\nComing in Phase 5!");
+// ==========================================
+// 7. AI SUMMARY ENGINE (Local SQL Analysis)
+// ==========================================
+
+async function summarizeData() {
+    const modal = document.getElementById("detail-modal");
+    const modalBody = document.getElementById("modal-body");
+    
+    // 1. Open Modal with Loading State
+    modal.classList.remove("hidden");
+    modalBody.innerHTML = `
+        <div style="text-align:center; padding: 20px;">
+            <h3>🤖 Analyzing Data...</h3>
+            <p>Calculating totals and identifying top performers.</p>
+        </div>`;
+
+    try {
+        // 2. Get Table Schema (Column Names & Types)
+        const schemaQuery = await conn.query(`DESCRIBE ${currentTableName}`);
+        const schema = schemaQuery.toArray().map(row => row.toJSON());
+
+        // 3. Identify Logic Columns
+        // We assume the first text column is the "Label" (e.g., City, Store Name)
+        const labelCol = schema.find(c => c.column_type.includes('VARCHAR'))?.column_name || schema[0].column_name;
+        
+        // Find all Numeric Columns for summing
+        const numericCols = schema.filter(c => 
+            ['BIGINT', 'INTEGER', 'DOUBLE', 'DECIMAL', 'HUGEINT'].some(type => c.column_type.includes(type))
+        ).map(c => c.column_name);
+
+        if (numericCols.length === 0) {
+            modalBody.innerHTML = "<p>⚠️ No numeric data found to summarize. (Columns might be formatted as text)</p>";
+            return;
+        }
+
+        // 4. Run Analysis Queries
+        
+        // A. Calculate Grand Totals
+        const sumQueryParts = numericCols.map(col => `SUM("${col}") as "${col}"`).join(", ");
+        const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${currentTableName}`);
+        const totals = totalResult.toArray()[0].toJSON();
+
+        // B. Find Top Performer (Based on the last numeric column, usually "Total")
+        const mainMetric = numericCols[numericCols.length - 1]; // Usually the last column is the Grand Total
+        const topResult = await conn.query(`
+            SELECT "${labelCol}", "${mainMetric}" 
+            FROM ${currentTableName} 
+            ORDER BY "${mainMetric}" DESC 
+            LIMIT 1
+        `);
+        const topRow = topResult.toArray()[0]?.toJSON();
+
+        // 5. Build HTML Report
+        let html = `<div style="padding: 10px;">`;
+        
+        // Section: Top Performer
+        if (topRow) {
+            html += `
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #2196f3;">
+                <h3 style="margin-top:0;">🏆 Top Performer</h3>
+                <p style="font-size: 1.1em;">
+                    <strong>${topRow[labelCol]}</strong> is leading with 
+                    <strong>${Number(topRow[mainMetric]).toLocaleString()}</strong> 
+                    in <em>${mainMetric}</em>.
+                </p>
+            </div>`;
+        }
+
+        // Section: System Totals
+        html += `<h3>📊 System Totals</h3>
+                 <table class="detail-table" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;">Metric</th>
+                            <th style="text-align:right;">Grand Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+        
+        numericCols.forEach(col => {
+            // Filter out ID columns usually not useful for sums
+            if (!col.toLowerCase().includes('id') && !col.toLowerCase().includes('phone')) {
+                let val = totals[col];
+                // Format numbers nicely (e.g. 1,234)
+                let displayVal = val ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 0}) : "0";
+                
+                // Highlight the Main Metric
+                let style = (col === mainMetric) ? "font-weight:bold; color:#007bff;" : "";
+                
+                html += `<tr>
+                            <td>${col}</td>
+                            <td style="text-align:right; ${style}">${displayVal}</td>
+                         </tr>`;
+            }
+        });
+
+        html += `</tbody></table></div>`;
+
+        // 6. Inject into Modal
+        modalBody.innerHTML = html;
+
+    } catch (e) {
+        console.error("Summary Error:", e);
+        modalBody.innerHTML = `<p style="color:red"><strong>Error generating summary:</strong> ${e.message}</p>`;
+    }
 }
 
 // ==========================================
