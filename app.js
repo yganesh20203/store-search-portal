@@ -364,27 +364,31 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            // --- SMART HEADER FIX (Flattens 2-Row Headers) ---
+            // --- SMART HEADER FIX (Applies to ALL Sheets) ---
             let finalValues = dataJson.values;
 
-            // Logic: If Row 1 contains specific keywords, assume it's a double header
-            if (finalValues.length > 2 && finalValues[1].includes("Store Code1")) {
-                console.log("🛠️ Detected Complex Header... Flattening.");
+            // Always check for at least 2 rows to attempt merge
+            if (finalValues.length >= 2) {
+                console.log("🛠️ Merging Top 2 Rows for Header...");
                 
-                const rowDates = finalValues[0];
-                const rowMetrics = finalValues[1];
+                const rowDates = finalValues[0]; // Top Row
+                const rowMetrics = finalValues[1]; // Bottom Row
                 let newHeader = [];
                 let lastDate = "";
 
+                // Iterate using the bottom row as the count
                 for (let i = 0; i < rowMetrics.length; i++) {
                     let dateVal = rowDates[i] || "";
                     let metricVal = rowMetrics[i] || `col${i}`;
 
+                    // Handle Merged Cells logic
                     if (dateVal !== "") lastDate = dateVal;
 
-                    if (lastDate && i > 2) newHeader.push(`${lastDate} - ${metricVal}`);
+                    if (lastDate) newHeader.push(`${lastDate} - ${metricVal}`);
                     else newHeader.push(metricVal);
                 }
+                
+                // Replace the first 2 rows with the new header
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
             // -------------------------------------------------
