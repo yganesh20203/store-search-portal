@@ -140,3 +140,51 @@ tbody tr:hover { background-color: #e6f7ff !important; border-left: 3px solid #0
     height: 100%;
     max-height: 80vh; /* Prevents growing too large */
 }
+
+
+/* =========================
+   DATA TABLE STYLES
+   ========================= */
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 13px;
+    background-color: white;
+}
+
+/* HEADER STYLING */
+.data-table thead th {
+    position: sticky;      
+    top: 0;
+    background-color: #0056b3; /* Dark Blue */
+    color: #ffffff;        /* White Text */
+    padding: 10px;
+    text-align: left;
+    white-space: nowrap;   /* Keep header on one line */
+    z-index: 10;
+    box-shadow: 0 2px 2px rgba(0,0,0,0.2);
+}
+
+/* CELL STYLING */
+.data-table tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #ddd;
+    color: #333;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* STRIPES */
+.data-table tbody tr:nth-child(even) {
+    background-color: #f2f2f2; /* Light Grey */
+}
+
+/* HOVER */
+.data-table tbody tr:hover {
+    background-color: #d1e7dd; /* Light Green/Blue Highlight */
+    cursor: pointer;
+}
