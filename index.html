@@ -31,13 +31,13 @@
             <main>
                 <div class="control-panel">
                     <button onclick="window.loadSalesDashboard()" class="nav-btn">📊 Sales Reports</button>
-                    <button onclick="window.loadMemberDashboard()" class="nav-btn">👥 Member DB (Parquet)</button>
+                    <button onclick="window.loadMemberDashboard()" class="nav-btn">👥 Member DB</button>
+                    <button onclick="window.loadTrackerDashboard()" class="nav-btn">📈 Google Sheets</button>
                 </div>
                 
                 <div id="sales-ui" class="hidden">
                     <hr>
                     <div id="month-list" class="folder-grid">Loading Months...</div>
-                    
                     <div id="store-search-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
                         <h3>Step 2: Load Report</h3>
                         <div style="display: flex; gap: 10px;">
@@ -49,12 +49,18 @@
 
                 <div id="member-ui" class="hidden">
                     <hr>
-                    <h3>📂 Select Parquet File (High Performance)</h3>
+                    <h3>📂 Select Parquet File</h3>
                     <div id="member-file-list" class="folder-grid">Loading Files...</div>
                 </div>
 
+                <div id="tracker-ui" class="hidden">
+                    <hr>
+                    <h3>📈 Select Tracker Sheet</h3>
+                    <div id="tracker-file-list" class="folder-grid">Loading Sheets...</div>
+                </div>
+
                 <div id="filter-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
-                    <h3>Data Filters (SQL Powered)</h3>
+                    <h3>Data Filters</h3>
                     
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <label>Filter:</label>
@@ -68,12 +74,13 @@
                         <label>Show Rows:</label>
                         <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
                             <option value="10">10 Rows</option>
-                            <option value="20">20 Rows</option>
                             <option value="50">50 Rows</option>
                             <option value="100" selected>100 Rows</option>
                         </select>
-                        <span style="font-size: 12px; color: #666; margin-left: 10px;">*400MB+ Ready.</span>
+                        <span style="font-size: 12px; color: #666; margin-left: 10px;">*Live Data from Sheets.</span>
                     </div>
+                    
+                    <div id="sheet-link-container" style="margin-top: 10px;"></div>
                     <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
                 </div>
 
@@ -96,7 +103,6 @@
     </div>
 
     <script src="config.js"></script>
-    
     <script type="module" src="main.js"></script>
 </body>
 </html>
