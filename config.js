@@ -6,6 +6,7 @@ const CONFIG = {
     // 2. Folder IDs
     SALES_FOLDER_ID: "1jguubICcAtMijiaNETV7B35G2YZlyM5O", 
     MEMBERS_FOLDER_ID: "1ViTdGxZu-mAMiUOyBCliV8uMNy30clNt",
+    HOURLY_SALES_FOLDER_ID: "1l42onyk5d1FWl7F58Go7oQFxamEM8ph4",
 
     // 3. TRACKER GROUPS
     TRACKER_GROUPS: {
