@@ -9,7 +9,7 @@ let db = null;
 let conn = null; 
 let currentTableName = "current_data"; 
 
-// Attach to Window
+// Attach functions to Window so HTML buttons can use them
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -82,7 +82,7 @@ async function generateAccessToken(creds) {
     const now = Math.floor(Date.now() / 1000);
     const claim = {
         iss: creds.client_email,
-        scope: "https://www.googleapis.com/auth/drive",
+        scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
         iat: now
@@ -183,26 +183,55 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- TRACKER DASHBOARD (WITH TABS SUPPORT) ---
+// --- UPDATED: TRACKER DASHBOARD WITH LAYERS ---
+
+// 1. Level 1: Show Categories (e.g. Vehicle Dispatch)
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
     const listContainer = document.getElementById("tracker-file-list");
-    listContainer.innerHTML = "";
     
+    // Clear list and show "Category" buttons
+    listContainer.innerHTML = "";
+
+    // Create "Vehicle Dispatch Summary" Group Button
+    const btn = document.createElement("button");
+    btn.className = "folder-btn";
+    btn.style.background = "#ffe082"; // Gold color for folders
+    btn.style.fontWeight = "bold";
+    btn.innerText = "🚛 Vehicle Dispatch Summary"; 
+    
+    // When clicked, go to Level 2
+    btn.onclick = () => renderVehicleDispatchSheets();
+    
+    listContainer.appendChild(btn);
+}
+
+// 2. Level 2: Show Actual Sheets
+function renderVehicleDispatchSheets() {
+    const listContainer = document.getElementById("tracker-file-list");
+    listContainer.innerHTML = ""; // Clear the category buttons
+
+    // Add "Back" Button
+    const backBtn = document.createElement("button");
+    backBtn.className = "folder-btn";
+    backBtn.style.background = "#e0e0e0"; 
+    backBtn.innerText = "⬅️ Back to Categories";
+    backBtn.onclick = () => loadTrackerDashboard(); // Go back to Level 1
+    listContainer.appendChild(backBtn);
+
+    // List the actual sheets from Config
     if (CONFIG.TRACKER_SHEETS && CONFIG.TRACKER_SHEETS.length > 0) {
         CONFIG.TRACKER_SHEETS.forEach(sheet => {
             const btn = document.createElement("button");
             btn.className = "folder-btn";
-            btn.style.background = "#fff3cd"; 
+            btn.style.background = "#fff3cd"; // Light yellow for files
             btn.innerText = "📊 " + sheet.name; 
-            
-            // Pass the gid if it exists
             btn.onclick = () => loadFileIntoDuckDB(sheet.id, sheet.name, 'sheet', sheet.gid);
             listContainer.appendChild(btn);
         });
     } else {
-        listContainer.innerHTML = "No sheets configured.";
+        listContainer.innerHTML += "<p>No sheets configured.</p>";
     }
 }
 
@@ -223,20 +252,45 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
-        let downloadUrl = "";
-        
         if (type === 'sheet') {
-            // Google Sheets: Export Specific Tab using GID
-            // Note: We use docs.google.com endpoint for specific tabs
-            if (gid) {
-                downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv&gid=${gid}`;
-            } else {
-                // Fallback to default (first sheet)
-                downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv`;
-            }
+            statusDiv.innerHTML = "⏳ Identifying Tab...";
             
-            // Buttons
-            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${gid || 0}`;
+            // 1. Get Sheet Metadata
+            const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
+            const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+            
+            if (!metaResp.ok) throw new Error("Could not access Sheet. Check sharing permissions.");
+            const metaData = await metaResp.json();
+            
+            // 2. Find Sheet Name by GID
+            let sheetTitle = "";
+            const targetGid = gid ? parseInt(gid) : 0;
+            
+            const foundSheet = metaData.sheets.find(s => s.properties.sheetId === targetGid);
+            if (foundSheet) {
+                sheetTitle = foundSheet.properties.title;
+            } else {
+                throw new Error("Tab not found in this sheet.");
+            }
+
+            statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
+
+            // 3. Fetch Data Values
+            const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
+            const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+            const dataJson = await dataResp.json();
+
+            if (!dataJson.values || dataJson.values.length === 0) {
+                throw new Error("Sheet is empty.");
+            }
+
+            // 4. Convert to CSV & Load
+            const csvText = arrayToCSV(dataJson.values);
+            await db.registerFileText('live_sheet.csv', csvText);
+            await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('live_sheet.csv')`);
+            
+            // 5. Setup Buttons
+            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
                     <a href="${editUrl}" target="_blank" style="text-decoration:none;">
@@ -248,21 +302,13 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                         🤖 Summarize Info (AI)
                     </button>
                 </div>`;
+
         } else {
-            downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-        }
+            // Handle Parquet/CSV
+            const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+            const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+            if (!response.ok) throw new Error("Download failed");
 
-        const response = await fetch(downloadUrl, {
-            headers: { "Authorization": `Bearer ${accessToken}` }
-        });
-
-        if (!response.ok) throw new Error("Download failed");
-
-        if (type === 'sheet') {
-            const csvText = await response.text();
-            await db.registerFileText('live_sheet.csv', csvText);
-            await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('live_sheet.csv')`);
-        } else {
             const arrayBuffer = await response.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             await db.registerFileBuffer(fileName, uint8Array);
@@ -283,6 +329,20 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         console.error(e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
     }
+}
+
+// Helper: JSON Array -> CSV
+function arrayToCSV(data) {
+    return data.map(row =>
+        row.map(field => {
+            if (field === null || field === undefined) return '';
+            let stringField = String(field);
+            if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n')) {
+                stringField = '"' + stringField.replace(/"/g, '""') + '"';
+            }
+            return stringField;
+        }).join(',')
+    ).join('\n');
 }
 
 function summarizeData() {
@@ -317,8 +377,6 @@ async function applyTableFilter() {
     
     if (filterText) {
         if (column === "all") {
-             // Fallback: search first column. True "Search All" in SQL requires building a huge OR statement.
-             // For now, we search column0 as a basic check.
              query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
         } else {
             query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
