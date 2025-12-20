@@ -8,6 +8,57 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
+
+    <style>
+        /* NEW: Split Screen Styles */
+        #view-container {
+            display: grid;
+            gap: 15px;
+            min-height: 600px;
+            margin-top: 20px;
+        }
+        
+        /* Grid Layouts */
+        .grid-1 { grid-template-columns: 1fr; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+        /* Individual Pane */
+        .pane {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: auto;
+            padding: 10px;
+            background: white;
+            position: relative;
+            min-height: 400px;
+            transition: border-color 0.2s;
+        }
+
+        /* Active Pane (Highlighted) */
+        .pane.active {
+            border: 3px solid #007bff;
+            box-shadow: 0 0 15px rgba(0, 123, 255, 0.2);
+        }
+
+        .pane-label {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #eee;
+            padding: 2px 8px;
+            font-size: 10px;
+            border-bottom-left-radius: 5px;
+            color: #555;
+        }
+
+        .empty-msg {
+            text-align: center;
+            color: #999;
+            margin-top: 50px;
+        }
+    </style>
 </head>
 <body>
 
@@ -25,7 +76,15 @@
         <div id="dashboard" class="hidden">
             <header>
                 <h2>Store Search App</h2>
-                <div id="user-info">Service Account Connected</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <select onchange="window.changeLayout(this.value)" style="padding:5px; border-radius:4px; font-weight:bold;">
+                        <option value="1">🔲 Single View</option>
+                        <option value="2">columns Split (2)</option>
+                        <option value="3">columns Split (3)</option>
+                        <option value="4">Grid Split (4)</option>
+                    </select>
+                    <div id="user-info">Service Account Connected</div>
+                </div>
             </header>
             
             <main>
@@ -42,7 +101,7 @@
                         <h3>Step 2: Load Report</h3>
                         <div style="display: flex; gap: 10px;">
                             <input type="text" id="store-id-input" placeholder="Enter Store ID (e.g. 4702)" style="padding: 8px;">
-                            <button onclick="window.findAndLoadReport()">🚀 Load Data</button>
+                            <button onclick="window.findAndLoadReport()">🚀 Load into Active View</button>
                         </div>
                     </div>
                 </div>
@@ -59,8 +118,8 @@
                     <div id="tracker-file-list" class="folder-grid">Loading Sheets...</div>
                 </div>
 
-                <div id="filter-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
-                    <h3>Data Filters</h3>
+                <div id="filter-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
+                    <h3>Data Filters (Applies to Blue Active View)</h3>
                     
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <label>Filter:</label>
@@ -77,14 +136,19 @@
                             <option value="50">50 Rows</option>
                             <option value="100" selected>100 Rows</option>
                         </select>
-                        <span style="font-size: 12px; color: #666; margin-left: 10px;">*Live Data from Sheets.</span>
                     </div>
                     
                     <div id="sheet-link-container" style="margin-top: 10px;"></div>
                     <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
                 </div>
 
-                <div id="content-area" style="margin-top: 20px; overflow-x: auto;"></div>
+                <div id="view-container" class="grid-1">
+                    <div id="pane-0" class="pane active" onclick="window.setActivePane('pane-0')">
+                        <span class="pane-label">View 1 (Active)</span>
+                        <div class="content-area"></div>
+                    </div>
+                </div>
+
             </main>
         </div>
     </div>
