@@ -183,49 +183,46 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- UPDATED: TRACKER DASHBOARD WITH LAYERS ---
+// --- TRACKER DASHBOARD (Layered) ---
 
-// 1. Level 1: Show Categories (e.g. Vehicle Dispatch)
+// Level 1: Categories
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
     const listContainer = document.getElementById("tracker-file-list");
     
-    // Clear list and show "Category" buttons
     listContainer.innerHTML = "";
 
-    // Create "Vehicle Dispatch Summary" Group Button
+    // "Vehicle Dispatch Summary" Folder Button
     const btn = document.createElement("button");
     btn.className = "folder-btn";
-    btn.style.background = "#ffe082"; // Gold color for folders
+    btn.style.background = "#ffe082"; 
     btn.style.fontWeight = "bold";
     btn.innerText = "🚛 Vehicle Dispatch Summary"; 
-    
-    // When clicked, go to Level 2
     btn.onclick = () => renderVehicleDispatchSheets();
     
     listContainer.appendChild(btn);
 }
 
-// 2. Level 2: Show Actual Sheets
+// Level 2: Sheets
 function renderVehicleDispatchSheets() {
     const listContainer = document.getElementById("tracker-file-list");
-    listContainer.innerHTML = ""; // Clear the category buttons
+    listContainer.innerHTML = ""; 
 
-    // Add "Back" Button
+    // Back Button
     const backBtn = document.createElement("button");
     backBtn.className = "folder-btn";
     backBtn.style.background = "#e0e0e0"; 
-    backBtn.innerText = "⬅️ Back to Categories";
-    backBtn.onclick = () => loadTrackerDashboard(); // Go back to Level 1
+    backBtn.innerText = "⬅️ Back";
+    backBtn.onclick = () => loadTrackerDashboard();
     listContainer.appendChild(backBtn);
 
-    // List the actual sheets from Config
+    // Render Sheets
     if (CONFIG.TRACKER_SHEETS && CONFIG.TRACKER_SHEETS.length > 0) {
         CONFIG.TRACKER_SHEETS.forEach(sheet => {
             const btn = document.createElement("button");
             btn.className = "folder-btn";
-            btn.style.background = "#fff3cd"; // Light yellow for files
+            btn.style.background = "#fff3cd"; 
             btn.innerText = "📊 " + sheet.name; 
             btn.onclick = () => loadFileIntoDuckDB(sheet.id, sheet.name, 'sheet', sheet.gid);
             listContainer.appendChild(btn);
@@ -237,7 +234,7 @@ function renderVehicleDispatchSheets() {
 
 
 // ==========================================
-// 5. DATA LOADING ENGINE
+// 5. DATA LOADING ENGINE (API & BINARY)
 // ==========================================
 
 async function findAndLoadReport() {
@@ -255,18 +252,18 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         if (type === 'sheet') {
             statusDiv.innerHTML = "⏳ Identifying Tab...";
             
-            // 1. Get Sheet Metadata
+            // 1. Get Metadata
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             
             if (!metaResp.ok) throw new Error("Could not access Sheet. Check sharing permissions.");
             const metaData = await metaResp.json();
             
-            // 2. Find Sheet Name by GID
+            // 2. Find Sheet Title
             let sheetTitle = "";
             const targetGid = gid ? parseInt(gid) : 0;
-            
             const foundSheet = metaData.sheets.find(s => s.properties.sheetId === targetGid);
+            
             if (foundSheet) {
                 sheetTitle = foundSheet.properties.title;
             } else {
@@ -275,21 +272,19 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
 
-            // 3. Fetch Data Values
+            // 3. Fetch Data (API)
             const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
             const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             const dataJson = await dataResp.json();
 
-            if (!dataJson.values || dataJson.values.length === 0) {
-                throw new Error("Sheet is empty.");
-            }
+            if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet is empty.");
 
-            // 4. Convert to CSV & Load
+            // 4. Convert & Load
             const csvText = arrayToCSV(dataJson.values);
             await db.registerFileText('live_sheet.csv', csvText);
             await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('live_sheet.csv')`);
             
-            // 5. Setup Buttons
+            // 5. Buttons
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -304,7 +299,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
-            // Handle Parquet/CSV
+            // Binary (Parquet/CSV)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -331,7 +326,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     }
 }
 
-// Helper: JSON Array -> CSV
+// Helper: JSON -> CSV
 function arrayToCSV(data) {
     return data.map(row =>
         row.map(field => {
@@ -346,14 +341,13 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 7. AI SUMMARY ENGINE (Local SQL Analysis)
+// 7. AI SUMMARY ENGINE (New!)
 // ==========================================
 
 async function summarizeData() {
     const modal = document.getElementById("detail-modal");
     const modalBody = document.getElementById("modal-body");
     
-    // 1. Open Modal with Loading State
     modal.classList.remove("hidden");
     modalBody.innerHTML = `
         <div style="text-align:center; padding: 20px;">
@@ -362,33 +356,27 @@ async function summarizeData() {
         </div>`;
 
     try {
-        // 2. Get Table Schema (Column Names & Types)
         const schemaQuery = await conn.query(`DESCRIBE ${currentTableName}`);
         const schema = schemaQuery.toArray().map(row => row.toJSON());
 
-        // 3. Identify Logic Columns
-        // We assume the first text column is the "Label" (e.g., City, Store Name)
         const labelCol = schema.find(c => c.column_type.includes('VARCHAR'))?.column_name || schema[0].column_name;
         
-        // Find all Numeric Columns for summing
         const numericCols = schema.filter(c => 
             ['BIGINT', 'INTEGER', 'DOUBLE', 'DECIMAL', 'HUGEINT'].some(type => c.column_type.includes(type))
         ).map(c => c.column_name);
 
         if (numericCols.length === 0) {
-            modalBody.innerHTML = "<p>⚠️ No numeric data found to summarize. (Columns might be formatted as text)</p>";
+            modalBody.innerHTML = "<p>⚠️ No numeric data found to summarize.</p>";
             return;
         }
 
-        // 4. Run Analysis Queries
-        
-        // A. Calculate Grand Totals
+        // Totals
         const sumQueryParts = numericCols.map(col => `SUM("${col}") as "${col}"`).join(", ");
         const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${currentTableName}`);
         const totals = totalResult.toArray()[0].toJSON();
 
-        // B. Find Top Performer (Based on the last numeric column, usually "Total")
-        const mainMetric = numericCols[numericCols.length - 1]; // Usually the last column is the Grand Total
+        // Top Performer
+        const mainMetric = numericCols[numericCols.length - 1]; 
         const topResult = await conn.query(`
             SELECT "${labelCol}", "${mainMetric}" 
             FROM ${currentTableName} 
@@ -397,10 +385,8 @@ async function summarizeData() {
         `);
         const topRow = topResult.toArray()[0]?.toJSON();
 
-        // 5. Build HTML Report
         let html = `<div style="padding: 10px;">`;
         
-        // Section: Top Performer
         if (topRow) {
             html += `
             <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #2196f3;">
@@ -413,37 +399,21 @@ async function summarizeData() {
             </div>`;
         }
 
-        // Section: System Totals
         html += `<h3>📊 System Totals</h3>
                  <table class="detail-table" style="width:100%">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left;">Metric</th>
-                            <th style="text-align:right;">Grand Total</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th style="text-align:left;">Metric</th><th style="text-align:right;">Grand Total</th></tr></thead>
                     <tbody>`;
         
         numericCols.forEach(col => {
-            // Filter out ID columns usually not useful for sums
             if (!col.toLowerCase().includes('id') && !col.toLowerCase().includes('phone')) {
                 let val = totals[col];
-                // Format numbers nicely (e.g. 1,234)
                 let displayVal = val ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 0}) : "0";
-                
-                // Highlight the Main Metric
                 let style = (col === mainMetric) ? "font-weight:bold; color:#007bff;" : "";
-                
-                html += `<tr>
-                            <td>${col}</td>
-                            <td style="text-align:right; ${style}">${displayVal}</td>
-                         </tr>`;
+                html += `<tr><td>${col}</td><td style="text-align:right; ${style}">${displayVal}</td></tr>`;
             }
         });
 
         html += `</tbody></table></div>`;
-
-        // 6. Inject into Modal
         modalBody.innerHTML = html;
 
     } catch (e) {
