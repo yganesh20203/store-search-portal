@@ -7,9 +7,11 @@ let accessToken = "";
 let currentMonthFolderId = "";
 let db = null; 
 let conn = null; 
-let currentTableName = "current_data"; 
 
-// Attach functions to Window so HTML buttons can use them
+// NEW: Multi-Pane State
+let activePaneId = "pane-0"; // Default active pane
+
+// Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -19,6 +21,8 @@ window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
 window.closeModal = closeModal;
 window.summarizeData = summarizeData; 
+window.changeLayout = changeLayout;
+window.setActivePane = setActivePane;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -102,15 +106,58 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 4. DASHBOARD SWITCHING
+// 4. SPLIT SCREEN LOGIC (NEW)
+// ==========================================
+
+function changeLayout(numPanes) {
+    const container = document.getElementById("view-container");
+    container.innerHTML = ""; // Clear existing panes
+    container.className = `grid-${numPanes}`; // Update CSS grid class
+
+    for (let i = 0; i < numPanes; i++) {
+        const paneId = `pane-${i}`;
+        const div = document.createElement("div");
+        div.id = paneId;
+        div.className = "pane";
+        if (i === 0) div.classList.add("active"); // First one active by default
+        
+        // Add Click Listener to make it active
+        div.onclick = () => window.setActivePane(paneId);
+
+        div.innerHTML = `
+            <span class="pane-label">View ${i + 1}</span>
+            <div class="content-area">
+                <div class="empty-msg">Select a file to load here</div>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+    
+    // Reset active pane to first one
+    activePaneId = "pane-0";
+}
+
+function setActivePane(id) {
+    // 1. Visual Update
+    document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
+    const pane = document.getElementById(id);
+    if(pane) pane.classList.add("active");
+    
+    // 2. State Update
+    activePaneId = id;
+    
+    // 3. Optional: Refresh Filter UI if we tracked filters per pane (Skipped for simplicity)
+}
+
+// ==========================================
+// 5. DASHBOARD SWITCHING
 // ==========================================
 
 function resetUI() {
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
-    document.getElementById("filter-box").classList.add("hidden");
-    document.getElementById("content-area").innerHTML = "";
+    // We do NOT clear content-area anymore because we have multiple panes
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -149,7 +196,6 @@ function selectMonth(folderId, btnElement) {
     document.querySelectorAll(".folder-btn").forEach(b => b.classList.remove("active"));
     btnElement.classList.add("active");
     document.getElementById("store-search-box").classList.remove("hidden");
-    document.getElementById("content-area").innerHTML = "";
 }
 
 async function loadMemberDashboard() {
@@ -184,8 +230,6 @@ async function loadMemberDashboard() {
 }
 
 // --- TRACKER DASHBOARD (Dynamic Groups) ---
-
-// Level 1: Show Folder Groups
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
@@ -193,7 +237,6 @@ async function loadTrackerDashboard() {
     
     listContainer.innerHTML = "";
 
-    // Loop through groups defined in config.js
     if (CONFIG.TRACKER_GROUPS) {
         Object.keys(CONFIG.TRACKER_GROUPS).forEach(groupName => {
             const btn = document.createElement("button");
@@ -209,12 +252,10 @@ async function loadTrackerDashboard() {
     }
 }
 
-// Level 2: Show Sheets inside a Group
 function openTrackerCategory(groupName) {
     const listContainer = document.getElementById("tracker-file-list");
     listContainer.innerHTML = ""; 
 
-    // Back Button
     const backBtn = document.createElement("button");
     backBtn.className = "folder-btn";
     backBtn.style.background = "#e0e0e0"; 
@@ -222,7 +263,6 @@ function openTrackerCategory(groupName) {
     backBtn.onclick = () => loadTrackerDashboard();
     listContainer.appendChild(backBtn);
 
-    // List Sheets in this Group
     const sheets = CONFIG.TRACKER_GROUPS[groupName];
     
     if (sheets && sheets.length > 0) {
@@ -241,7 +281,7 @@ function openTrackerCategory(groupName) {
 
 
 // ==========================================
-// 5. DATA LOADING ENGINE (API & BINARY)
+// 6. DATA LOADING ENGINE (UPDATED FOR SPLIT VIEW)
 // ==========================================
 
 async function findAndLoadReport() {
@@ -250,58 +290,65 @@ async function findAndLoadReport() {
 
 async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     const statusDiv = document.getElementById("loading-status");
-    document.getElementById("filter-box").classList.remove("hidden");
     statusDiv.innerHTML = "⏳ Fetching Data...";
-    document.getElementById("content-area").innerHTML = "";
+    
+    // 1. Identify Target Pane & Table Name
+    const pane = document.getElementById(activePaneId);
+    if (!pane) { alert("Error: No active view selected"); return; }
+    
+    const contentArea = pane.querySelector(".content-area");
+    const tableName = `table_${activePaneId.replace('-', '_')}`; // e.g., table_pane_0
+
+    contentArea.innerHTML = "<p>⏳ Loading...</p>";
     document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
         if (type === 'sheet') {
             statusDiv.innerHTML = "⏳ Identifying Tab...";
             
-            // 1. Get Metadata
+            // API Call: Metadata
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
-            
-            if (!metaResp.ok) throw new Error("Could not access Sheet. Check sharing permissions.");
+            if (!metaResp.ok) throw new Error("Access Denied");
             const metaData = await metaResp.json();
             
-            // 2. Find Sheet Title
             let sheetTitle = "";
             const targetGid = gid ? parseInt(gid) : 0;
             const foundSheet = metaData.sheets.find(s => s.properties.sheetId === targetGid);
             
-            if (foundSheet) {
-                sheetTitle = foundSheet.properties.title;
-            } else {
-                throw new Error("Tab not found in this sheet.");
-            }
+            if (foundSheet) sheetTitle = foundSheet.properties.title;
+            else throw new Error("Tab not found");
 
             statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
 
-            // 3. Fetch Data (API)
+            // API Call: Data
             const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
             const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             const dataJson = await dataResp.json();
 
-            if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet is empty.");
+            if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            // 4. Convert & Load
+            // Convert & Load
             const csvText = arrayToCSV(dataJson.values);
-            await db.registerFileText('live_sheet.csv', csvText);
-            await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('live_sheet.csv')`);
+            const csvFileName = `temp_${tableName}.csv`;
             
-            // 5. Buttons
+            await db.registerFileText(csvFileName, csvText);
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}')`);
+            
+            // Update Label
+            pane.querySelector(".pane-label").innerText = `${sheetTitle} (Sheet)`;
+
+            // Add Buttons (Global area, applies to active pane)
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
                     <a href="${editUrl}" target="_blank" style="text-decoration:none;">
                         <button style="background:#28a745; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
-                            ✏️ Open in Google Sheets
+                            ✏️ Open Sheet
                         </button>
                     </a>
                     <button onclick="window.summarizeData()" style="background:#6f42c1; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
-                        🤖 Summarize Info (AI)
+                        🤖 AI Summary
                     </button>
                 </div>`;
 
@@ -316,20 +363,24 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             await db.registerFileBuffer(fileName, uint8Array);
             
             if (fileName.endsWith('.parquet')) {
-                 await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM parquet_scan('${fileName}')`);
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 await conn.query(`CREATE OR REPLACE TABLE ${currentTableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
             }
+            
+            // Update Label
+            pane.querySelector(".pane-label").innerText = fileName;
         }
 
         statusDiv.innerHTML = "✅ Data Loaded!";
-        await setupFilterDropdown();
+        await setupFilterDropdown(tableName);
         await applyTableFilter(); 
         statusDiv.innerHTML = "";
 
     } catch (e) {
         console.error(e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+        contentArea.innerHTML = `<p style="color:red">Failed to load</p>`;
     }
 }
 
@@ -348,102 +399,82 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 6. AI SUMMARY ENGINE
+// 7. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
     const modal = document.getElementById("detail-modal");
     const modalBody = document.getElementById("modal-body");
+    const tableName = `table_${activePaneId.replace('-', '_')}`;
     
     modal.classList.remove("hidden");
-    modalBody.innerHTML = `
-        <div style="text-align:center; padding: 20px;">
-            <h3>🤖 Analyzing Data...</h3>
-            <p>Calculating totals and identifying top performers.</p>
-        </div>`;
+    modalBody.innerHTML = `<h3>🤖 Analyzing...</h3>`;
 
     try {
-        const schemaQuery = await conn.query(`DESCRIBE ${currentTableName}`);
+        const schemaQuery = await conn.query(`DESCRIBE ${tableName}`);
         const schema = schemaQuery.toArray().map(row => row.toJSON());
 
         const labelCol = schema.find(c => c.column_type.includes('VARCHAR'))?.column_name || schema[0].column_name;
-        
         const numericCols = schema.filter(c => 
             ['BIGINT', 'INTEGER', 'DOUBLE', 'DECIMAL', 'HUGEINT'].some(type => c.column_type.includes(type))
         ).map(c => c.column_name);
 
         if (numericCols.length === 0) {
-            modalBody.innerHTML = "<p>⚠️ No numeric data found to summarize.</p>";
+            modalBody.innerHTML = "<p>⚠️ No numeric data found.</p>";
             return;
         }
 
         // Totals
         const sumQueryParts = numericCols.map(col => `SUM("${col}") as "${col}"`).join(", ");
-        const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${currentTableName}`);
+        const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${tableName}`);
         const totals = totalResult.toArray()[0].toJSON();
 
         // Top Performer
         const mainMetric = numericCols[numericCols.length - 1]; 
         const topResult = await conn.query(`
             SELECT "${labelCol}", "${mainMetric}" 
-            FROM ${currentTableName} 
+            FROM ${tableName} 
             ORDER BY "${mainMetric}" DESC 
             LIMIT 1
         `);
         const topRow = topResult.toArray()[0]?.toJSON();
 
         let html = `<div style="padding: 10px;">`;
-        
         if (topRow) {
-            html += `
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #2196f3;">
-                <h3 style="margin-top:0;">🏆 Top Performer</h3>
-                <p style="font-size: 1.1em;">
-                    <strong>${topRow[labelCol]}</strong> is leading with 
-                    <strong>${Number(topRow[mainMetric]).toLocaleString()}</strong> 
-                    in <em>${mainMetric}</em>.
-                </p>
+            html += `<div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin-top:0;">🏆 Leader: ${topRow[labelCol]}</h3>
+                <p>Score: <strong>${Number(topRow[mainMetric]).toLocaleString()}</strong></p>
             </div>`;
         }
 
-        html += `<h3>📊 System Totals</h3>
-                 <table class="detail-table" style="width:100%">
-                    <thead><tr><th style="text-align:left;">Metric</th><th style="text-align:right;">Grand Total</th></tr></thead>
-                    <tbody>`;
-        
+        html += `<h3>📊 Totals</h3><table class="detail-table" style="width:100%"><tbody>`;
         numericCols.forEach(col => {
-            if (!col.toLowerCase().includes('id') && !col.toLowerCase().includes('phone')) {
-                let val = totals[col];
-                let displayVal = val ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 0}) : "0";
-                let style = (col === mainMetric) ? "font-weight:bold; color:#007bff;" : "";
-                html += `<tr><td>${col}</td><td style="text-align:right; ${style}">${displayVal}</td></tr>`;
+            if (!col.toLowerCase().includes('id')) {
+                html += `<tr><td>${col}</td><td style="text-align:right;">${Number(totals[col]).toLocaleString()}</td></tr>`;
             }
         });
-
         html += `</tbody></table></div>`;
         modalBody.innerHTML = html;
 
     } catch (e) {
-        console.error("Summary Error:", e);
-        modalBody.innerHTML = `<p style="color:red"><strong>Error generating summary:</strong> ${e.message}</p>`;
+        modalBody.innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
     }
 }
 
 // ==========================================
-// 7. SQL FILTERING & RENDERING
+// 8. SQL FILTERING & RENDERING (TARGETS ACTIVE PANE)
 // ==========================================
 
-async function setupFilterDropdown() {
-    const schema = await conn.query(`DESCRIBE ${currentTableName}`);
+async function setupFilterDropdown(tableName) {
+    const schema = await conn.query(`DESCRIBE ${tableName}`);
     const dropdown = document.getElementById("column-select");
     dropdown.innerHTML = '<option value="all">All Columns</option>';
     
     const rows = schema.toArray();
     rows.forEach(row => {
-        const colName = row.column_name;
         const option = document.createElement("option");
-        option.value = colName;
-        option.innerText = colName;
+        option.value = row.column_name;
+        option.innerText = row.column_name;
         dropdown.appendChild(option);
     });
 }
@@ -452,15 +483,13 @@ async function applyTableFilter() {
     const filterText = document.getElementById("filter-input").value.replace(/'/g, "''"); 
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
+    const tableName = `table_${activePaneId.replace('-', '_')}`;
     
-    let query = `SELECT * FROM ${currentTableName}`;
+    let query = `SELECT * FROM ${tableName}`;
     
     if (filterText) {
-        if (column === "all") {
-             query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
-        } else {
-            query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
-        }
+        if (column === "all") query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
+        else query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
     }
     
     if (limit !== "all") query += ` LIMIT ${limit}`;
@@ -469,32 +498,35 @@ async function applyTableFilter() {
         const result = await conn.query(query);
         renderTableFromArrow(result);
     } catch (e) {
-        console.error("Query Error", e);
+        console.log("Empty or Error");
     }
 }
 
 let currentArrowData = null; 
 
 function renderTableFromArrow(arrowResult) {
-    const container = document.getElementById("content-area");
+    const pane = document.getElementById(activePaneId);
+    if(!pane) return;
+    const container = pane.querySelector(".content-area");
+    
     const rows = arrowResult.toArray().map(r => r.toJSON());
     currentArrowData = rows; 
 
     if (rows.length === 0) {
-        container.innerHTML = "<p>No matches found.</p>";
+        container.innerHTML = "<p style='text-align:center; padding:20px;'>No matches found.</p>";
         return;
     }
 
     const headers = Object.keys(rows[0]);
-    let html = `<table><thead><tr>`;
-    headers.forEach(h => html += `<th>${h}</th>`);
+    let html = `<table style="width:100%; border-collapse:collapse;"><thead><tr>`;
+    headers.forEach(h => html += `<th style="text-align:left; background:#f1f1f1; padding:8px; border-bottom:2px solid #ddd; position:sticky; top:0;">${h}</th>`);
     html += `</tr></thead><tbody>`;
 
     rows.forEach((row, index) => {
-        html += `<tr onclick="window.showRowDetails(${index})" title="Click details">`;
+        html += `<tr onclick="window.showRowDetails(${index})" title="Click details" style="border-bottom:1px solid #eee; cursor:pointer;">`;
         headers.forEach(h => {
              let val = row[h];
-             html += `<td>${val !== null ? val : ''}</td>`;
+             html += `<td style="padding:8px;">${val !== null ? val : ''}</td>`;
         });
         html += `</tr>`;
     });
