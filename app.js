@@ -9,10 +9,10 @@ let db = null;
 let conn = null; 
 let activePaneId = "pane-0"; 
 
-// HOURLY CACHE (Stores fetched images to avoid re-fetching)
+// HOURLY CACHE
 let hourlyFilesCache = []; 
 
-// Attach functions to Window for HTML access
+// Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -292,8 +292,8 @@ async function loadHourlyDashboard() {
     imageList.innerHTML = "";
 
     // Query: Sort by Created Time Descending (Newest First)
-    const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and (mimeType contains 'image/') and trashed = false`;
     // We request createdTime to group them
+    const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and (mimeType contains 'image/') and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc`;
 
     try {
