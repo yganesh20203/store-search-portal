@@ -317,6 +317,10 @@ function openTrackerCategory(groupName) {
 // ==========================================
 // 6. WALKIN DASHBOARD
 // ==========================================
+// ==========================================
+// 6. WALKIN DASHBOARD (UPDATED: Nested Folders)
+// ==========================================
+
 async function loadWalkinDashboard() {
     resetUI();
     document.getElementById("walkin-ui").classList.remove("hidden");
@@ -333,7 +337,8 @@ async function loadWalkinDashboard() {
             btn.style.fontWeight = "bold";
             btn.innerText = groupName;
             const folderId = CONFIG.WALKIN_FOLDERS[groupName];
-            btn.onclick = () => loadWalkinCategory(groupName, folderId);
+            // Start at the root of this category, passing 'dashboard' as the back target
+            btn.onclick = () => loadWalkinCategory(groupName, folderId, 'dashboard');
             catList.appendChild(btn);
         });
     } else {
@@ -341,28 +346,58 @@ async function loadWalkinDashboard() {
     }
 }
 
-async function loadWalkinCategory(groupName, folderId) {
+// Global stack to handle "Back" navigation history
+let walkinHistoryStack = [];
+
+async function loadWalkinCategory(title, folderId, backMode = null) {
     const container = document.getElementById("walkin-files-container");
     const list = document.getElementById("walkin-file-list");
-    const title = document.getElementById("walkin-files-title");
+    const titleElem = document.getElementById("walkin-files-title");
     
     container.classList.remove("hidden");
-    title.innerText = `📂 ${groupName}`;
-    list.innerHTML = "Loading...";
+    titleElem.innerText = `📂 ${title}`;
+    list.innerHTML = "⏳ Loading...";
+
+    // Handle History/Back Logic
+    if (backMode === 'dashboard') {
+        walkinHistoryStack = []; // Reset stack for new category
+    } else if (backMode === 'push') {
+        // We are drilling down, so push current state to history BEFORE loading new
+        // We don't push here, we rely on the click handler to push
+    }
 
     if (!folderId || folderId.includes("PASTE")) {
         list.innerHTML = "<p style='color:red'>Folder ID not configured in config.js</p>";
         return;
     }
 
+    // 1. Render Back Button if we are deep in folders
+    if (walkinHistoryStack.length > 0) {
+        const backBtn = document.createElement("button");
+        backBtn.className = "folder-btn";
+        backBtn.style.background = "#e0e0e0";
+        backBtn.style.width = "100%";
+        backBtn.style.marginBottom = "10px";
+        backBtn.innerHTML = "⬅️ Back";
+        backBtn.onclick = () => {
+            const prev = walkinHistoryStack.pop(); // Get previous state
+            loadWalkinCategory(prev.title, prev.id, 'back'); // Load it
+        };
+        // Clear list momentarily to prepend button nicely
+        list.innerHTML = ""; 
+        list.appendChild(backBtn);
+    } else {
+        list.innerHTML = "";
+    }
+
+    // 2. Fetch Files & Folders
     const query = `'${folderId}' in parents and trashed = false`;
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, thumbnailLink)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, thumbnailLink)&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        list.innerHTML = "";
         if (data.files && data.files.length > 0) {
             data.files.forEach(file => {
                 const btn = document.createElement("button");
@@ -373,32 +408,53 @@ async function loadWalkinCategory(groupName, folderId) {
                 btn.style.flexDirection = "column";
                 btn.style.alignItems = "center";
                 btn.style.width = "140px";
-                btn.style.height = "120px";
+                btn.style.height = "130px"; // Slightly taller for folder names
                 btn.style.padding = "10px";
                 btn.style.gap = "5px";
 
-                let icon = `<div style="font-size:30px;">📄</div>`;
-                if (file.mimeType.includes("image") && file.thumbnailLink) {
+                let icon = "";
+                let isFolder = false;
+
+                // --- ICON LOGIC ---
+                if (file.mimeType === "application/vnd.google-apps.folder") {
+                    icon = `<div style="font-size:40px;">📁</div>`;
+                    isFolder = true;
+                    btn.style.background = "#fff8e1"; // Yellowish for folders
+                } 
+                else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
-                } else if (file.mimeType.includes("spreadsheet")) {
+                } 
+                else if (file.mimeType.includes("spreadsheet")) {
                     icon = `<div style="font-size:30px;">📊</div>`;
+                } 
+                else {
+                    icon = `<div style="font-size:30px;">📄</div>`;
                 }
 
-                btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
+                btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center; max-height:3em;">${file.name}</div>`;
 
+                // --- CLICK LOGIC ---
                 btn.onclick = () => {
-                    if (file.mimeType.includes("image")) {
+                    if (isFolder) {
+                        // Push CURRENT level to stack before going deeper
+                        walkinHistoryStack.push({ title: title, id: folderId });
+                        // Drill down
+                        loadWalkinCategory(file.name, file.id, 'push');
+                    } 
+                    else if (file.mimeType.includes("image")) {
                         renderImage(file.id, file.name);
-                    } else if (file.mimeType.includes("spreadsheet")) {
+                    } 
+                    else if (file.mimeType.includes("spreadsheet")) {
                         loadFileIntoDuckDB(file.id, file.name, 'sheet', 0);
-                    } else {
+                    } 
+                    else {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
                     }
                 };
                 list.appendChild(btn);
             });
         } else {
-            list.innerHTML = "No files found.";
+            list.innerHTML += "<p style='width:100%; text-align:center; color:#777;'>Empty Folder</p>";
         }
     } catch (e) {
         list.innerHTML = "Error: " + e.message;
