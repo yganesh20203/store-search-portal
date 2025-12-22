@@ -20,6 +20,7 @@ const CONFIG = {
     TICKET_SHEET_ID: "1w3Hs0teV2AACnHitf4iVG-Yg3i-PXP4Sek9VMwWStTw",
     TICKET_SCRIPT_URL: "https://script.google.com/a/macros/flipkart.com/s/AKfycbzpB3QtwSOZok3ZBJVqsSj6b74UHSVzUOrlRTOeaXEMfe1oRi41NedwfDSZqxKthcAd/exec",
     DAILY_DISPATCH_SHEET_ID: "1rg-bNn8WqMg0uqpyczjG8ywOJuLhV-3DMS0S7ZSZQvI",
+    WORK_REPORTS_FOLDER_ID: "1ViTdGxZu-mAMiUOyBCliV8uMNy30clNt",
 
     // 4. Tracker Groups
     TRACKER_GROUPS: {
