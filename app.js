@@ -16,7 +16,7 @@ window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
 window.loadTrackerDashboard = loadTrackerDashboard; 
 window.loadHourlyDashboard = loadHourlyDashboard; 
-window.loadTicketDashboard = loadTicketDashboard; // NEW
+window.loadTicketDashboard = loadTicketDashboard; 
 window.findAndLoadReport = findAndLoadReport;
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
@@ -28,10 +28,10 @@ window.filterHourlyImagesByDate = filterHourlyImagesByDate;
 window.openFeedbackModal = openFeedbackModal;
 window.closeFeedbackModal = closeFeedbackModal;
 window.submitFeedback = submitFeedback;
-window.createTicket = createTicket; // NEW
-window.openResolveModal = openResolveModal; // NEW
-window.closeResolveModal = closeResolveModal; // NEW
-window.confirmResolve = confirmResolve; // NEW
+window.createTicket = createTicket; 
+window.openResolveModal = openResolveModal; 
+window.closeResolveModal = closeResolveModal; 
+window.confirmResolve = confirmResolve; 
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -95,7 +95,7 @@ async function generateAccessToken(creds) {
     const now = Math.floor(Date.now() / 1000);
     const claim = {
         iss: creds.client_email,
-        // CHANGED: Removed .readonly so we can WRITE feedback/tickets to sheets
+        // CRITICAL: Scope allows writing to Sheets (Tickets/Feedback)
         scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
@@ -116,53 +116,7 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 4. FEEDBACK LOGIC
-// ==========================================
-function openFeedbackModal() {
-    document.getElementById("feedback-modal").classList.remove("hidden");
-}
-
-function closeFeedbackModal() {
-    document.getElementById("feedback-modal").classList.add("hidden");
-}
-
-async function submitFeedback() {
-    const text = document.getElementById("feedback-text").value;
-    const storeId = document.getElementById("store-id-input")?.value || "N/A";
-    
-    if(!text) { alert("Please type some feedback!"); return; }
-    if(!CONFIG.FEEDBACK_SHEET_ID) { alert("Feedback Sheet ID missing in config.js"); return; }
-
-    try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.FEEDBACK_SHEET_ID}/values/A1:append?valueInputOption=USER_ENTERED`;
-        const body = {
-            values: [[ new Date().toLocaleString(), storeId, text ]]
-        };
-
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body)
-        });
-
-        if(response.ok) {
-            alert("✅ Feedback Sent! Thank you.");
-            document.getElementById("feedback-text").value = "";
-            closeFeedbackModal();
-        } else {
-            const err = await response.json();
-            alert("Error sending feedback: " + err.error.message);
-        }
-    } catch(e) {
-        alert("Network Error: " + e.message);
-    }
-}
-
-// ==========================================
-// 5. SPLIT SCREEN LOGIC
+// 4. UI HELPERS & FEEDBACK
 // ==========================================
 
 function changeLayout(numPanes) {
@@ -177,7 +131,6 @@ function changeLayout(numPanes) {
         div.className = "pane";
         if (i === 0) div.classList.add("active"); // First one active by default
         
-        // Add Click Listener to make it active
         div.onclick = () => window.setActivePane(paneId);
 
         div.innerHTML = `
@@ -188,8 +141,6 @@ function changeLayout(numPanes) {
         `;
         container.appendChild(div);
     }
-    
-    // Reset active pane to first one
     activePaneId = "pane-0";
 }
 
@@ -200,18 +151,50 @@ function setActivePane(id) {
     activePaneId = id;
 }
 
-// ==========================================
-// 6. DASHBOARD SWITCHING
-// ==========================================
-
 function resetUI() {
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
     document.getElementById("hourly-ui").classList.add("hidden"); 
-    document.getElementById("ticket-ui").classList.add("hidden"); // Added Ticket UI
+    document.getElementById("ticket-ui").classList.add("hidden"); 
     document.getElementById("sheet-link-container").innerHTML = "";
 }
+
+// --- FEEDBACK ---
+function openFeedbackModal() { document.getElementById("feedback-modal").classList.remove("hidden"); }
+function closeFeedbackModal() { document.getElementById("feedback-modal").classList.add("hidden"); }
+
+async function submitFeedback() {
+    const text = document.getElementById("feedback-text").value;
+    const storeId = document.getElementById("store-id-input")?.value || "N/A";
+    
+    if(!text) { alert("Please type some feedback!"); return; }
+    if(!CONFIG.FEEDBACK_SHEET_ID) { alert("Feedback Sheet ID missing in config.js"); return; }
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.FEEDBACK_SHEET_ID}/values/A1:append?valueInputOption=USER_ENTERED`;
+        const body = { values: [[ new Date().toLocaleString(), storeId, text ]] };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        if(response.ok) {
+            alert("✅ Feedback Sent!");
+            document.getElementById("feedback-text").value = "";
+            closeFeedbackModal();
+        } else {
+            const err = await response.json();
+            alert("Error: " + err.error.message);
+        }
+    } catch(e) { alert("Network Error: " + e.message); }
+}
+
+// ==========================================
+// 5. DASHBOARD SWITCHING
+// ==========================================
 
 async function loadSalesDashboard() {
     resetUI();
@@ -281,12 +264,10 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- TRACKER DASHBOARD (Dynamic Groups) ---
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
     const listContainer = document.getElementById("tracker-file-list");
-    
     listContainer.innerHTML = "";
 
     if (CONFIG.TRACKER_GROUPS) {
@@ -332,7 +313,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 7. HOURLY SALES DASHBOARD
+// 6. HOURLY SALES DASHBOARD
 // ==========================================
 
 async function loadHourlyDashboard() {
@@ -342,7 +323,7 @@ async function loadHourlyDashboard() {
     const imageList = document.getElementById("hourly-file-list");
     document.getElementById("hourly-images-container").classList.add("hidden");
     
-    dateList.innerHTML = "⏳ Scanning Drive for Hourly Images...";
+    dateList.innerHTML = "⏳ Scanning Drive...";
     imageList.innerHTML = "";
 
     // Query: Sort by Created Time Descending (Newest First)
@@ -360,18 +341,17 @@ async function loadHourlyDashboard() {
             const dates = {};
             data.files.forEach(file => {
                 const dateObj = new Date(file.createdTime);
-                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); // e.g., "Dec 20, 2025"
+                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); 
                 if (!dates[dateKey]) dates[dateKey] = [];
                 dates[dateKey].push(file);
             });
 
-            // Render Date Buttons
             dateList.innerHTML = "";
             Object.keys(dates).forEach(date => {
                 const count = dates[date].length;
                 const btn = document.createElement("button");
                 btn.className = "folder-btn";
-                btn.style.background = "#e1bee7"; // Light Purple
+                btn.style.background = "#e1bee7"; 
                 btn.style.width = "auto";
                 btn.style.padding = "10px 20px";
                 btn.innerHTML = `📅 <b>${date}</b> <br><span style="font-size:0.8em;">(${count} updates)</span>`;
@@ -380,12 +360,7 @@ async function loadHourlyDashboard() {
             });
 
         } else {
-            dateList.innerHTML = `
-                <div style="color:red; text-align:center;">
-                    ❌ No images found.<br>
-                    <small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small><br>
-                    <small>Make sure 'analytics-fkw@...' has Viewer access.</small>
-                </div>`;
+            dateList.innerHTML = `<div style="color:red; text-align:center;">❌ No images found.<br><small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small></div>`;
         }
     } catch (e) {
         dateList.innerHTML = "Error: " + e.message;
@@ -398,10 +373,7 @@ function filterHourlyImagesByDate(dateKey) {
     container.classList.remove("hidden");
     list.innerHTML = "";
 
-    // Filter files for selected date
     const filteredFiles = hourlyFilesCache.filter(f => new Date(f.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) === dateKey);
-
-    // Sort by Time Ascending for the day
     filteredFiles.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
 
     filteredFiles.forEach(file => {
@@ -420,16 +392,11 @@ function filterHourlyImagesByDate(dateKey) {
         btn.style.gap = "5px";
         btn.style.padding = "10px";
         
-        // Thumbnail
         const img = file.thumbnailLink 
             ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
             : `<div style="font-size:30px;">🖼️</div>`;
 
-        // UI: Show Time BIG, Hide Name
-        btn.innerHTML = `
-            ${img}
-            <div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>
-        `;
+        btn.innerHTML = `${img}<div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>`;
         btn.onclick = () => renderImage(file.id, timeStr);
         list.appendChild(btn);
     });
@@ -463,14 +430,166 @@ async function renderImage(fileId, timeLabel) {
 
 
 // ==========================================
-// 8. DATA LOADING ENGINE (SALES & TRACKERS)
+// 7. TICKETING SYSTEM (DIRECT DB MODE)
+// ==========================================
+
+async function loadTicketDashboard() {
+    resetUI();
+    document.getElementById("ticket-ui").classList.remove("hidden");
+    const container = document.getElementById("ticket-list-container");
+    container.innerHTML = "⏳ Fetching tickets...";
+
+    try {
+        if (!CONFIG.TICKET_SHEET_ID) { container.innerHTML = "<p>Ticketing not configured.</p>"; return; }
+        
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "<p>No tickets found.</p>";
+            return;
+        }
+
+        let html = `<table class="data-table">
+            <thead><tr><th>ID</th><th>Date</th><th>Assigned To</th><th>Task</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>`;
+
+        // Loop rows (Skip header)
+        for (let i = data.values.length - 1; i >= 1; i--) {
+            const row = data.values[i];
+            const tktId = row[0];
+            const tktDate = row[1];
+            const tktTo = row[3];
+            const tktTask = row[4];
+            const tktStatus = row[5];
+
+            const isResolved = tktStatus === "RESOLVED";
+            const rowColor = isResolved ? "#e8f5e9" : "#fff";
+            const rowIndex = i + 1; // Google Sheet Row Index (based on array index match)
+            
+            const btnHtml = isResolved 
+                ? `<span style="color:green; font-weight:bold;">✔ Done</span>` 
+                : `<button onclick="window.openResolveModal('${tktId}', ${rowIndex})" style="font-size:10px; padding:4px; cursor:pointer;">✅ Resolve</button>`;
+
+            html += `<tr style="background:${rowColor}">
+                <td>${tktId}</td>
+                <td>${tktDate}</td>
+                <td>${tktTo}</td>
+                <td>${tktTask}</td>
+                <td style="font-weight:bold;">${tktStatus}</td>
+                <td>${btnHtml}</td>
+            </tr>`;
+        }
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+    } catch (e) {
+        container.innerHTML = "Error loading tickets: " + e.message;
+    }
+}
+
+async function createTicket() {
+    const email = document.getElementById("tkt-email").value;
+    const task = document.getElementById("tkt-task").value;
+    
+    if(!email || !task) { alert("Please fill in email and task."); return; }
+
+    const btn = document.querySelector("#ticket-ui button"); 
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ Saving...";
+    btn.disabled = true;
+
+    try {
+        const ticketId = "TKT-" + Math.floor(10000 + Math.random() * 90000);
+        const date = new Date().toLocaleDateString();
+        
+        // DIRECT WRITE TO SHEET
+        const values = [[ ticketId, date, "Admin", email, task, "OPEN", "" ]];
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`;
+        
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: values })
+        });
+
+        if (response.ok) {
+            alert(`✅ Ticket ${ticketId} Created!`);
+            document.getElementById("tkt-task").value = "";
+            loadTicketDashboard(); 
+        } else {
+            throw new Error("DB Save Failed");
+        }
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
+
+let currentResolveId = "";
+let currentResolveRowIndex = 0;
+
+function openResolveModal(id, rowIndex) {
+    currentResolveId = id;
+    currentResolveRowIndex = rowIndex; 
+    document.getElementById("resolve-tkt-id").innerText = "Closing Ticket: " + id;
+    document.getElementById("resolve-modal").classList.remove("hidden");
+}
+
+function closeResolveModal() {
+    document.getElementById("resolve-modal").classList.add("hidden");
+}
+
+async function confirmResolve() {
+    const notes = document.getElementById("resolve-notes").value;
+    const btn = document.querySelector("#resolve-modal button");
+    btn.innerText = "⏳ Updating DB...";
+    
+    try {
+        // Calculate Sheet Row (1-based index)
+        // Array index 0 = Header (Row 1). Array index 1 = Row 2.
+        // Passed rowIndex is the array index + 1? No, we need exact sheet row.
+        // loadTicketDashboard logic: i starts at 1. If i=1 (Row 2), rowIndex passed = 2.
+        // So rowIndex IS the Sheet Row Number.
+        const sheetRow = currentResolveRowIndex + 1; 
+
+        const range = `Sheet1!F${sheetRow}:G${sheetRow}`; // Columns F (Status) and G (Resolution)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
+
+        const response = await fetch(url, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [[ "RESOLVED", notes ]] })
+        });
+
+        if(response.ok) {
+            alert("✅ Ticket Resolved!");
+            closeResolveModal();
+            loadTicketDashboard(); 
+        } else {
+            throw new Error("Update Failed");
+        }
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = "Mark as Resolved";
+    }
+}
+
+
+// ==========================================
+// 8. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
     const storeId = document.getElementById("store-id-input").value.trim();
     const statusDiv = document.getElementById("loading-status");
 
-    // Validation
     if (!currentMonthFolderId) { alert("⚠️ Please select a Month folder first (Step 1)."); return; }
     if (!storeId) { alert("⚠️ Please enter a Store ID."); return; }
 
@@ -481,7 +600,6 @@ async function findAndLoadReport() {
     const contentArea = pane.querySelector(".content-area");
     contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:#666;">🔍 Searching Drive for ${storeId}...</div>`;
 
-    // Search Drive
     const query = `'${currentMonthFolderId}' in parents and name contains '${storeId}' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
@@ -518,9 +636,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
     try {
         if (type === 'sheet') {
-            statusDiv.innerHTML = "⏳ Identifying Tab...";
-            
-            // Metadata
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
@@ -532,45 +647,29 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (foundSheet) sheetTitle = foundSheet.properties.title;
             else throw new Error("Tab not found");
 
-            statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
-
-            // Data
             const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
             const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             const dataJson = await dataResp.json();
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            // --- SMART HEADER FIX (Applies to ALL Sheets) ---
             let finalValues = dataJson.values;
-
-            // Always check for at least 2 rows to attempt merge
             if (finalValues.length >= 2) {
-                console.log("🛠️ Merging Top 2 Rows for Header...");
-                
-                const rowDates = finalValues[0]; // Top Row
-                const rowMetrics = finalValues[1]; // Bottom Row
+                const rowDates = finalValues[0];
+                const rowMetrics = finalValues[1];
                 let newHeader = [];
                 let lastDate = "";
 
-                // Iterate using the bottom row as the count
                 for (let i = 0; i < rowMetrics.length; i++) {
                     let dateVal = rowDates[i] || "";
                     let metricVal = rowMetrics[i] || `col${i}`;
-
-                    // Handle Merged Cells logic
                     if (dateVal !== "") lastDate = dateVal;
-
                     if (lastDate) newHeader.push(`${lastDate} - ${metricVal}`);
                     else newHeader.push(metricVal);
                 }
-                
-                // Replace the first 2 rows with the new header
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
-            // -------------------------------------------------
 
-            // Load to DuckDB
             const csvText = arrayToCSV(finalValues);
             const csvFileName = `temp_${tableName}.csv`;
             
@@ -579,7 +678,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
-            // Buttons
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -594,7 +692,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
-            // Binary (Parquet/CSV)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -664,12 +761,10 @@ async function summarizeData() {
             return;
         }
 
-        // Totals
         const sumQueryParts = numericCols.map(col => `SUM("${col}") as "${col}"`).join(", ");
         const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${tableName}`);
         const totals = totalResult.toArray()[0].toJSON();
 
-        // Top Performer
         const mainMetric = numericCols[numericCols.length - 1]; 
         const topResult = await conn.query(`
             SELECT "${labelCol}", "${mainMetric}" 
@@ -796,140 +891,4 @@ function closeModal() {
 window.onclick = function(event) {
     const modal = document.getElementById("detail-modal");
     if (event.target == modal) closeModal();
-}
-
-// ==========================================
-// 11. TICKETING SYSTEM
-// ==========================================
-
-async function loadTicketDashboard() {
-    resetUI();
-    document.getElementById("ticket-ui").classList.remove("hidden");
-    const container = document.getElementById("ticket-list-container");
-    container.innerHTML = "⏳ Fetching tickets...";
-
-    try {
-        if (!CONFIG.TICKET_SHEET_ID) { container.innerHTML = "<p>Ticketing not configured.</p>"; return; }
-        
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1`;
-        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        const data = await response.json();
-
-        if (!data.values || data.values.length < 2) {
-            container.innerHTML = "<p>No tickets found.</p>";
-            return;
-        }
-
-        let html = `<table class="data-table">
-            <thead><tr><th>ID</th><th>Date</th><th>Assigned To</th><th>Task</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody>`;
-
-        for (let i = data.values.length - 1; i >= 1; i--) {
-            const row = data.values[i];
-            const tktId = row[0];
-            const tktDate = row[1];
-            const tktTo = row[3];
-            const tktTask = row[4];
-            const tktStatus = row[5];
-
-            const isResolved = tktStatus === "RESOLVED";
-            const rowColor = isResolved ? "#e8f5e9" : "#fff";
-            const btnHtml = isResolved 
-                ? `<span style="color:green; font-weight:bold;">✔ Done</span>` 
-                : `<button onclick="window.openResolveModal('${tktId}')" style="font-size:10px; padding:4px; cursor:pointer;">✅ Resolve</button>`;
-
-            html += `<tr style="background:${rowColor}">
-                <td>${tktId}</td>
-                <td>${tktDate}</td>
-                <td>${tktTo}</td>
-                <td>${tktTask}</td>
-                <td style="font-weight:bold;">${tktStatus}</td>
-                <td>${btnHtml}</td>
-            </tr>`;
-        }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
-
-    } catch (e) {
-        container.innerHTML = "Error loading tickets: " + e.message;
-    }
-}
-
-async function createTicket() {
-    const email = document.getElementById("tkt-email").value;
-    const task = document.getElementById("tkt-task").value;
-    
-    if(!email || !task) { alert("Please fill in email and task."); return; }
-
-    const btn = document.querySelector("#ticket-ui button"); 
-    const originalText = btn.innerText;
-    btn.innerText = "⏳ Sending...";
-    btn.disabled = true;
-
-    try {
-        const payload = {
-            action: "create",
-            assignedBy: "Admin",
-            assignedTo: email,
-            task: task
-        };
-
-        const response = await fetch(CONFIG.TICKET_SCRIPT_URL, {
-            method: "POST",
-            body: JSON.stringify(payload)
-        });
-        
-        alert("✅ Ticket Assigned & Email Sent!");
-        document.getElementById("tkt-task").value = "";
-        loadTicketDashboard(); 
-
-    } catch (e) {
-        alert("Note: Ticket created (check sheet), but script response was opaque.");
-        loadTicketDashboard();
-    } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
-    }
-}
-
-let currentResolveId = "";
-
-function openResolveModal(id) {
-    currentResolveId = id;
-    document.getElementById("resolve-tkt-id").innerText = "Closing Ticket: " + id;
-    document.getElementById("resolve-modal").classList.remove("hidden");
-}
-
-function closeResolveModal() {
-    document.getElementById("resolve-modal").classList.add("hidden");
-}
-
-async function confirmResolve() {
-    const notes = document.getElementById("resolve-notes").value;
-    const btn = document.querySelector("#resolve-modal button");
-    btn.innerText = "⏳ Updating...";
-    
-    try {
-        const payload = {
-            action: "resolve",
-            ticketId: currentResolveId,
-            notes: notes
-        };
-
-        await fetch(CONFIG.TICKET_SCRIPT_URL, {
-            method: "POST",
-            body: JSON.stringify(payload)
-        });
-
-        alert("✅ Ticket Resolved!");
-        closeResolveModal();
-        loadTicketDashboard(); 
-
-    } catch (e) {
-        alert("Note: Status updated.");
-        closeResolveModal();
-        loadTicketDashboard();
-    } finally {
-        btn.innerText = "Mark as Resolved";
-    }
 }
