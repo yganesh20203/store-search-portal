@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Store Portal</title>
     <link rel="stylesheet" href="styles.css">
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
+
     <style>
         /* Split Screen Grid */
         #view-container { display: grid; gap: 15px; min-height: 600px; margin-top: 20px; }
@@ -15,13 +17,22 @@
         .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
         .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 
-        .pane { border: 2px solid #e0e0e0; border-radius: 8px; overflow: auto; padding: 10px; background: white; position: relative; min-height: 400px; transition: border-color 0.2s; }
+        .pane {
+            border: 2px solid #e0e0e0; border-radius: 8px; overflow: auto; padding: 10px;
+            background: white; position: relative; min-height: 400px; transition: border-color 0.2s;
+        }
         .pane.active { border: 3px solid #007bff; box-shadow: 0 0 15px rgba(0, 123, 255, 0.2); }
-        .pane-label { position: absolute; top: 0; right: 0; background: #eee; padding: 2px 8px; font-size: 10px; border-bottom-left-radius: 5px; color: #555; z-index: 100; }
+        .pane-label {
+            position: absolute; top: 0; right: 0; background: #eee; padding: 2px 8px;
+            font-size: 10px; border-bottom-left-radius: 5px; color: #555; z-index: 100;
+        }
         .empty-msg { text-align: center; color: #999; margin-top: 50px; }
 
         /* Buttons */
-        .feedback-btn { background: #ff9800; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px; }
+        .feedback-btn { 
+            background: #ff9800; color: white; border: none; padding: 5px 12px; 
+            border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px; 
+        }
         .feedback-btn:hover { background: #f57c00; }
     </style>
 </head>
@@ -48,7 +59,9 @@
                         <option value="3">columns Split (3)</option>
                         <option value="4">Grid Split (4)</option>
                     </select>
+                    
                     <button class="feedback-btn" onclick="window.openFeedbackModal()">💬 Feedback</button>
+                    
                     <div id="user-info">Service Account Connected</div>
                 </div>
             </header>
@@ -61,6 +74,7 @@
                     <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
                     <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
                     <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
+                    <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Daily Update</button>
                 </div>
                 
                 <div id="sales-ui" class="hidden">
@@ -91,9 +105,30 @@
                     <hr>
                     <h3>🕒 Step 1: Select Date</h3>
                     <div id="hourly-date-list" class="folder-grid" style="margin-bottom:15px;">Loading Dates...</div>
+                    
                     <div id="hourly-images-container" class="hidden" style="padding:15px; background:#f3e5f5; border-radius:8px;">
                         <h3>🕒 Step 2: Select Hour</h3>
                         <div id="hourly-file-list" class="folder-grid"></div>
+                    </div>
+                </div>
+
+                <div id="ticket-ui" class="hidden">
+                    <hr>
+                    <div style="display:flex; gap:20px;">
+                        <div style="flex:1; padding:15px; background:#fff3e0; border-radius:8px;">
+                            <h3>➕ Assign New Task</h3>
+                            <input type="email" id="tkt-email" placeholder="Assign To (Email)..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
+                            <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                            <button onclick="window.createTicket()" style="background:#ff9800; color:white; padding:8px; border:none; border-radius:4px; width:100%; cursor:pointer;">📧 Assign & Notify</button>
+                        </div>
+
+                        <div style="flex:2;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3>📋 Open Tickets</h3>
+                                <button onclick="window.loadTicketDashboard()" style="font-size:12px;">🔄 Refresh</button>
+                            </div>
+                            <div id="ticket-list-container" style="max-height:400px; overflow:auto; border:1px solid #eee;">Loading...</div>
+                        </div>
                     </div>
                 </div>
 
@@ -108,27 +143,24 @@
                     </div>
                 </div>
 
-                <div id="ticket-ui" class="hidden">
+                <div id="daily-ui" class="hidden">
                     <hr>
-                    <div style="display:flex; gap:20px;">
-                        <div style="flex:1; padding:15px; background:#fff3e0; border-radius:8px;">
-                            <h3>➕ Assign New Task</h3>
-                            <input type="email" id="tkt-email" placeholder="Assign To (Email)..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
-                            <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
-                            <button onclick="window.createTicket()" style="background:#ff9800; color:white; padding:8px; border:none; border-radius:4px; width:100%; cursor:pointer;">📧 Assign & Notify</button>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3>📅 My Reports Inbox</h3>
+                        <div style="display:flex; gap:10px;">
+                            <input type="email" id="user-identity-email" placeholder="Verify your email..." style="padding:5px; border:1px solid #ccc; border-radius:4px;">
+                            <button onclick="window.fetchDailyUpdates()" style="background:#ff5722; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Check Inbox</button>
                         </div>
-                        <div style="flex:2;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3>📋 Open Tickets</h3>
-                                <button onclick="window.loadTicketDashboard()" style="font-size:12px;">🔄 Refresh</button>
-                            </div>
-                            <div id="ticket-list-container" style="max-height:400px; overflow:auto; border:1px solid #eee;">Loading...</div>
-                        </div>
+                    </div>
+                    
+                    <div id="daily-list-container" class="folder-grid">
+                        <p style="color:#666;">Enter your email above to see your assigned reports.</p>
                     </div>
                 </div>
 
                 <div id="filter-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
                     <h3>Data Filters (Applies to Blue Active View)</h3>
+                    
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <label>Filter:</label>
                         <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
@@ -136,6 +168,7 @@
                         </select>
                         <input type="text" id="filter-input" placeholder="Type to search..." onkeyup="window.applyTableFilter()" style="padding: 8px; flex-grow: 1; min-width: 200px;">
                     </div>
+
                     <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
                         <label>Show Rows:</label>
                         <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
@@ -146,6 +179,7 @@
                             <option value="all">All Rows</option>
                         </select>
                     </div>
+                    
                     <div id="sheet-link-container" style="margin-top: 10px;"></div>
                     <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
                 </div>
@@ -158,6 +192,7 @@
                         </div>
                     </div>
                 </div>
+
             </main>
         </div>
     </div>
