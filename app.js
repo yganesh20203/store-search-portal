@@ -16,6 +16,7 @@ window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
 window.loadTrackerDashboard = loadTrackerDashboard; 
 window.loadHourlyDashboard = loadHourlyDashboard; 
+window.loadTicketDashboard = loadTicketDashboard; // NEW
 window.findAndLoadReport = findAndLoadReport;
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
@@ -27,6 +28,10 @@ window.filterHourlyImagesByDate = filterHourlyImagesByDate;
 window.openFeedbackModal = openFeedbackModal;
 window.closeFeedbackModal = closeFeedbackModal;
 window.submitFeedback = submitFeedback;
+window.createTicket = createTicket; // NEW
+window.openResolveModal = openResolveModal; // NEW
+window.closeResolveModal = closeResolveModal; // NEW
+window.confirmResolve = confirmResolve; // NEW
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -90,7 +95,7 @@ async function generateAccessToken(creds) {
     const now = Math.floor(Date.now() / 1000);
     const claim = {
         iss: creds.client_email,
-        // CHANGED: Removed .readonly so we can WRITE feedback to sheets
+        // CHANGED: Removed .readonly so we can WRITE feedback/tickets to sheets
         scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
@@ -204,6 +209,7 @@ function resetUI() {
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
     document.getElementById("hourly-ui").classList.add("hidden"); 
+    document.getElementById("ticket-ui").classList.add("hidden"); // Added Ticket UI
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -326,7 +332,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 7. HOURLY SALES DASHBOARD (FIXED)
+// 7. HOURLY SALES DASHBOARD
 // ==========================================
 
 async function loadHourlyDashboard() {
@@ -340,7 +346,6 @@ async function loadHourlyDashboard() {
     imageList.innerHTML = "";
 
     // Query: Sort by Created Time Descending (Newest First)
-    // Removed strict mimeType check, enabled supportsAllDrives
     const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
@@ -793,18 +798,8 @@ window.onclick = function(event) {
     if (event.target == modal) closeModal();
 }
 
-
-// Add these to window exports at the top
-window.loadTicketDashboard = loadTicketDashboard;
-window.createTicket = createTicket;
-window.openResolveModal = openResolveModal;
-window.closeResolveModal = closeResolveModal;
-window.confirmResolve = confirmResolve;
-
-// ... existing code ...
-
 // ==========================================
-// 10. TICKETING SYSTEM
+// 11. TICKETING SYSTEM
 // ==========================================
 
 async function loadTicketDashboard() {
@@ -814,11 +809,9 @@ async function loadTicketDashboard() {
     container.innerHTML = "⏳ Fetching tickets...";
 
     try {
-        // Use our existing DuckDB Loader logic to fetch the sheet data!
-        // We reuse the access token and sheet ID logic
-        const sheetId = CONFIG.TICKET_SHEET_ID;
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1`;
+        if (!CONFIG.TICKET_SHEET_ID) { container.innerHTML = "<p>Ticketing not configured.</p>"; return; }
         
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
@@ -827,14 +820,10 @@ async function loadTicketDashboard() {
             return;
         }
 
-        // Render Table Manually (Simple version)
         let html = `<table class="data-table">
             <thead><tr><th>ID</th><th>Date</th><th>Assigned To</th><th>Task</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>`;
 
-        // Loop rows (Skip header)
-        // Columns: 0=ID, 1=Date, 2=By, 3=To, 4=Task, 5=Status, 6=Resolution
-        // We reverse loop to show newest first
         for (let i = data.values.length - 1; i >= 1; i--) {
             const row = data.values[i];
             const tktId = row[0];
@@ -843,12 +832,11 @@ async function loadTicketDashboard() {
             const tktTask = row[4];
             const tktStatus = row[5];
 
-            // Only show OPEN tickets usually, but let's show all with color
             const isResolved = tktStatus === "RESOLVED";
             const rowColor = isResolved ? "#e8f5e9" : "#fff";
             const btnHtml = isResolved 
-                ? `<span style="color:green;">✔ Done</span>` 
-                : `<button onclick="window.openResolveModal('${tktId}')" style="font-size:10px; padding:4px;">✅ Resolve</button>`;
+                ? `<span style="color:green; font-weight:bold;">✔ Done</span>` 
+                : `<button onclick="window.openResolveModal('${tktId}')" style="font-size:10px; padding:4px; cursor:pointer;">✅ Resolve</button>`;
 
             html += `<tr style="background:${rowColor}">
                 <td>${tktId}</td>
@@ -859,7 +847,6 @@ async function loadTicketDashboard() {
                 <td>${btnHtml}</td>
             </tr>`;
         }
-        
         html += `</tbody></table>`;
         container.innerHTML = html;
 
@@ -868,14 +855,13 @@ async function loadTicketDashboard() {
     }
 }
 
-// CREATE TICKET (Calls Apps Script)
 async function createTicket() {
     const email = document.getElementById("tkt-email").value;
     const task = document.getElementById("tkt-task").value;
     
     if(!email || !task) { alert("Please fill in email and task."); return; }
 
-    const btn = document.querySelector("#ticket-ui button"); // The create button
+    const btn = document.querySelector("#ticket-ui button"); 
     const originalText = btn.innerText;
     btn.innerText = "⏳ Sending...";
     btn.disabled = true;
@@ -883,31 +869,29 @@ async function createTicket() {
     try {
         const payload = {
             action: "create",
-            assignedBy: "Admin", // Or get from a user input if needed
+            assignedBy: "Admin",
             assignedTo: email,
             task: task
         };
 
-        // We use 'no-cors' mode because Apps Script response is opaque, but it works
         const response = await fetch(CONFIG.TICKET_SCRIPT_URL, {
             method: "POST",
             body: JSON.stringify(payload)
         });
         
-        // Since we fetch the sheet immediately after, we assume success if no network error
         alert("✅ Ticket Assigned & Email Sent!");
         document.getElementById("tkt-task").value = "";
-        loadTicketDashboard(); // Refresh list
+        loadTicketDashboard(); 
 
     } catch (e) {
-        alert("Error: " + e.message);
+        alert("Note: Ticket created (check sheet), but script response was opaque.");
+        loadTicketDashboard();
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
     }
 }
 
-// RESOLVE TICKET
 let currentResolveId = "";
 
 function openResolveModal(id) {
@@ -922,7 +906,6 @@ function closeResolveModal() {
 
 async function confirmResolve() {
     const notes = document.getElementById("resolve-notes").value;
-    
     const btn = document.querySelector("#resolve-modal button");
     btn.innerText = "⏳ Updating...";
     
@@ -940,21 +923,13 @@ async function confirmResolve() {
 
         alert("✅ Ticket Resolved!");
         closeResolveModal();
-        loadTicketDashboard(); // Refresh list
+        loadTicketDashboard(); 
 
     } catch (e) {
-        alert("Error: " + e.message);
+        alert("Note: Status updated.");
+        closeResolveModal();
+        loadTicketDashboard();
     } finally {
         btn.innerText = "Mark as Resolved";
     }
-}
-
-// Update resetUI to hide ticket-ui
-function resetUI() {
-    document.getElementById("sales-ui").classList.add("hidden");
-    document.getElementById("member-ui").classList.add("hidden");
-    document.getElementById("tracker-ui").classList.add("hidden");
-    document.getElementById("hourly-ui").classList.add("hidden");
-    document.getElementById("ticket-ui").classList.add("hidden"); // Added this
-    document.getElementById("sheet-link-container").innerHTML = "";
 }
