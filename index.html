@@ -34,6 +34,11 @@
             border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px; 
         }
         .feedback-btn:hover { background: #f57c00; }
+
+        /* Approval Form Inputs */
+        .app-input {
+            padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -75,6 +80,7 @@
                     <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
                     <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
                     <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Daily Update</button>
+                    <button onclick="window.loadApprovalDashboard()" class="nav-btn" style="background:#ce93d8;">⏳ Approvals</button>
                 </div>
                 
                 <div id="sales-ui" class="hidden">
@@ -155,6 +161,49 @@
                     
                     <div id="daily-list-container" class="folder-grid">
                         <p style="color:#666;">Enter your email above to see your assigned reports.</p>
+                    </div>
+                </div>
+
+                <div id="approval-ui" class="hidden">
+                    <hr>
+                    <div style="display:flex; gap:20px;">
+                        <div style="flex:1; padding:20px; background:#f3e5f5; border-radius:8px;">
+                            <h3>⏳ Find Pending Approvals</h3>
+                            <p style="font-size:12px; color:#666; margin-bottom:15px;">Scan your inbox for emails from a specific person within a date range.</p>
+                            
+                            <label style="font-weight:bold; font-size:12px;">Target Sender (Email)</label>
+                            <input type="email" id="appr-target-email" class="app-input" placeholder="e.g. manager@flipkart.com" style="margin-bottom:10px;">
+                            
+                            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                <div style="flex:1;">
+                                    <label style="font-weight:bold; font-size:12px;">From Date</label>
+                                    <input type="date" id="appr-start-date" class="app-input">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-weight:bold; font-size:12px;">To Date</label>
+                                    <input type="date" id="appr-end-date" class="app-input">
+                                </div>
+                            </div>
+
+                            <label style="font-weight:bold; font-size:12px;">Keywords (Optional)</label>
+                            <select id="appr-keywords" class="app-input" style="margin-bottom:15px;">
+                                <option value="default">Default ("Approve", "Pending", "Review")</option>
+                                <option value="approval">"Approval Needed"</option>
+                                <option value="action">"Action Required"</option>
+                                <option value="all">All Emails (No Keyword Filter)</option>
+                            </select>
+
+                            <button onclick="window.openGmailSearch()" style="background:#9c27b0; color:white; border:none; padding:10px; border-radius:4px; width:100%; cursor:pointer; font-weight:bold; font-size:14px;">
+                                🔍 Scan My Inbox
+                            </button>
+                        </div>
+                        
+                        <div style="flex:1; display:flex; align-items:center; justify-content:center; color:#888; border:2px dashed #ddd; border-radius:8px;">
+                            <div style="text-align:center;">
+                                <div style="font-size:40px;">📧</div>
+                                <p>Clicking Scan will open Gmail<br>with these exact filters applied.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
