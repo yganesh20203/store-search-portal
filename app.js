@@ -20,9 +20,10 @@ window.loadHourlyDashboard = loadHourlyDashboard;
 window.loadTicketDashboard = loadTicketDashboard; 
 window.loadWalkinDashboard = loadWalkinDashboard; 
 window.loadWalkinCategory = loadWalkinCategory;
-window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; // NEW
-window.fetchDailyUpdates = fetchDailyUpdates; // NEW
+window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; 
+window.fetchDailyUpdates = fetchDailyUpdates; 
 window.findAndLoadReport = findAndLoadReport;
+window.loadFileIntoDuckDB = loadFileIntoDuckDB; // <--- ADDED THIS FIXED LINE
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
 window.closeModal = closeModal;
@@ -319,7 +320,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. WALKIN DASHBOARD (NESTED FOLDERS)
+// 6. WALKIN DASHBOARD (SMART FOLDERS)
 // ==========================================
 
 async function loadWalkinDashboard() {
@@ -409,7 +410,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 if (isFolder) {
                     icon = `<div style="font-size:40px;">📁</div>`;
-                    btn.style.background = "#fff8e1"; 
+                    btn.style.background = "#fff8e1"; // Highlight Folders
                 } 
                 else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
@@ -423,8 +424,10 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
 
+                // --- SMART CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
+                        // DRILL DOWN (Prevent 403 error)
                         walkinHistoryStack.push({ title: title, id: folderId });
                         loadWalkinCategory(file.name, file.id, 'push');
                     } 
@@ -438,6 +441,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
                     }
                     else {
+                        // Fallback: Open in new tab (PDFs, Docs, etc)
                         window.open(file.webViewLink, '_blank');
                     }
                 };
