@@ -9,7 +9,7 @@ let db = null;
 let conn = null; 
 let activePaneId = "pane-0"; 
 let hourlyFilesCache = []; 
-let walkinHistoryStack = []; // For Walkin Folder Navigation
+let walkinHistoryStack = []; 
 
 // Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
@@ -21,9 +21,11 @@ window.loadTicketDashboard = loadTicketDashboard;
 window.loadWalkinDashboard = loadWalkinDashboard; 
 window.loadWalkinCategory = loadWalkinCategory;
 window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; 
+window.loadApprovalDashboard = loadApprovalDashboard; // NEW
 window.fetchDailyUpdates = fetchDailyUpdates; 
+window.openGmailSearch = openGmailSearch; // NEW
 window.findAndLoadReport = findAndLoadReport;
-window.loadFileIntoDuckDB = loadFileIntoDuckDB; // <--- ADDED THIS FIXED LINE
+window.loadFileIntoDuckDB = loadFileIntoDuckDB; 
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
 window.closeModal = closeModal;
@@ -164,6 +166,7 @@ function resetUI() {
     document.getElementById("ticket-ui").classList.add("hidden"); 
     document.getElementById("walkin-ui").classList.add("hidden");
     document.getElementById("daily-ui").classList.add("hidden");
+    document.getElementById("approval-ui").classList.add("hidden"); // NEW
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -320,7 +323,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. WALKIN DASHBOARD (SMART FOLDERS)
+// 6. WALKIN DASHBOARD
 // ==========================================
 
 async function loadWalkinDashboard() {
@@ -410,7 +413,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 if (isFolder) {
                     icon = `<div style="font-size:40px;">📁</div>`;
-                    btn.style.background = "#fff8e1"; // Highlight Folders
+                    btn.style.background = "#fff8e1"; 
                 } 
                 else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
@@ -424,10 +427,8 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
 
-                // --- SMART CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
-                        // DRILL DOWN (Prevent 403 error)
                         walkinHistoryStack.push({ title: title, id: folderId });
                         loadWalkinCategory(file.name, file.id, 'push');
                     } 
@@ -441,7 +442,6 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
                     }
                     else {
-                        // Fallback: Open in new tab (PDFs, Docs, etc)
                         window.open(file.webViewLink, '_blank');
                     }
                 };
@@ -537,7 +537,10 @@ function filterHourlyImagesByDate(dateKey) {
             ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
             : `<div style="font-size:30px;">🖼️</div>`;
 
-        btn.innerHTML = `${img}<div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>`;
+        btn.innerHTML = `
+            ${img}
+            <div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>
+        `;
         btn.onclick = () => renderImage(file.id, timeStr);
         list.appendChild(btn);
     });
@@ -807,9 +810,57 @@ async function fetchDailyUpdates() {
     }
 }
 
+// ==========================================
+// 10. APPROVALS DASHBOARD (GMAIL SEARCH LINK)
+// ==========================================
+
+function loadApprovalDashboard() {
+    resetUI();
+    document.getElementById("approval-ui").classList.remove("hidden");
+    
+    // Set default dates
+    const today = new Date();
+    const lastMonth = new Date();
+    lastMonth.setMonth(today.getMonth() - 1);
+    
+    document.getElementById("appr-end-date").valueAsDate = today;
+    document.getElementById("appr-start-date").valueAsDate = lastMonth;
+}
+
+function openGmailSearch() {
+    const targetEmail = document.getElementById("appr-target-email").value.trim();
+    const startDate = document.getElementById("appr-start-date").value;
+    const endDate = document.getElementById("appr-end-date").value;
+    const keywordMode = document.getElementById("appr-keywords").value;
+
+    if (!targetEmail) { alert("Please enter the sender's email."); return; }
+
+    // Construct Query Parts
+    let query = `from:${targetEmail}`;
+    if (startDate) query += ` after:${startDate}`;
+    if (endDate) query += ` before:${endDate}`;
+
+    // Add Keywords
+    if (keywordMode === "default") {
+        query += ` (approve OR approval OR pending OR review)`;
+    } else if (keywordMode === "approval") {
+        query += ` "approval needed"`;
+    } else if (keywordMode === "action") {
+        query += ` "action required"`;
+    }
+    // "all" adds nothing
+
+    // Encode for URL
+    const encodedQuery = encodeURIComponent(query);
+    const gmailUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
+
+    // Open in New Tab
+    window.open(gmailUrl, '_blank');
+}
+
 
 // ==========================================
-// 10. DATA LOADING ENGINE
+// 11. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
@@ -962,7 +1013,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 11. AI SUMMARY ENGINE
+// 12. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -1023,7 +1074,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 12. SQL FILTERING & RENDERING
+// 13. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
