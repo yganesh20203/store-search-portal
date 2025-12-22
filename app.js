@@ -9,14 +9,19 @@ let db = null;
 let conn = null; 
 let activePaneId = "pane-0"; 
 let hourlyFilesCache = []; 
+let walkinHistoryStack = []; // For Walkin Folder Navigation
 
-// Attach functions to Window for HTML access
+// Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
 window.loadTrackerDashboard = loadTrackerDashboard; 
 window.loadHourlyDashboard = loadHourlyDashboard; 
 window.loadTicketDashboard = loadTicketDashboard; 
+window.loadWalkinDashboard = loadWalkinDashboard; 
+window.loadWalkinCategory = loadWalkinCategory;
+window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; // NEW
+window.fetchDailyUpdates = fetchDailyUpdates; // NEW
 window.findAndLoadReport = findAndLoadReport;
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
@@ -32,8 +37,6 @@ window.createTicket = createTicket;
 window.openResolveModal = openResolveModal; 
 window.closeResolveModal = closeResolveModal; 
 window.confirmResolve = confirmResolve; 
-window.loadWalkinDashboard = loadWalkinDashboard;
-window.loadWalkinCategory = loadWalkinCategory;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -159,6 +162,7 @@ function resetUI() {
     document.getElementById("hourly-ui").classList.add("hidden"); 
     document.getElementById("ticket-ui").classList.add("hidden"); 
     document.getElementById("walkin-ui").classList.add("hidden");
+    document.getElementById("daily-ui").classList.add("hidden");
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -315,10 +319,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. WALKIN DASHBOARD
-// ==========================================
-// ==========================================
-// 6. WALKIN DASHBOARD (UPDATED: Nested Folders)
+// 6. WALKIN DASHBOARD (NESTED FOLDERS)
 // ==========================================
 
 async function loadWalkinDashboard() {
@@ -337,7 +338,6 @@ async function loadWalkinDashboard() {
             btn.style.fontWeight = "bold";
             btn.innerText = groupName;
             const folderId = CONFIG.WALKIN_FOLDERS[groupName];
-            // Start at the root of this category, passing 'dashboard' as the back target
             btn.onclick = () => loadWalkinCategory(groupName, folderId, 'dashboard');
             catList.appendChild(btn);
         });
@@ -345,9 +345,6 @@ async function loadWalkinDashboard() {
         catList.innerHTML = "<p>No Walkin folders configured.</p>";
     }
 }
-
-// Global stack to handle "Back" navigation history
-let walkinHistoryStack = [];
 
 async function loadWalkinCategory(title, folderId, backMode = null) {
     const container = document.getElementById("walkin-files-container");
@@ -358,12 +355,9 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
     titleElem.innerText = `📂 ${title}`;
     list.innerHTML = "⏳ Loading...";
 
-    // Handle History/Back Logic
+    // Handle History
     if (backMode === 'dashboard') {
-        walkinHistoryStack = []; // Reset stack for new category
-    } else if (backMode === 'push') {
-        // We are drilling down, so push current state to history BEFORE loading new
-        // We don't push here, we rely on the click handler to push
+        walkinHistoryStack = []; 
     }
 
     if (!folderId || folderId.includes("PASTE")) {
@@ -371,7 +365,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
         return;
     }
 
-    // 1. Render Back Button if we are deep in folders
+    // Render Back Button
     if (walkinHistoryStack.length > 0) {
         const backBtn = document.createElement("button");
         backBtn.className = "folder-btn";
@@ -380,19 +374,17 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
         backBtn.style.marginBottom = "10px";
         backBtn.innerHTML = "⬅️ Back";
         backBtn.onclick = () => {
-            const prev = walkinHistoryStack.pop(); // Get previous state
-            loadWalkinCategory(prev.title, prev.id, 'back'); // Load it
+            const prev = walkinHistoryStack.pop();
+            loadWalkinCategory(prev.title, prev.id, 'back');
         };
-        // Clear list momentarily to prepend button nicely
         list.innerHTML = ""; 
         list.appendChild(backBtn);
     } else {
         list.innerHTML = "";
     }
 
-    // 2. Fetch Files & Folders
     const query = `'${folderId}' in parents and trashed = false`;
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, thumbnailLink)&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, thumbnailLink, webViewLink)&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
@@ -408,18 +400,16 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                 btn.style.flexDirection = "column";
                 btn.style.alignItems = "center";
                 btn.style.width = "140px";
-                btn.style.height = "130px"; // Slightly taller for folder names
+                btn.style.height = "130px";
                 btn.style.padding = "10px";
                 btn.style.gap = "5px";
 
                 let icon = "";
-                let isFolder = false;
+                let isFolder = (file.mimeType === "application/vnd.google-apps.folder");
 
-                // --- ICON LOGIC ---
-                if (file.mimeType === "application/vnd.google-apps.folder") {
+                if (isFolder) {
                     icon = `<div style="font-size:40px;">📁</div>`;
-                    isFolder = true;
-                    btn.style.background = "#fff8e1"; // Yellowish for folders
+                    btn.style.background = "#fff8e1"; 
                 } 
                 else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
@@ -431,14 +421,11 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                     icon = `<div style="font-size:30px;">📄</div>`;
                 }
 
-                btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center; max-height:3em;">${file.name}</div>`;
+                btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
 
-                // --- CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
-                        // Push CURRENT level to stack before going deeper
                         walkinHistoryStack.push({ title: title, id: folderId });
-                        // Drill down
                         loadWalkinCategory(file.name, file.id, 'push');
                     } 
                     else if (file.mimeType.includes("image")) {
@@ -447,8 +434,11 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                     else if (file.mimeType.includes("spreadsheet")) {
                         loadFileIntoDuckDB(file.id, file.name, 'sheet', 0);
                     } 
-                    else {
+                    else if (file.mimeType.includes("octet-stream") || file.name.endsWith(".parquet") || file.name.endsWith(".csv")) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
+                    }
+                    else {
+                        window.open(file.webViewLink, '_blank');
                     }
                 };
                 list.appendChild(btn);
@@ -507,12 +497,7 @@ async function loadHourlyDashboard() {
             });
 
         } else {
-            dateList.innerHTML = `
-                <div style="color:red; text-align:center;">
-                    ❌ No images found.<br>
-                    <small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small><br>
-                    <small>Make sure 'analytics-fkw@...' has Viewer access.</small>
-                </div>`;
+            dateList.innerHTML = `<div style="color:red; text-align:center;">❌ No images found.<br><small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small></div>`;
         }
     } catch (e) {
         dateList.innerHTML = "Error: " + e.message;
@@ -548,10 +533,7 @@ function filterHourlyImagesByDate(dateKey) {
             ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
             : `<div style="font-size:30px;">🖼️</div>`;
 
-        btn.innerHTML = `
-            ${img}
-            <div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>
-        `;
+        btn.innerHTML = `${img}<div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>`;
         btn.onclick = () => renderImage(file.id, timeStr);
         list.appendChild(btn);
     });
@@ -728,9 +710,102 @@ async function confirmResolve() {
     }
 }
 
+// ==========================================
+// 9. DAILY UPDATE DASHBOARD (INBOX)
+// ==========================================
+
+async function loadDailyUpdateDashboard() {
+    resetUI();
+    document.getElementById("daily-ui").classList.remove("hidden");
+    
+    // Auto-load if email is saved
+    const savedEmail = localStorage.getItem("portal_user_email");
+    if (savedEmail) {
+        document.getElementById("user-identity-email").value = savedEmail;
+        fetchDailyUpdates();
+    }
+}
+
+async function fetchDailyUpdates() {
+    const emailInput = document.getElementById("user-identity-email");
+    const container = document.getElementById("daily-list-container");
+    const userEmail = emailInput.value.trim().toLowerCase();
+
+    if (!userEmail) { alert("Please enter your email to verify identity."); return; }
+    if (!CONFIG.DAILY_DISPATCH_SHEET_ID) { container.innerHTML = "<p>Dispatch Sheet ID missing.</p>"; return; }
+
+    localStorage.setItem("portal_user_email", userEmail);
+    container.innerHTML = "⏳ Checking Inbox...";
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.DAILY_DISPATCH_SHEET_ID}/values/Sheet1`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "<p>No records found in dispatch sheet.</p>";
+            return;
+        }
+
+        let foundCount = 0;
+        let html = "";
+
+        // Loop Data (Skip Header)
+        // Col A: Email, Col B: Subject, Col C: Link
+        data.values.slice(1).forEach(row => {
+            const rEmail = row[0]?.toString().trim().toLowerCase();
+            const rSubject = row[1];
+            const rLink = row[2] || "";
+
+            if (rEmail === userEmail) {
+                foundCount++;
+                
+                let fileId = "";
+                let fileType = "parquet"; 
+                let gid = "0";
+
+                // --- SMART SHEET DETECTION ---
+                if (rLink.includes("spreadsheets")) {
+                    fileType = "sheet";
+                    const idMatch = rLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
+                    if (idMatch) fileId = idMatch[1];
+                    if (rLink.includes("gid=")) {
+                        gid = rLink.split("gid=")[1].split("&")[0];
+                    }
+                } 
+                else {
+                    if (rLink.includes("id=")) fileId = rLink.split("id=")[1].split("&")[0];
+                    else if (rLink.includes("/d/")) fileId = rLink.split("/d/")[1].split("/")[0];
+                }
+
+                html += `
+                    <button onclick="window.loadFileIntoDuckDB('${fileId}', '${rSubject}', '${fileType}', '${gid}')" 
+                            class="folder-btn" style="background:#ffccbc; display:flex; flex-direction:column; align-items:center; gap:5px; width:160px; height:auto; padding:15px;">
+                        <div style="font-size:30px;">📊</div>
+                        <div style="font-weight:bold; font-size:12px; text-align:center;">${rSubject}</div>
+                        <div style="font-size:10px; color:#555;">Open Report</div>
+                    </button>
+                `;
+            }
+        });
+
+        if (foundCount === 0) {
+            container.innerHTML = `<div style="width:100%; text-align:center; padding:20px;">
+                <h3>📭 Inbox Empty</h3>
+                <p>No reports mapped to <b>${userEmail}</b></p>
+            </div>`;
+        } else {
+            container.innerHTML = html;
+        }
+
+    } catch (e) {
+        container.innerHTML = "Error: " + e.message;
+    }
+}
+
 
 // ==========================================
-// 9. DATA LOADING ENGINE
+// 10. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
@@ -883,7 +958,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 10. AI SUMMARY ENGINE
+// 11. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -944,7 +1019,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 11. SQL FILTERING & RENDERING
+// 12. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
