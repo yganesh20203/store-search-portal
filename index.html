@@ -278,5 +278,63 @@
 
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
+    <div class="control-panel">
+    <button onclick="window.loadSalesDashboard()" class="nav-btn">📊 Sales Reports</button>
+    <button onclick="window.loadMemberDashboard()" class="nav-btn">👥 Member DB</button>
+    <button onclick="window.loadTrackerDashboard()" class="nav-btn">📈 Google Sheets</button>
+    <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
+    <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
+    <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
+    <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Daily Update</button>
+    <button onclick="window.loadWorkDashboard()" class="nav-btn" style="background:#80deea;">🛠️ Work on Reports</button>
+</div>
+
+<div id="work-ui" class="hidden">
+    <hr>
+    <div style="background:#e0f7fa; padding:15px; border-radius:8px; border:1px solid #b2ebf2;">
+        <h3>🛠️ Analyze Local Files (CSV / Parquet)</h3>
+        <p style="font-size:12px; color:#555;">Process large files (500MB+) instantly in your browser. No upload required.</p>
+        
+        <input type="file" id="local-file-upload" accept=".csv,.parquet" onchange="window.handleLocalFileUpload(this)" style="margin-bottom:15px;">
+        
+        <div id="pivot-controls" class="hidden" style="margin-top:15px; border-top:1px dashed #0097a7; padding-top:15px;">
+            <h4 style="margin-top:0;">📐 Pivot / Grouping Builder</h4>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-weight:bold; font-size:12px;">1. Group By (Rows)</label>
+                    <select id="pivot-rows" class="app-input"></select>
+                </div>
+
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-weight:bold; font-size:12px;">2. Pivot Column (Optional Headers)</label>
+                    <select id="pivot-cols" class="app-input">
+                        <option value="">(None - Flat Table)</option>
+                    </select>
+                </div>
+
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-weight:bold; font-size:12px;">3. Value to Summarize</label>
+                    <select id="pivot-values" class="app-input"></select>
+                </div>
+
+                <div style="flex:0 0 100px;">
+                    <label style="font-weight:bold; font-size:12px;">Function</label>
+                    <select id="pivot-func" class="app-input">
+                        <option value="SUM">Sum</option>
+                        <option value="COUNT">Count</option>
+                        <option value="AVG">Average</option>
+                        <option value="MAX">Max</option>
+                        <option value="MIN">Min</option>
+                    </select>
+                </div>
+            </div>
+
+            <button onclick="window.runPivotAnalysis()" style="background:#00838f; color:white; border:none; padding:10px 20px; border-radius:4px; margin-top:15px; cursor:pointer; font-weight:bold;">
+                ⚡ Run Analysis
+            </button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
