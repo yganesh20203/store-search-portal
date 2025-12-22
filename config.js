@@ -11,7 +11,7 @@ const CONFIG = {
         "Walkin-MAC": "1TU9jhb2jZ-MRKPijG-5I3AyTPvyOqnUE4yrF-W6CbkU",
         "SaveEasy": "1TU9jhb2jZ-MRKPijG-5I3AyTPvyOqnUE4yrF-W6CbkU",
         "Offer posters": "1J2epmcfA8hT8YFk4Q7G9LM3qLZzw3W_H",
-        "Offer articles": "17LuLQiErqyxBAn_HyVOo_39NR9fSKZgIess20QJiTps"
+        "Offer articles": "11TDD91U2naMQAUHB-pWa54fPzMU5eIFH"
     },
     
     // 3. UPDATED: Hourly Images Folder
