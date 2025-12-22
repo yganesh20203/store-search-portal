@@ -8,11 +8,9 @@ let currentMonthFolderId = "";
 let db = null; 
 let conn = null; 
 let activePaneId = "pane-0"; 
-
-// HOURLY CACHE
 let hourlyFilesCache = []; 
 
-// Attach functions to Window
+// Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -26,6 +24,9 @@ window.summarizeData = summarizeData;
 window.changeLayout = changeLayout;
 window.setActivePane = setActivePane;
 window.filterHourlyImagesByDate = filterHourlyImagesByDate; 
+window.openFeedbackModal = openFeedbackModal;
+window.closeFeedbackModal = closeFeedbackModal;
+window.submitFeedback = submitFeedback;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -89,7 +90,8 @@ async function generateAccessToken(creds) {
     const now = Math.floor(Date.now() / 1000);
     const claim = {
         iss: creds.client_email,
-        scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets.readonly",
+        // CHANGED: Removed .readonly so we can WRITE feedback to sheets
+        scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
         iat: now
@@ -109,7 +111,53 @@ async function generateAccessToken(creds) {
 }
 
 // ==========================================
-// 4. SPLIT SCREEN LOGIC
+// 4. FEEDBACK LOGIC
+// ==========================================
+function openFeedbackModal() {
+    document.getElementById("feedback-modal").classList.remove("hidden");
+}
+
+function closeFeedbackModal() {
+    document.getElementById("feedback-modal").classList.add("hidden");
+}
+
+async function submitFeedback() {
+    const text = document.getElementById("feedback-text").value;
+    const storeId = document.getElementById("store-id-input")?.value || "N/A";
+    
+    if(!text) { alert("Please type some feedback!"); return; }
+    if(!CONFIG.FEEDBACK_SHEET_ID) { alert("Feedback Sheet ID missing in config.js"); return; }
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.FEEDBACK_SHEET_ID}/values/A1:append?valueInputOption=USER_ENTERED`;
+        const body = {
+            values: [[ new Date().toLocaleString(), storeId, text ]]
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+        });
+
+        if(response.ok) {
+            alert("✅ Feedback Sent! Thank you.");
+            document.getElementById("feedback-text").value = "";
+            closeFeedbackModal();
+        } else {
+            const err = await response.json();
+            alert("Error sending feedback: " + err.error.message);
+        }
+    } catch(e) {
+        alert("Network Error: " + e.message);
+    }
+}
+
+// ==========================================
+// 5. SPLIT SCREEN LOGIC
 // ==========================================
 
 function changeLayout(numPanes) {
@@ -148,7 +196,7 @@ function setActivePane(id) {
 }
 
 // ==========================================
-// 5. DASHBOARD SWITCHING
+// 6. DASHBOARD SWITCHING
 // ==========================================
 
 function resetUI() {
@@ -227,7 +275,7 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- TRACKER DASHBOARD ---
+// --- TRACKER DASHBOARD (Dynamic Groups) ---
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
@@ -278,7 +326,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. HOURLY SALES DASHBOARD (FIXED)
+// 7. HOURLY SALES DASHBOARD (FIXED)
 // ==========================================
 
 async function loadHourlyDashboard() {
@@ -291,9 +339,8 @@ async function loadHourlyDashboard() {
     dateList.innerHTML = "⏳ Scanning Drive for Hourly Images...";
     imageList.innerHTML = "";
 
-    console.log("Searching Folder ID:", CONFIG.HOURLY_SALES_FOLDER_ID);
-
-    // FIXED QUERY: Removing strict mimeType check and adding supportsAllDrives
+    // Query: Sort by Created Time Descending (Newest First)
+    // Removed strict mimeType check, enabled supportsAllDrives
     const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
@@ -301,8 +348,6 @@ async function loadHourlyDashboard() {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
         
-        console.log("API Response:", data); // Debugging line
-
         if (data.files && data.files.length > 0) {
             hourlyFilesCache = data.files; 
             
@@ -310,7 +355,7 @@ async function loadHourlyDashboard() {
             const dates = {};
             data.files.forEach(file => {
                 const dateObj = new Date(file.createdTime);
-                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); // e.g., "Dec 20, 2025"
                 if (!dates[dateKey]) dates[dateKey] = [];
                 dates[dateKey].push(file);
             });
@@ -321,7 +366,7 @@ async function loadHourlyDashboard() {
                 const count = dates[date].length;
                 const btn = document.createElement("button");
                 btn.className = "folder-btn";
-                btn.style.background = "#e1bee7"; 
+                btn.style.background = "#e1bee7"; // Light Purple
                 btn.style.width = "auto";
                 btn.style.padding = "10px 20px";
                 btn.innerHTML = `📅 <b>${date}</b> <br><span style="font-size:0.8em;">(${count} updates)</span>`;
@@ -348,9 +393,10 @@ function filterHourlyImagesByDate(dateKey) {
     container.classList.remove("hidden");
     list.innerHTML = "";
 
+    // Filter files for selected date
     const filteredFiles = hourlyFilesCache.filter(f => new Date(f.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) === dateKey);
 
-    // Sort by Time Ascending
+    // Sort by Time Ascending for the day
     filteredFiles.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
 
     filteredFiles.forEach(file => {
@@ -364,17 +410,17 @@ function filterHourlyImagesByDate(dateKey) {
         btn.style.display = "flex";
         btn.style.flexDirection = "column";
         btn.style.alignItems = "center";
-        btn.style.width = "140px"; 
-        btn.style.height = "120px";
+        btn.style.width = "160px"; 
+        btn.style.height = "140px";
         btn.style.gap = "5px";
         btn.style.padding = "10px";
         
         // Thumbnail
         const img = file.thumbnailLink 
-            ? `<img src="${file.thumbnailLink}" style="width:100%; height:70px; object-fit:contain; border-radius:4px;">` 
+            ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
             : `<div style="font-size:30px;">🖼️</div>`;
 
-        // CHANGED: Show Time BIG, Hide Name
+        // UI: Show Time BIG, Hide Name
         btn.innerHTML = `
             ${img}
             <div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>
@@ -412,13 +458,14 @@ async function renderImage(fileId, timeLabel) {
 
 
 // ==========================================
-// 7. DATA LOADING ENGINE
+// 8. DATA LOADING ENGINE (SALES & TRACKERS)
 // ==========================================
 
 async function findAndLoadReport() {
     const storeId = document.getElementById("store-id-input").value.trim();
     const statusDiv = document.getElementById("loading-status");
 
+    // Validation
     if (!currentMonthFolderId) { alert("⚠️ Please select a Month folder first (Step 1)."); return; }
     if (!storeId) { alert("⚠️ Please enter a Store ID."); return; }
 
@@ -429,6 +476,7 @@ async function findAndLoadReport() {
     const contentArea = pane.querySelector(".content-area");
     contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:#666;">🔍 Searching Drive for ${storeId}...</div>`;
 
+    // Search Drive
     const query = `'${currentMonthFolderId}' in parents and name contains '${storeId}' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
@@ -467,6 +515,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         if (type === 'sheet') {
             statusDiv.innerHTML = "⏳ Identifying Tab...";
             
+            // Metadata
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
@@ -480,32 +529,43 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
 
+            // Data
             const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
             const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             const dataJson = await dataResp.json();
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
+            // --- SMART HEADER FIX (Applies to ALL Sheets) ---
             let finalValues = dataJson.values;
 
-            // SMART HEADER FIX
+            // Always check for at least 2 rows to attempt merge
             if (finalValues.length >= 2) {
                 console.log("🛠️ Merging Top 2 Rows for Header...");
-                const rowDates = finalValues[0];
-                const rowMetrics = finalValues[1];
+                
+                const rowDates = finalValues[0]; // Top Row
+                const rowMetrics = finalValues[1]; // Bottom Row
                 let newHeader = [];
                 let lastDate = "";
 
+                // Iterate using the bottom row as the count
                 for (let i = 0; i < rowMetrics.length; i++) {
                     let dateVal = rowDates[i] || "";
                     let metricVal = rowMetrics[i] || `col${i}`;
+
+                    // Handle Merged Cells logic
                     if (dateVal !== "") lastDate = dateVal;
+
                     if (lastDate) newHeader.push(`${lastDate} - ${metricVal}`);
                     else newHeader.push(metricVal);
                 }
+                
+                // Replace the first 2 rows with the new header
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
+            // -------------------------------------------------
 
+            // Load to DuckDB
             const csvText = arrayToCSV(finalValues);
             const csvFileName = `temp_${tableName}.csv`;
             
@@ -514,6 +574,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
+            // Buttons
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -528,6 +589,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
+            // Binary (Parquet/CSV)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -557,6 +619,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     }
 }
 
+// Helper: JSON -> CSV
 function arrayToCSV(data) {
     return data.map(row =>
         row.map(field => {
@@ -571,7 +634,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 8. AI SUMMARY & FILTERS
+// 9. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -596,10 +659,12 @@ async function summarizeData() {
             return;
         }
 
+        // Totals
         const sumQueryParts = numericCols.map(col => `SUM("${col}") as "${col}"`).join(", ");
         const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${tableName}`);
         const totals = totalResult.toArray()[0].toJSON();
 
+        // Top Performer
         const mainMetric = numericCols[numericCols.length - 1]; 
         const topResult = await conn.query(`
             SELECT "${labelCol}", "${mainMetric}" 
@@ -630,6 +695,10 @@ async function summarizeData() {
         modalBody.innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
     }
 }
+
+// ==========================================
+// 10. SQL FILTERING & RENDERING
+// ==========================================
 
 async function setupFilterDropdown(tableName) {
     const schema = await conn.query(`DESCRIBE ${tableName}`);
@@ -670,6 +739,7 @@ async function applyTableFilter() {
 
 let currentArrowData = null; 
 
+// RENDER TABLE (CSS Styled)
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
