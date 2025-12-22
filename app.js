@@ -11,7 +11,7 @@ let activePaneId = "pane-0";
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
 
-// Attach functions to Window
+// Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -21,9 +21,9 @@ window.loadTicketDashboard = loadTicketDashboard;
 window.loadWalkinDashboard = loadWalkinDashboard; 
 window.loadWalkinCategory = loadWalkinCategory;
 window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; 
-window.loadWorkDashboard = loadWorkDashboard; // NEW
-window.handleLocalFileUpload = handleLocalFileUpload; // NEW
-window.runPivotAnalysis = runPivotAnalysis; // NEW
+window.loadWorkDashboard = loadWorkDashboard; 
+window.handleLocalFileUpload = handleLocalFileUpload; 
+window.loadRemotePivotFile = loadRemotePivotFile; 
 window.fetchDailyUpdates = fetchDailyUpdates; 
 window.findAndLoadReport = findAndLoadReport;
 window.loadFileIntoDuckDB = loadFileIntoDuckDB; 
@@ -41,6 +41,7 @@ window.createTicket = createTicket;
 window.openResolveModal = openResolveModal; 
 window.closeResolveModal = closeResolveModal; 
 window.confirmResolve = confirmResolve; 
+window.showRowDetails = showRowDetails;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -160,6 +161,7 @@ function setActivePane(id) {
 }
 
 function resetUI() {
+    // Hide all Dashboard Controls
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
@@ -167,7 +169,13 @@ function resetUI() {
     document.getElementById("ticket-ui").classList.add("hidden"); 
     document.getElementById("walkin-ui").classList.add("hidden");
     document.getElementById("daily-ui").classList.add("hidden");
-    document.getElementById("work-ui").classList.add("hidden"); // NEW
+    document.getElementById("work-ui").classList.add("hidden"); 
+    
+    // Reset Data View Containers
+    document.getElementById("view-container").classList.remove("hidden"); // Default Grid
+    document.getElementById("pivot-wrapper").classList.add("hidden");     // Hide Pivot
+    document.getElementById("filter-box").classList.remove("hidden");     // Show SQL Filters
+    
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -204,7 +212,7 @@ async function submitFeedback() {
 }
 
 // ==========================================
-// 5. DASHBOARD SWITCHING
+// 5. SALES DASHBOARD
 // ==========================================
 
 async function loadSalesDashboard() {
@@ -244,6 +252,10 @@ function selectMonth(folderId, btnElement) {
     document.getElementById("store-search-box").classList.remove("hidden");
 }
 
+// ==========================================
+// 6. MEMBER DASHBOARD
+// ==========================================
+
 async function loadMemberDashboard() {
     resetUI();
     document.getElementById("member-ui").classList.remove("hidden");
@@ -274,6 +286,10 @@ async function loadMemberDashboard() {
         listContainer.innerHTML = "Error: " + e.message;
     }
 }
+
+// ==========================================
+// 7. TRACKER DASHBOARD
+// ==========================================
 
 async function loadTrackerDashboard() {
     resetUI();
@@ -324,7 +340,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. WALKIN DASHBOARD (SMART FOLDERS)
+// 8. WALKIN DASHBOARD
 // ==========================================
 
 async function loadWalkinDashboard() {
@@ -431,7 +447,6 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                 // --- SMART CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
-                        // DRILL DOWN (Prevent 403 error)
                         walkinHistoryStack.push({ title: title, id: folderId });
                         loadWalkinCategory(file.name, file.id, 'push');
                     } 
@@ -445,7 +460,6 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
                     }
                     else {
-                        // Fallback: Open in new tab (PDFs, Docs, etc)
                         window.open(file.webViewLink, '_blank');
                     }
                 };
@@ -460,7 +474,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 }
 
 // ==========================================
-// 7. HOURLY SALES DASHBOARD
+// 9. HOURLY SALES DASHBOARD
 // ==========================================
 
 async function loadHourlyDashboard() {
@@ -576,9 +590,8 @@ async function renderImage(fileId, timeLabel) {
     }
 }
 
-
 // ==========================================
-// 8. TICKETING SYSTEM (DIRECT DB MODE)
+// 10. TICKETING SYSTEM
 // ==========================================
 
 async function loadTicketDashboard() {
@@ -722,7 +735,7 @@ async function confirmResolve() {
 }
 
 // ==========================================
-// 9. DAILY UPDATE DASHBOARD (INBOX)
+// 11. DAILY UPDATE DASHBOARD (INBOX)
 // ==========================================
 
 async function loadDailyUpdateDashboard() {
@@ -762,7 +775,6 @@ async function fetchDailyUpdates() {
         let html = "";
 
         // Loop Data (Skip Header)
-        // Col A: Email, Col B: Subject, Col C: Link
         data.values.slice(1).forEach(row => {
             const rEmail = row[0]?.toString().trim().toLowerCase();
             const rSubject = row[1];
@@ -775,7 +787,6 @@ async function fetchDailyUpdates() {
                 let fileType = "parquet"; 
                 let gid = "0";
 
-                // --- SMART SHEET DETECTION ---
                 if (rLink.includes("spreadsheets")) {
                     fileType = "sheet";
                     const idMatch = rLink.match(/\/d\/([a-zA-Z0-9-_]+)/);
@@ -815,125 +826,135 @@ async function fetchDailyUpdates() {
 }
 
 // ==========================================
-// 10. WORK ON REPORTS (LOCAL PIVOT)
+// 12. WORK ON REPORTS (PIVOT MODE - UPGRADED)
 // ==========================================
 
-function loadWorkDashboard() {
+async function loadWorkDashboard() {
     resetUI();
     document.getElementById("work-ui").classList.remove("hidden");
-    document.getElementById("pivot-controls").classList.add("hidden");
-    document.getElementById("local-file-upload").value = ""; // Reset
+    const list = document.getElementById("work-file-list");
+    list.innerHTML = "⏳ Scanning Drive...";
+
+    // Ensure Local File Upload Input is cleared
+    document.getElementById("local-file-upload").value = "";
+
+    if (!CONFIG.WORK_REPORTS_FOLDER_ID) { list.innerHTML = "<p>Config Missing</p>"; return; }
+
+    const query = `'${CONFIG.WORK_REPORTS_FOLDER_ID}' in parents and trashed = false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType)`;
+
+    try {
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        list.innerHTML = "";
+        if (data.files && data.files.length > 0) {
+            data.files.forEach(file => {
+                const btn = document.createElement("button");
+                btn.className = "folder-btn";
+                btn.style.background = "#e0f7fa";
+                btn.style.width = "150px";
+                btn.style.display = "flex";
+                btn.style.flexDirection = "column";
+                btn.style.alignItems = "center";
+                btn.style.padding = "10px";
+                
+                let icon = "📄";
+                if(file.name.endsWith(".parquet")) icon = "📦";
+                if(file.name.endsWith(".csv")) icon = "📝";
+
+                btn.innerHTML = `<div style="font-size:30px;">${icon}</div><div style="font-size:11px;">${file.name}</div>`;
+                btn.onclick = () => loadRemotePivotFile(file.id, file.name);
+                list.appendChild(btn);
+            });
+        } else {
+            list.innerHTML = "No reports found.";
+        }
+    } catch (e) {
+        list.innerHTML = "Error: " + e.message;
+    }
 }
 
-// Handle File Upload
+async function loadRemotePivotFile(fileId, fileName) {
+    const statusDiv = document.getElementById("loading-status");
+    statusDiv.innerHTML = "⏳ Downloading Pivot Data...";
+    
+    // Switch to Pivot View Mode (Hide Grid, Show Pivot)
+    document.getElementById("view-container").classList.add("hidden");
+    document.getElementById("filter-box").classList.add("hidden");
+    document.getElementById("pivot-wrapper").classList.remove("hidden");
+    document.getElementById("pivot-output").innerHTML = "<h3>⏳ Processing large file in DuckDB...</h3>";
+
+    try {
+        // 1. Download File Blob
+        const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const arrayBuffer = await response.arrayBuffer();
+        
+        await processAndRenderPivot(new Uint8Array(arrayBuffer), fileName);
+        statusDiv.innerHTML = "✅ Pivot Ready!";
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById("pivot-output").innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+        statusDiv.innerHTML = "Error";
+    }
+}
+
 async function handleLocalFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
 
-    // Reset UI
-    const container = document.getElementById("pivot-controls");
-    container.classList.add("hidden");
-    const activePane = document.getElementById(activePaneId);
-    activePane.querySelector(".content-area").innerHTML = "⏳ Loading local file into DuckDB...";
+    const statusDiv = document.getElementById("loading-status");
+    statusDiv.innerHTML = "⏳ Loading Local File...";
+
+    // Switch to Pivot View
+    document.getElementById("view-container").classList.add("hidden");
+    document.getElementById("filter-box").classList.add("hidden");
+    document.getElementById("pivot-wrapper").classList.remove("hidden");
+    document.getElementById("pivot-output").innerHTML = "<h3>⏳ Processing local file...</h3>";
 
     try {
-        const tableName = `work_table_${Date.now()}`;
-        // Store table name on the element for retrieval later
-        container.dataset.tableName = tableName; 
-
-        // Read file into buffer
         const arrayBuffer = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-
-        // Register with DuckDB
-        await db.registerFileBuffer(file.name, uint8Array);
-
-        // Load into a table
-        if (file.name.endsWith(".parquet")) {
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${file.name}')`);
-        } else {
-            // Assume CSV
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${file.name}')`);
-        }
-
-        // Get Schema to populate dropdowns
-        const schema = await conn.query(`DESCRIBE ${tableName}`);
-        populatePivotDropdowns(schema.toArray());
-
-        // Show Pivot UI
-        container.classList.remove("hidden");
-        activePane.querySelector(".content-area").innerHTML = `<div style="text-align:center; padding:20px; color:#00838f;">✅ File Loaded!<br>Use the controls above to analyze.</div>`;
-
+        await processAndRenderPivot(new Uint8Array(arrayBuffer), file.name);
+        statusDiv.innerHTML = "✅ Local Pivot Ready!";
     } catch (e) {
         console.error(e);
-        activePane.querySelector(".content-area").innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+        document.getElementById("pivot-output").innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
     }
 }
 
-function populatePivotDropdowns(schemaRows) {
-    const rowSelect = document.getElementById("pivot-rows");
-    const colSelect = document.getElementById("pivot-cols");
-    const valSelect = document.getElementById("pivot-values");
+async function processAndRenderPivot(uint8Array, fileName) {
+    // 1. Register in DuckDB
+    const tableName = `pivot_table_${Date.now()}`;
+    await db.registerFileBuffer(fileName, uint8Array);
 
-    rowSelect.innerHTML = "";
-    colSelect.innerHTML = '<option value="">(None - Flat Table)</option>';
-    valSelect.innerHTML = "";
-
-    schemaRows.forEach(row => {
-        const colName = row.column_name;
-        const colType = row.column_type;
-
-        // Add to Rows/Cols
-        const opt1 = document.createElement("option"); opt1.value = colName; opt1.innerText = colName;
-        rowSelect.appendChild(opt1);
-
-        const opt2 = document.createElement("option"); opt2.value = colName; opt2.innerText = colName;
-        colSelect.appendChild(opt2);
-
-        // Add to Values (Prefer numbers)
-        const opt3 = document.createElement("option"); opt3.value = colName; opt3.innerText = colName;
-        valSelect.appendChild(opt3);
-        
-        // Auto-select first numeric column for Values
-        if (['BIGINT', 'INTEGER', 'DOUBLE', 'DECIMAL'].some(t => colType.includes(t))) {
-            valSelect.value = colName;
-        }
-    });
-}
-
-async function runPivotAnalysis() {
-    const tableName = document.getElementById("pivot-controls").dataset.tableName;
-    const rowCol = document.getElementById("pivot-rows").value;
-    const pivotCol = document.getElementById("pivot-cols").value;
-    const valCol = document.getElementById("pivot-values").value;
-    const func = document.getElementById("pivot-func").value; // SUM, COUNT, etc
-
-    if (!tableName || !rowCol || !valCol) return;
-
-    let query = "";
-    
-    // PIVOT MODE
-    if (pivotCol) {
-        // PIVOT table ON pivotCol USING func(valCol) GROUP BY rowCol
-        query = `PIVOT ${tableName} ON "${pivotCol}" USING ${func}("${valCol}") GROUP BY "${rowCol}" ORDER BY "${rowCol}"`;
-    } 
-    // GROUP BY MODE
-    else {
-        // SELECT rowCol, func(valCol) FROM table GROUP BY rowCol
-        query = `SELECT "${rowCol}", ${func}("${valCol}") as "${valCol}" FROM ${tableName} GROUP BY "${rowCol}" ORDER BY "${valCol}" DESC`;
+    // 2. Load Table
+    if (fileName.endsWith(".parquet")) {
+        await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
+    } else {
+        // Assume CSV
+        await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
     }
 
-    try {
-        const result = await conn.query(query);
-        renderTableFromArrow(result);
-    } catch (e) {
-        alert("Query Error: " + e.message);
+    // 3. Fetch All Data for Pivot (Limit to prevent crash on massive files if needed)
+    const result = await conn.query(`SELECT * FROM ${tableName} LIMIT 500000`);
+    const rows = result.toArray().map(r => r.toJSON());
+
+    // 4. Render Pivot UI (Depends on jQuery & PivotTable.js in HTML)
+    if (typeof $ !== 'undefined' && $.pivotUtilities) {
+        $("#pivot-output").pivotUI(rows, {
+            renderers: $.pivotUtilities.renderers,
+            cols: [], rows: [],
+            rendererName: "Table"
+        });
+    } else {
+        document.getElementById("pivot-output").innerHTML = "<p style='color:red'>Missing PivotTable.js or jQuery libraries in HTML.</p>";
     }
 }
-
 
 // ==========================================
-// 11. DATA LOADING ENGINE
+// 13. DATA LOADING ENGINE (CORE)
 // ==========================================
 
 async function findAndLoadReport() {
@@ -1086,7 +1107,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 12. AI SUMMARY ENGINE
+// 14. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -1147,7 +1168,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 13. SQL FILTERING & RENDERING
+// 15. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
@@ -1222,7 +1243,7 @@ function renderTableFromArrow(arrowResult) {
     container.innerHTML = html;
 }
 
-window.showRowDetails = function(index) {
+function showRowDetails(index) {
     const rowData = currentArrowData[index];
     const modalBody = document.getElementById("modal-body");
     let html = `<table class="detail-table"><tbody>`;
