@@ -8,6 +8,7 @@ const CONFIG = {
     
     // 3. UPDATED: Hourly Images Folder
     HOURLY_SALES_FOLDER_ID: "1I42onyk5d1FWl7F58Go7oQFxamEM8ph4",
+    FEEDBACK_SHEET_ID: "1pWgjKGWBypp8vldYLhNXCWHOfQO5qS8sV1yayzFAw0U",
 
     // 4. Tracker Groups
     TRACKER_GROUPS: {
