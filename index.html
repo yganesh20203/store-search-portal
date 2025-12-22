@@ -9,6 +9,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+
     <style>
         /* Split Screen Grid */
         #view-container { display: grid; gap: 15px; min-height: 600px; margin-top: 20px; }
@@ -35,9 +42,17 @@
         }
         .feedback-btn:hover { background: #f57c00; }
 
-        /* Approval Form Inputs */
-        .app-input {
-            padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box;
+        /* Pivot Table Overrides */
+        .pvtAxisContainer, .pvtVals { background: #f9f9f9; border: 1px solid #ddd; }
+        .pvtRendererArea { padding: 10px; }
+        #pivot-wrapper {
+            background: white;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 600px;
+            overflow: auto;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
     </style>
 </head>
@@ -79,8 +94,8 @@
                     <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
                     <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
                     <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
-                    <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Daily Update</button>
-                    <button onclick="window.loadApprovalDashboard()" class="nav-btn" style="background:#ce93d8;">⏳ Approvals</button>
+                    <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Inbox</button>
+                    <button onclick="window.loadWorkDashboard()" class="nav-btn" style="background:#80deea;">🛠️ Work on Reports</button>
                 </div>
                 
                 <div id="sales-ui" class="hidden">
@@ -111,7 +126,6 @@
                     <hr>
                     <h3>🕒 Step 1: Select Date</h3>
                     <div id="hourly-date-list" class="folder-grid" style="margin-bottom:15px;">Loading Dates...</div>
-                    
                     <div id="hourly-images-container" class="hidden" style="padding:15px; background:#f3e5f5; border-radius:8px;">
                         <h3>🕒 Step 2: Select Hour</h3>
                         <div id="hourly-file-list" class="folder-grid"></div>
@@ -127,7 +141,6 @@
                             <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
                             <button onclick="window.createTicket()" style="background:#ff9800; color:white; padding:8px; border:none; border-radius:4px; width:100%; cursor:pointer;">📧 Assign & Notify</button>
                         </div>
-
                         <div style="flex:2;">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <h3>📋 Open Tickets</h3>
@@ -142,7 +155,6 @@
                     <hr>
                     <h3>🚶 Select Walkin Category</h3>
                     <div id="walkin-category-list" class="folder-grid" style="margin-bottom:15px;"></div>
-                    
                     <div id="walkin-files-container" class="hidden" style="padding:15px; background:#e0f2f1; border-radius:8px;">
                         <h3 id="walkin-files-title">Files</h3>
                         <div id="walkin-file-list" class="folder-grid"></div>
@@ -158,58 +170,26 @@
                             <button onclick="window.fetchDailyUpdates()" style="background:#ff5722; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Check Inbox</button>
                         </div>
                     </div>
-                    
                     <div id="daily-list-container" class="folder-grid">
                         <p style="color:#666;">Enter your email above to see your assigned reports.</p>
                     </div>
                 </div>
 
-                <div id="approval-ui" class="hidden">
+                <div id="work-ui" class="hidden">
                     <hr>
-                    <div style="display:flex; gap:20px;">
-                        <div style="flex:1; padding:20px; background:#f3e5f5; border-radius:8px;">
-                            <h3>⏳ Find Pending Approvals</h3>
-                            <p style="font-size:12px; color:#666; margin-bottom:15px;">Scan your inbox for emails from a specific person within a date range.</p>
-                            
-                            <label style="font-weight:bold; font-size:12px;">Target Sender (Email)</label>
-                            <input type="email" id="appr-target-email" class="app-input" placeholder="e.g. manager@flipkart.com" style="margin-bottom:10px;">
-                            
-                            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                                <div style="flex:1;">
-                                    <label style="font-weight:bold; font-size:12px;">From Date</label>
-                                    <input type="date" id="appr-start-date" class="app-input">
-                                </div>
-                                <div style="flex:1;">
-                                    <label style="font-weight:bold; font-size:12px;">To Date</label>
-                                    <input type="date" id="appr-end-date" class="app-input">
-                                </div>
-                            </div>
-
-                            <label style="font-weight:bold; font-size:12px;">Keywords (Optional)</label>
-                            <select id="appr-keywords" class="app-input" style="margin-bottom:15px;">
-                                <option value="default">Default ("Approve", "Pending", "Review")</option>
-                                <option value="approval">"Approval Needed"</option>
-                                <option value="action">"Action Required"</option>
-                                <option value="all">All Emails (No Keyword Filter)</option>
-                            </select>
-
-                            <button onclick="window.openGmailSearch()" style="background:#9c27b0; color:white; border:none; padding:10px; border-radius:4px; width:100%; cursor:pointer; font-weight:bold; font-size:14px;">
-                                🔍 Scan My Inbox
-                            </button>
-                        </div>
-                        
-                        <div style="flex:1; display:flex; align-items:center; justify-content:center; color:#888; border:2px dashed #ddd; border-radius:8px;">
-                            <div style="text-align:center;">
-                                <div style="font-size:40px;">📧</div>
-                                <p>Clicking Scan will open Gmail<br>with these exact filters applied.</p>
-                            </div>
-                        </div>
+                    <div style="background:#e0f7fa; padding:15px; border-radius:8px; border:1px solid #b2ebf2; margin-bottom: 20px;">
+                        <h3>🛠️ Work on Reports (Pivot Mode)</h3>
+                        <p style="font-size:12px; color:#555;">Select a file to load it into the Pivot Table engine. <b>Parquet files (100MB+) perform best here.</b></p>
+                        <div id="work-file-list" class="folder-grid">Loading Files...</div>
+                    </div>
+                    
+                    <div id="pivot-wrapper" class="hidden">
+                        <div id="pivot-output"></div>
                     </div>
                 </div>
 
                 <div id="filter-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
                     <h3>Data Filters (Applies to Blue Active View)</h3>
-                    
                     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <label>Filter:</label>
                         <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
@@ -217,7 +197,6 @@
                         </select>
                         <input type="text" id="filter-input" placeholder="Type to search..." onkeyup="window.applyTableFilter()" style="padding: 8px; flex-grow: 1; min-width: 200px;">
                     </div>
-
                     <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
                         <label>Show Rows:</label>
                         <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
@@ -228,7 +207,6 @@
                             <option value="all">All Rows</option>
                         </select>
                     </div>
-                    
                     <div id="sheet-link-container" style="margin-top: 10px;"></div>
                     <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
                 </div>
@@ -278,63 +256,5 @@
 
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
-    <div class="control-panel">
-    <button onclick="window.loadSalesDashboard()" class="nav-btn">📊 Sales Reports</button>
-    <button onclick="window.loadMemberDashboard()" class="nav-btn">👥 Member DB</button>
-    <button onclick="window.loadTrackerDashboard()" class="nav-btn">📈 Google Sheets</button>
-    <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
-    <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
-    <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
-    <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Daily Update</button>
-    <button onclick="window.loadWorkDashboard()" class="nav-btn" style="background:#80deea;">🛠️ Work on Reports</button>
-</div>
-
-<div id="work-ui" class="hidden">
-    <hr>
-    <div style="background:#e0f7fa; padding:15px; border-radius:8px; border:1px solid #b2ebf2;">
-        <h3>🛠️ Analyze Local Files (CSV / Parquet)</h3>
-        <p style="font-size:12px; color:#555;">Process large files (500MB+) instantly in your browser. No upload required.</p>
-        
-        <input type="file" id="local-file-upload" accept=".csv,.parquet" onchange="window.handleLocalFileUpload(this)" style="margin-bottom:15px;">
-        
-        <div id="pivot-controls" class="hidden" style="margin-top:15px; border-top:1px dashed #0097a7; padding-top:15px;">
-            <h4 style="margin-top:0;">📐 Pivot / Grouping Builder</h4>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                
-                <div style="flex:1; min-width:200px;">
-                    <label style="font-weight:bold; font-size:12px;">1. Group By (Rows)</label>
-                    <select id="pivot-rows" class="app-input"></select>
-                </div>
-
-                <div style="flex:1; min-width:200px;">
-                    <label style="font-weight:bold; font-size:12px;">2. Pivot Column (Optional Headers)</label>
-                    <select id="pivot-cols" class="app-input">
-                        <option value="">(None - Flat Table)</option>
-                    </select>
-                </div>
-
-                <div style="flex:1; min-width:200px;">
-                    <label style="font-weight:bold; font-size:12px;">3. Value to Summarize</label>
-                    <select id="pivot-values" class="app-input"></select>
-                </div>
-
-                <div style="flex:0 0 100px;">
-                    <label style="font-weight:bold; font-size:12px;">Function</label>
-                    <select id="pivot-func" class="app-input">
-                        <option value="SUM">Sum</option>
-                        <option value="COUNT">Count</option>
-                        <option value="AVG">Average</option>
-                        <option value="MAX">Max</option>
-                        <option value="MIN">Min</option>
-                    </select>
-                </div>
-            </div>
-
-            <button onclick="window.runPivotAnalysis()" style="background:#00838f; color:white; border:none; padding:10px 20px; border-radius:4px; margin-top:15px; cursor:pointer; font-weight:bold;">
-                ⚡ Run Analysis
-            </button>
-        </div>
-    </div>
-</div>
 </body>
 </html>
