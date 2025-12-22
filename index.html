@@ -179,5 +179,40 @@
 
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
+
+    <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
+
+<div id="ticket-ui" class="hidden">
+    <hr>
+    <div style="display:flex; gap:20px;">
+        <div style="flex:1; padding:15px; background:#fff3e0; border-radius:8px;">
+            <h3>➕ Assign New Task</h3>
+            <input type="email" id="tkt-email" placeholder="Assign To (Email)..." style="width:100%; padding:8px; margin-bottom:10px;">
+            <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px;"></textarea>
+            <button onclick="window.createTicket()" style="background:#ff9800; color:white; padding:8px; border:none; border-radius:4px; width:100%; cursor:pointer;">📧 Assign & Notify</button>
+        </div>
+
+        <div style="flex:2;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>📋 Open Tickets</h3>
+                <button onclick="window.loadTicketDashboard()" style="font-size:12px;">🔄 Refresh</button>
+            </div>
+            <div id="ticket-list-container" style="max-height:400px; overflow:auto; border:1px solid #eee;">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<div id="resolve-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header"><h3>✅ Resolve Ticket</h3><span class="close-btn" onclick="window.closeResolveModal()">&times;</span></div>
+        <div class="modal-body">
+            <p id="resolve-tkt-id" style="font-weight:bold;"></p>
+            <textarea id="resolve-notes" rows="4" placeholder="How was this resolved?" style="width:100%; padding:10px;"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button onclick="window.confirmResolve()" style="background:#28a745; color:white;">Mark as Resolved</button>
+        </div>
+    </div>
+</div>    
 </body>
 </html>
