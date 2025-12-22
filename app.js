@@ -32,6 +32,8 @@ window.createTicket = createTicket;
 window.openResolveModal = openResolveModal; 
 window.closeResolveModal = closeResolveModal; 
 window.confirmResolve = confirmResolve; 
+window.loadWalkinDashboard = loadWalkinDashboard;
+window.loadWalkinCategory = loadWalkinCategory;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -95,7 +97,6 @@ async function generateAccessToken(creds) {
     const now = Math.floor(Date.now() / 1000);
     const claim = {
         iss: creds.client_email,
-        // CRITICAL: Scope allows writing to Sheets (Tickets/Feedback)
         scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
         aud: "https://oauth2.googleapis.com/token",
         exp: now + 3600,
@@ -129,7 +130,7 @@ function changeLayout(numPanes) {
         const div = document.createElement("div");
         div.id = paneId;
         div.className = "pane";
-        if (i === 0) div.classList.add("active"); // First one active by default
+        if (i === 0) div.classList.add("active"); 
         
         div.onclick = () => window.setActivePane(paneId);
 
@@ -157,6 +158,7 @@ function resetUI() {
     document.getElementById("tracker-ui").classList.add("hidden");
     document.getElementById("hourly-ui").classList.add("hidden"); 
     document.getElementById("ticket-ui").classList.add("hidden"); 
+    document.getElementById("walkin-ui").classList.add("hidden");
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -313,7 +315,98 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. HOURLY SALES DASHBOARD
+// 6. WALKIN DASHBOARD
+// ==========================================
+async function loadWalkinDashboard() {
+    resetUI();
+    document.getElementById("walkin-ui").classList.remove("hidden");
+    const catList = document.getElementById("walkin-category-list");
+    const fileContainer = document.getElementById("walkin-files-container");
+    catList.innerHTML = "";
+    fileContainer.classList.add("hidden");
+
+    if (CONFIG.WALKIN_FOLDERS) {
+        Object.keys(CONFIG.WALKIN_FOLDERS).forEach(groupName => {
+            const btn = document.createElement("button");
+            btn.className = "folder-btn";
+            btn.style.background = "#b2dfdb";
+            btn.style.fontWeight = "bold";
+            btn.innerText = groupName;
+            const folderId = CONFIG.WALKIN_FOLDERS[groupName];
+            btn.onclick = () => loadWalkinCategory(groupName, folderId);
+            catList.appendChild(btn);
+        });
+    } else {
+        catList.innerHTML = "<p>No Walkin folders configured.</p>";
+    }
+}
+
+async function loadWalkinCategory(groupName, folderId) {
+    const container = document.getElementById("walkin-files-container");
+    const list = document.getElementById("walkin-file-list");
+    const title = document.getElementById("walkin-files-title");
+    
+    container.classList.remove("hidden");
+    title.innerText = `📂 ${groupName}`;
+    list.innerHTML = "Loading...";
+
+    if (!folderId || folderId.includes("PASTE")) {
+        list.innerHTML = "<p style='color:red'>Folder ID not configured in config.js</p>";
+        return;
+    }
+
+    const query = `'${folderId}' in parents and trashed = false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, thumbnailLink)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+
+    try {
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        list.innerHTML = "";
+        if (data.files && data.files.length > 0) {
+            data.files.forEach(file => {
+                const btn = document.createElement("button");
+                btn.className = "folder-btn";
+                btn.style.background = "#ffffff";
+                btn.style.border = "1px solid #ddd";
+                btn.style.display = "flex";
+                btn.style.flexDirection = "column";
+                btn.style.alignItems = "center";
+                btn.style.width = "140px";
+                btn.style.height = "120px";
+                btn.style.padding = "10px";
+                btn.style.gap = "5px";
+
+                let icon = `<div style="font-size:30px;">📄</div>`;
+                if (file.mimeType.includes("image") && file.thumbnailLink) {
+                    icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
+                } else if (file.mimeType.includes("spreadsheet")) {
+                    icon = `<div style="font-size:30px;">📊</div>`;
+                }
+
+                btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
+
+                btn.onclick = () => {
+                    if (file.mimeType.includes("image")) {
+                        renderImage(file.id, file.name);
+                    } else if (file.mimeType.includes("spreadsheet")) {
+                        loadFileIntoDuckDB(file.id, file.name, 'sheet', 0);
+                    } else {
+                        loadFileIntoDuckDB(file.id, file.name, 'parquet');
+                    }
+                };
+                list.appendChild(btn);
+            });
+        } else {
+            list.innerHTML = "No files found.";
+        }
+    } catch (e) {
+        list.innerHTML = "Error: " + e.message;
+    }
+}
+
+// ==========================================
+// 7. HOURLY SALES DASHBOARD
 // ==========================================
 
 async function loadHourlyDashboard() {
@@ -323,10 +416,9 @@ async function loadHourlyDashboard() {
     const imageList = document.getElementById("hourly-file-list");
     document.getElementById("hourly-images-container").classList.add("hidden");
     
-    dateList.innerHTML = "⏳ Scanning Drive...";
+    dateList.innerHTML = "⏳ Scanning Drive for Hourly Images...";
     imageList.innerHTML = "";
 
-    // Query: Sort by Created Time Descending (Newest First)
     const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
@@ -337,7 +429,6 @@ async function loadHourlyDashboard() {
         if (data.files && data.files.length > 0) {
             hourlyFilesCache = data.files; 
             
-            // Group by Date
             const dates = {};
             data.files.forEach(file => {
                 const dateObj = new Date(file.createdTime);
@@ -360,7 +451,12 @@ async function loadHourlyDashboard() {
             });
 
         } else {
-            dateList.innerHTML = `<div style="color:red; text-align:center;">❌ No images found.<br><small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small></div>`;
+            dateList.innerHTML = `
+                <div style="color:red; text-align:center;">
+                    ❌ No images found.<br>
+                    <small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small><br>
+                    <small>Make sure 'analytics-fkw@...' has Viewer access.</small>
+                </div>`;
         }
     } catch (e) {
         dateList.innerHTML = "Error: " + e.message;
@@ -396,7 +492,10 @@ function filterHourlyImagesByDate(dateKey) {
             ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
             : `<div style="font-size:30px;">🖼️</div>`;
 
-        btn.innerHTML = `${img}<div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>`;
+        btn.innerHTML = `
+            ${img}
+            <div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>
+        `;
         btn.onclick = () => renderImage(file.id, timeStr);
         list.appendChild(btn);
     });
@@ -430,7 +529,7 @@ async function renderImage(fileId, timeLabel) {
 
 
 // ==========================================
-// 7. TICKETING SYSTEM (DIRECT DB MODE)
+// 8. TICKETING SYSTEM (DIRECT DB MODE)
 // ==========================================
 
 async function loadTicketDashboard() {
@@ -455,7 +554,6 @@ async function loadTicketDashboard() {
             <thead><tr><th>ID</th><th>Date</th><th>Assigned To</th><th>Task</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>`;
 
-        // Loop rows (Skip header)
         for (let i = data.values.length - 1; i >= 1; i--) {
             const row = data.values[i];
             const tktId = row[0];
@@ -466,7 +564,7 @@ async function loadTicketDashboard() {
 
             const isResolved = tktStatus === "RESOLVED";
             const rowColor = isResolved ? "#e8f5e9" : "#fff";
-            const rowIndex = i + 1; // Google Sheet Row Index (based on array index match)
+            const rowIndex = i + 1; 
             
             const btnHtml = isResolved 
                 ? `<span style="color:green; font-weight:bold;">✔ Done</span>` 
@@ -504,7 +602,6 @@ async function createTicket() {
         const ticketId = "TKT-" + Math.floor(10000 + Math.random() * 90000);
         const date = new Date().toLocaleDateString();
         
-        // DIRECT WRITE TO SHEET
         const values = [[ ticketId, date, "Admin", email, task, "OPEN", "" ]];
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`;
         
@@ -550,14 +647,8 @@ async function confirmResolve() {
     btn.innerText = "⏳ Updating DB...";
     
     try {
-        // Calculate Sheet Row (1-based index)
-        // Array index 0 = Header (Row 1). Array index 1 = Row 2.
-        // Passed rowIndex is the array index + 1? No, we need exact sheet row.
-        // loadTicketDashboard logic: i starts at 1. If i=1 (Row 2), rowIndex passed = 2.
-        // So rowIndex IS the Sheet Row Number.
         const sheetRow = currentResolveRowIndex + 1; 
-
-        const range = `Sheet1!F${sheetRow}:G${sheetRow}`; // Columns F (Status) and G (Resolution)
+        const range = `Sheet1!F${sheetRow}:G${sheetRow}`; 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
 
         const response = await fetch(url, {
@@ -583,7 +674,7 @@ async function confirmResolve() {
 
 
 // ==========================================
-// 8. DATA LOADING ENGINE
+// 9. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
@@ -736,7 +827,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 9. AI SUMMARY ENGINE
+// 10. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -797,7 +888,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 10. SQL FILTERING & RENDERING
+// 11. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
