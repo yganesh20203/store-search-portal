@@ -68,7 +68,7 @@ async function initDuckDB() {
 // ==========================================
 async function unlockAndLogin() {
     const userPass = document.getElementById("access-key").value;
-    const btn = document.querySelector("button");
+    const btn = document.querySelector("#auth-overlay button");
     const errorMsg = document.getElementById("error-msg");
 
     if(!userPass) return;
@@ -835,8 +835,9 @@ async function loadWorkDashboard() {
     const list = document.getElementById("work-file-list");
     list.innerHTML = "⏳ Scanning Drive...";
 
-    // Ensure Local File Upload Input is cleared
-    document.getElementById("local-file-upload").value = "";
+    // Ensure Local File Upload Input is cleared (Safe Check Added)
+    const uploadInput = document.getElementById("local-file-upload");
+    if(uploadInput) uploadInput.value = "";
 
     if (!CONFIG.WORK_REPORTS_FOLDER_ID) { list.innerHTML = "<p>Config Missing</p>"; return; }
 
