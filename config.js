@@ -5,6 +5,14 @@ const CONFIG = {
 
     SALES_FOLDER_ID: "1jguubICcAtMijiaNETV7B35G2YZlyM5O", 
     MEMBERS_FOLDER_ID: "1ViTdGxZu-mAMiUOyBCliV8uMNy30clNt",
+
+    WALKIN_FOLDERS: {
+        "Walkin-sales": "1TU9jhb2jZ-MRKPijG-5I3AyTPvyOqnUE4yrF-W6CbkU",
+        "Walkin-MAC": "1TU9jhb2jZ-MRKPijG-5I3AyTPvyOqnUE4yrF-W6CbkU",
+        "SaveEasy": "1TU9jhb2jZ-MRKPijG-5I3AyTPvyOqnUE4yrF-W6CbkU",
+        "Offer posters": "1J2epmcfA8hT8YFk4Q7G9LM3qLZzw3W_H",
+        "Offer articles": "17LuLQiErqyxBAn_HyVOo_39NR9fSKZgIess20QJiTps"
+    },
     
     // 3. UPDATED: Hourly Images Folder
     HOURLY_SALES_FOLDER_ID: "1I42onyk5d1FWl7F58Go7oQFxamEM8ph4",
