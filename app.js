@@ -792,3 +792,169 @@ window.onclick = function(event) {
     const modal = document.getElementById("detail-modal");
     if (event.target == modal) closeModal();
 }
+
+
+// Add these to window exports at the top
+window.loadTicketDashboard = loadTicketDashboard;
+window.createTicket = createTicket;
+window.openResolveModal = openResolveModal;
+window.closeResolveModal = closeResolveModal;
+window.confirmResolve = confirmResolve;
+
+// ... existing code ...
+
+// ==========================================
+// 10. TICKETING SYSTEM
+// ==========================================
+
+async function loadTicketDashboard() {
+    resetUI();
+    document.getElementById("ticket-ui").classList.remove("hidden");
+    const container = document.getElementById("ticket-list-container");
+    container.innerHTML = "⏳ Fetching tickets...";
+
+    try {
+        // Use our existing DuckDB Loader logic to fetch the sheet data!
+        // We reuse the access token and sheet ID logic
+        const sheetId = CONFIG.TICKET_SHEET_ID;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1`;
+        
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "<p>No tickets found.</p>";
+            return;
+        }
+
+        // Render Table Manually (Simple version)
+        let html = `<table class="data-table">
+            <thead><tr><th>ID</th><th>Date</th><th>Assigned To</th><th>Task</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>`;
+
+        // Loop rows (Skip header)
+        // Columns: 0=ID, 1=Date, 2=By, 3=To, 4=Task, 5=Status, 6=Resolution
+        // We reverse loop to show newest first
+        for (let i = data.values.length - 1; i >= 1; i--) {
+            const row = data.values[i];
+            const tktId = row[0];
+            const tktDate = row[1];
+            const tktTo = row[3];
+            const tktTask = row[4];
+            const tktStatus = row[5];
+
+            // Only show OPEN tickets usually, but let's show all with color
+            const isResolved = tktStatus === "RESOLVED";
+            const rowColor = isResolved ? "#e8f5e9" : "#fff";
+            const btnHtml = isResolved 
+                ? `<span style="color:green;">✔ Done</span>` 
+                : `<button onclick="window.openResolveModal('${tktId}')" style="font-size:10px; padding:4px;">✅ Resolve</button>`;
+
+            html += `<tr style="background:${rowColor}">
+                <td>${tktId}</td>
+                <td>${tktDate}</td>
+                <td>${tktTo}</td>
+                <td>${tktTask}</td>
+                <td style="font-weight:bold;">${tktStatus}</td>
+                <td>${btnHtml}</td>
+            </tr>`;
+        }
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+    } catch (e) {
+        container.innerHTML = "Error loading tickets: " + e.message;
+    }
+}
+
+// CREATE TICKET (Calls Apps Script)
+async function createTicket() {
+    const email = document.getElementById("tkt-email").value;
+    const task = document.getElementById("tkt-task").value;
+    
+    if(!email || !task) { alert("Please fill in email and task."); return; }
+
+    const btn = document.querySelector("#ticket-ui button"); // The create button
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ Sending...";
+    btn.disabled = true;
+
+    try {
+        const payload = {
+            action: "create",
+            assignedBy: "Admin", // Or get from a user input if needed
+            assignedTo: email,
+            task: task
+        };
+
+        // We use 'no-cors' mode because Apps Script response is opaque, but it works
+        const response = await fetch(CONFIG.TICKET_SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        });
+        
+        // Since we fetch the sheet immediately after, we assume success if no network error
+        alert("✅ Ticket Assigned & Email Sent!");
+        document.getElementById("tkt-task").value = "";
+        loadTicketDashboard(); // Refresh list
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
+
+// RESOLVE TICKET
+let currentResolveId = "";
+
+function openResolveModal(id) {
+    currentResolveId = id;
+    document.getElementById("resolve-tkt-id").innerText = "Closing Ticket: " + id;
+    document.getElementById("resolve-modal").classList.remove("hidden");
+}
+
+function closeResolveModal() {
+    document.getElementById("resolve-modal").classList.add("hidden");
+}
+
+async function confirmResolve() {
+    const notes = document.getElementById("resolve-notes").value;
+    
+    const btn = document.querySelector("#resolve-modal button");
+    btn.innerText = "⏳ Updating...";
+    
+    try {
+        const payload = {
+            action: "resolve",
+            ticketId: currentResolveId,
+            notes: notes
+        };
+
+        await fetch(CONFIG.TICKET_SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        });
+
+        alert("✅ Ticket Resolved!");
+        closeResolveModal();
+        loadTicketDashboard(); // Refresh list
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = "Mark as Resolved";
+    }
+}
+
+// Update resetUI to hide ticket-ui
+function resetUI() {
+    document.getElementById("sales-ui").classList.add("hidden");
+    document.getElementById("member-ui").classList.add("hidden");
+    document.getElementById("tracker-ui").classList.add("hidden");
+    document.getElementById("hourly-ui").classList.add("hidden");
+    document.getElementById("ticket-ui").classList.add("hidden"); // Added this
+    document.getElementById("sheet-link-container").innerHTML = "";
+}
