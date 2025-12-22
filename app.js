@@ -227,7 +227,7 @@ async function loadMemberDashboard() {
     }
 }
 
-// --- TRACKER DASHBOARD (Dynamic Groups) ---
+// --- TRACKER DASHBOARD ---
 async function loadTrackerDashboard() {
     resetUI();
     document.getElementById("tracker-ui").classList.remove("hidden");
@@ -278,7 +278,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. HOURLY SALES DASHBOARD (IMAGES)
+// 6. HOURLY SALES DASHBOARD (FIXED)
 // ==========================================
 
 async function loadHourlyDashboard() {
@@ -291,23 +291,26 @@ async function loadHourlyDashboard() {
     dateList.innerHTML = "⏳ Scanning Drive for Hourly Images...";
     imageList.innerHTML = "";
 
-    // Query: Sort by Created Time Descending (Newest First)
-    // We request createdTime to group them
-    const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and (mimeType contains 'image/') and trashed = false`;
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc`;
+    console.log("Searching Folder ID:", CONFIG.HOURLY_SALES_FOLDER_ID);
+
+    // FIXED QUERY: Removing strict mimeType check and adding supportsAllDrives
+    const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and trashed = false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
     try {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
         
+        console.log("API Response:", data); // Debugging line
+
         if (data.files && data.files.length > 0) {
-            hourlyFilesCache = data.files; // Store globally
+            hourlyFilesCache = data.files; 
             
             // Group by Date
             const dates = {};
             data.files.forEach(file => {
                 const dateObj = new Date(file.createdTime);
-                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); // e.g., "Dec 20, 2025"
+                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                 if (!dates[dateKey]) dates[dateKey] = [];
                 dates[dateKey].push(file);
             });
@@ -318,7 +321,7 @@ async function loadHourlyDashboard() {
                 const count = dates[date].length;
                 const btn = document.createElement("button");
                 btn.className = "folder-btn";
-                btn.style.background = "#e1bee7"; // Light Purple
+                btn.style.background = "#e1bee7"; 
                 btn.style.width = "auto";
                 btn.style.padding = "10px 20px";
                 btn.innerHTML = `📅 <b>${date}</b> <br><span style="font-size:0.8em;">(${count} updates)</span>`;
@@ -327,7 +330,12 @@ async function loadHourlyDashboard() {
             });
 
         } else {
-            dateList.innerHTML = "No hourly images found in the configured folder.";
+            dateList.innerHTML = `
+                <div style="color:red; text-align:center;">
+                    ❌ No images found.<br>
+                    <small>Checked Folder: ${CONFIG.HOURLY_SALES_FOLDER_ID}</small><br>
+                    <small>Make sure 'analytics-fkw@...' has Viewer access.</small>
+                </div>`;
         }
     } catch (e) {
         dateList.innerHTML = "Error: " + e.message;
@@ -340,10 +348,9 @@ function filterHourlyImagesByDate(dateKey) {
     container.classList.remove("hidden");
     list.innerHTML = "";
 
-    // Filter files for selected date
     const filteredFiles = hourlyFilesCache.filter(f => new Date(f.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) === dateKey);
 
-    // Sort by Time Ascending for the day
+    // Sort by Time Ascending
     filteredFiles.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
 
     filteredFiles.forEach(file => {
@@ -357,27 +364,27 @@ function filterHourlyImagesByDate(dateKey) {
         btn.style.display = "flex";
         btn.style.flexDirection = "column";
         btn.style.alignItems = "center";
-        btn.style.width = "160px"; 
-        btn.style.height = "140px";
+        btn.style.width = "140px"; 
+        btn.style.height = "120px";
         btn.style.gap = "5px";
         btn.style.padding = "10px";
         
         // Thumbnail
         const img = file.thumbnailLink 
-            ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
+            ? `<img src="${file.thumbnailLink}" style="width:100%; height:70px; object-fit:contain; border-radius:4px;">` 
             : `<div style="font-size:30px;">🖼️</div>`;
 
+        // CHANGED: Show Time BIG, Hide Name
         btn.innerHTML = `
             ${img}
-            <div style="font-size:14px; font-weight:bold; color:#0056b3;">${timeStr}</div>
-            <div style="font-size:10px; color:#666; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;">${file.name}</div>
+            <div style="font-size:16px; font-weight:bold; color:#d81b60;">${timeStr}</div>
         `;
-        btn.onclick = () => renderImage(file.id, file.name);
+        btn.onclick = () => renderImage(file.id, timeStr);
         list.appendChild(btn);
     });
 }
 
-async function renderImage(fileId, fileName) {
+async function renderImage(fileId, timeLabel) {
     const pane = document.getElementById(activePaneId);
     if (!pane) { alert("Error: No active view selected"); return; }
     
@@ -397,7 +404,7 @@ async function renderImage(fileId, fileName) {
                 <img src="${imageUrl}" style="max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
             </div>
         `;
-        pane.querySelector(".pane-label").innerText = `📷 ${fileName}`;
+        pane.querySelector(".pane-label").innerText = `📷 Snapshot: ${timeLabel}`;
     } catch (e) {
         contentArea.innerHTML = `<p style="color:red">Error loading image: ${e.message}</p>`;
     }
@@ -405,14 +412,13 @@ async function renderImage(fileId, fileName) {
 
 
 // ==========================================
-// 7. DATA LOADING ENGINE (SALES & TRACKERS)
+// 7. DATA LOADING ENGINE
 // ==========================================
 
 async function findAndLoadReport() {
     const storeId = document.getElementById("store-id-input").value.trim();
     const statusDiv = document.getElementById("loading-status");
 
-    // Validation
     if (!currentMonthFolderId) { alert("⚠️ Please select a Month folder first (Step 1)."); return; }
     if (!storeId) { alert("⚠️ Please enter a Store ID."); return; }
 
@@ -423,7 +429,6 @@ async function findAndLoadReport() {
     const contentArea = pane.querySelector(".content-area");
     contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:#666;">🔍 Searching Drive for ${storeId}...</div>`;
 
-    // Search Drive
     const query = `'${currentMonthFolderId}' in parents and name contains '${storeId}' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
@@ -462,7 +467,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         if (type === 'sheet') {
             statusDiv.innerHTML = "⏳ Identifying Tab...";
             
-            // Metadata
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
@@ -476,43 +480,32 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             statusDiv.innerHTML = `⏳ Downloading "${sheetTitle}"...`;
 
-            // Data
             const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${encodeURIComponent(sheetTitle)}`;
             const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             const dataJson = await dataResp.json();
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            // --- SMART HEADER FIX (Applies to ALL Sheets) ---
             let finalValues = dataJson.values;
 
-            // Always check for at least 2 rows to attempt merge
+            // SMART HEADER FIX
             if (finalValues.length >= 2) {
                 console.log("🛠️ Merging Top 2 Rows for Header...");
-                
-                const rowDates = finalValues[0]; // Top Row
-                const rowMetrics = finalValues[1]; // Bottom Row
+                const rowDates = finalValues[0];
+                const rowMetrics = finalValues[1];
                 let newHeader = [];
                 let lastDate = "";
 
-                // Iterate using the bottom row as the count
                 for (let i = 0; i < rowMetrics.length; i++) {
                     let dateVal = rowDates[i] || "";
                     let metricVal = rowMetrics[i] || `col${i}`;
-
-                    // Handle Merged Cells logic
                     if (dateVal !== "") lastDate = dateVal;
-
                     if (lastDate) newHeader.push(`${lastDate} - ${metricVal}`);
                     else newHeader.push(metricVal);
                 }
-                
-                // Replace the first 2 rows with the new header
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
-            // -------------------------------------------------
 
-            // Load to DuckDB
             const csvText = arrayToCSV(finalValues);
             const csvFileName = `temp_${tableName}.csv`;
             
@@ -521,7 +514,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
-            // Buttons
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -536,7 +528,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
-            // Binary (Parquet/CSV)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -566,7 +557,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     }
 }
 
-// Helper: JSON -> CSV
 function arrayToCSV(data) {
     return data.map(row =>
         row.map(field => {
@@ -581,7 +571,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 8. AI SUMMARY ENGINE
+// 8. AI SUMMARY & FILTERS
 // ==========================================
 
 async function summarizeData() {
@@ -606,12 +596,10 @@ async function summarizeData() {
             return;
         }
 
-        // Totals
         const sumQueryParts = numericCols.map(col => `SUM("${col}") as "${col}"`).join(", ");
         const totalResult = await conn.query(`SELECT ${sumQueryParts} FROM ${tableName}`);
         const totals = totalResult.toArray()[0].toJSON();
 
-        // Top Performer
         const mainMetric = numericCols[numericCols.length - 1]; 
         const topResult = await conn.query(`
             SELECT "${labelCol}", "${mainMetric}" 
@@ -642,10 +630,6 @@ async function summarizeData() {
         modalBody.innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
     }
 }
-
-// ==========================================
-// 9. SQL FILTERING & RENDERING
-// ==========================================
 
 async function setupFilterDropdown(tableName) {
     const schema = await conn.query(`DESCRIBE ${tableName}`);
@@ -686,7 +670,6 @@ async function applyTableFilter() {
 
 let currentArrowData = null; 
 
-// RENDER TABLE (CSS Styled)
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
