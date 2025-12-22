@@ -9,6 +9,8 @@ const CONFIG = {
     // 3. UPDATED: Hourly Images Folder
     HOURLY_SALES_FOLDER_ID: "1I42onyk5d1FWl7F58Go7oQFxamEM8ph4",
     FEEDBACK_SHEET_ID: "1pWgjKGWBypp8vldYLhNXCWHOfQO5qS8sV1yayzFAw0U",
+    TICKET_SHEET_ID: "1w3Hs0teV2AACnHitf4iVG-Yg3i-PXP4Sek9VMwWStTw",
+    TICKET_SCRIPT_URL: "https://script.google.com/a/macros/flipkart.com/s/AKfycbzpB3QtwSOZok3ZBJVqsSj6b74UHSVzUOrlRTOeaXEMfe1oRi41NedwfDSZqxKthcAd/exec",
 
     // 4. Tracker Groups
     TRACKER_GROUPS: {
