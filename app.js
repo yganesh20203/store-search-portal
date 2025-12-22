@@ -21,9 +21,10 @@ window.loadTicketDashboard = loadTicketDashboard;
 window.loadWalkinDashboard = loadWalkinDashboard; 
 window.loadWalkinCategory = loadWalkinCategory;
 window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; 
-window.loadApprovalDashboard = loadApprovalDashboard; // NEW
+window.loadWorkDashboard = loadWorkDashboard; // NEW
+window.handleLocalFileUpload = handleLocalFileUpload; // NEW
+window.runPivotAnalysis = runPivotAnalysis; // NEW
 window.fetchDailyUpdates = fetchDailyUpdates; 
-window.openGmailSearch = openGmailSearch; // NEW
 window.findAndLoadReport = findAndLoadReport;
 window.loadFileIntoDuckDB = loadFileIntoDuckDB; 
 window.selectMonth = selectMonth;
@@ -166,7 +167,7 @@ function resetUI() {
     document.getElementById("ticket-ui").classList.add("hidden"); 
     document.getElementById("walkin-ui").classList.add("hidden");
     document.getElementById("daily-ui").classList.add("hidden");
-    document.getElementById("approval-ui").classList.add("hidden"); // NEW
+    document.getElementById("work-ui").classList.add("hidden"); // NEW
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -323,7 +324,7 @@ function openTrackerCategory(groupName) {
 }
 
 // ==========================================
-// 6. WALKIN DASHBOARD
+// 6. WALKIN DASHBOARD (SMART FOLDERS)
 // ==========================================
 
 async function loadWalkinDashboard() {
@@ -413,7 +414,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 if (isFolder) {
                     icon = `<div style="font-size:40px;">📁</div>`;
-                    btn.style.background = "#fff8e1"; 
+                    btn.style.background = "#fff8e1"; // Highlight Folders
                 } 
                 else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
@@ -427,8 +428,10 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
 
+                // --- SMART CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
+                        // DRILL DOWN (Prevent 403 error)
                         walkinHistoryStack.push({ title: title, id: folderId });
                         loadWalkinCategory(file.name, file.id, 'push');
                     } 
@@ -442,6 +445,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
                     }
                     else {
+                        // Fallback: Open in new tab (PDFs, Docs, etc)
                         window.open(file.webViewLink, '_blank');
                     }
                 };
@@ -811,51 +815,120 @@ async function fetchDailyUpdates() {
 }
 
 // ==========================================
-// 10. APPROVALS DASHBOARD (GMAIL SEARCH LINK)
+// 10. WORK ON REPORTS (LOCAL PIVOT)
 // ==========================================
 
-function loadApprovalDashboard() {
+function loadWorkDashboard() {
     resetUI();
-    document.getElementById("approval-ui").classList.remove("hidden");
-    
-    // Set default dates
-    const today = new Date();
-    const lastMonth = new Date();
-    lastMonth.setMonth(today.getMonth() - 1);
-    
-    document.getElementById("appr-end-date").valueAsDate = today;
-    document.getElementById("appr-start-date").valueAsDate = lastMonth;
+    document.getElementById("work-ui").classList.remove("hidden");
+    document.getElementById("pivot-controls").classList.add("hidden");
+    document.getElementById("local-file-upload").value = ""; // Reset
 }
 
-function openGmailSearch() {
-    const targetEmail = document.getElementById("appr-target-email").value.trim();
-    const startDate = document.getElementById("appr-start-date").value;
-    const endDate = document.getElementById("appr-end-date").value;
-    const keywordMode = document.getElementById("appr-keywords").value;
+// Handle File Upload
+async function handleLocalFileUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
 
-    if (!targetEmail) { alert("Please enter the sender's email."); return; }
+    // Reset UI
+    const container = document.getElementById("pivot-controls");
+    container.classList.add("hidden");
+    const activePane = document.getElementById(activePaneId);
+    activePane.querySelector(".content-area").innerHTML = "⏳ Loading local file into DuckDB...";
 
-    // Construct Query Parts
-    let query = `from:${targetEmail}`;
-    if (startDate) query += ` after:${startDate}`;
-    if (endDate) query += ` before:${endDate}`;
+    try {
+        const tableName = `work_table_${Date.now()}`;
+        // Store table name on the element for retrieval later
+        container.dataset.tableName = tableName; 
 
-    // Add Keywords
-    if (keywordMode === "default") {
-        query += ` (approve OR approval OR pending OR review)`;
-    } else if (keywordMode === "approval") {
-        query += ` "approval needed"`;
-    } else if (keywordMode === "action") {
-        query += ` "action required"`;
+        // Read file into buffer
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        // Register with DuckDB
+        await db.registerFileBuffer(file.name, uint8Array);
+
+        // Load into a table
+        if (file.name.endsWith(".parquet")) {
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${file.name}')`);
+        } else {
+            // Assume CSV
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${file.name}')`);
+        }
+
+        // Get Schema to populate dropdowns
+        const schema = await conn.query(`DESCRIBE ${tableName}`);
+        populatePivotDropdowns(schema.toArray());
+
+        // Show Pivot UI
+        container.classList.remove("hidden");
+        activePane.querySelector(".content-area").innerHTML = `<div style="text-align:center; padding:20px; color:#00838f;">✅ File Loaded!<br>Use the controls above to analyze.</div>`;
+
+    } catch (e) {
+        console.error(e);
+        activePane.querySelector(".content-area").innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
     }
-    // "all" adds nothing
+}
 
-    // Encode for URL
-    const encodedQuery = encodeURIComponent(query);
-    const gmailUrl = `https://mail.google.com/mail/u/0/#search/${encodedQuery}`;
+function populatePivotDropdowns(schemaRows) {
+    const rowSelect = document.getElementById("pivot-rows");
+    const colSelect = document.getElementById("pivot-cols");
+    const valSelect = document.getElementById("pivot-values");
 
-    // Open in New Tab
-    window.open(gmailUrl, '_blank');
+    rowSelect.innerHTML = "";
+    colSelect.innerHTML = '<option value="">(None - Flat Table)</option>';
+    valSelect.innerHTML = "";
+
+    schemaRows.forEach(row => {
+        const colName = row.column_name;
+        const colType = row.column_type;
+
+        // Add to Rows/Cols
+        const opt1 = document.createElement("option"); opt1.value = colName; opt1.innerText = colName;
+        rowSelect.appendChild(opt1);
+
+        const opt2 = document.createElement("option"); opt2.value = colName; opt2.innerText = colName;
+        colSelect.appendChild(opt2);
+
+        // Add to Values (Prefer numbers)
+        const opt3 = document.createElement("option"); opt3.value = colName; opt3.innerText = colName;
+        valSelect.appendChild(opt3);
+        
+        // Auto-select first numeric column for Values
+        if (['BIGINT', 'INTEGER', 'DOUBLE', 'DECIMAL'].some(t => colType.includes(t))) {
+            valSelect.value = colName;
+        }
+    });
+}
+
+async function runPivotAnalysis() {
+    const tableName = document.getElementById("pivot-controls").dataset.tableName;
+    const rowCol = document.getElementById("pivot-rows").value;
+    const pivotCol = document.getElementById("pivot-cols").value;
+    const valCol = document.getElementById("pivot-values").value;
+    const func = document.getElementById("pivot-func").value; // SUM, COUNT, etc
+
+    if (!tableName || !rowCol || !valCol) return;
+
+    let query = "";
+    
+    // PIVOT MODE
+    if (pivotCol) {
+        // PIVOT table ON pivotCol USING func(valCol) GROUP BY rowCol
+        query = `PIVOT ${tableName} ON "${pivotCol}" USING ${func}("${valCol}") GROUP BY "${rowCol}" ORDER BY "${rowCol}"`;
+    } 
+    // GROUP BY MODE
+    else {
+        // SELECT rowCol, func(valCol) FROM table GROUP BY rowCol
+        query = `SELECT "${rowCol}", ${func}("${valCol}") as "${valCol}" FROM ${tableName} GROUP BY "${rowCol}" ORDER BY "${valCol}" DESC`;
+    }
+
+    try {
+        const result = await conn.query(query);
+        renderTableFromArrow(result);
+    } catch (e) {
+        alert("Query Error: " + e.message);
+    }
 }
 
 
