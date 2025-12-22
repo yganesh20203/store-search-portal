@@ -7,15 +7,17 @@ let accessToken = "";
 let currentMonthFolderId = "";
 let db = null; 
 let conn = null; 
+let activePaneId = "pane-0"; 
 
-// Multi-Pane State
-let activePaneId = "pane-0"; // Default active pane
+// HOURLY CACHE (Stores fetched images to avoid re-fetching)
+let hourlyFilesCache = []; 
 
-// Attach functions to Window
+// Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
 window.loadTrackerDashboard = loadTrackerDashboard; 
+window.loadHourlyDashboard = loadHourlyDashboard; 
 window.findAndLoadReport = findAndLoadReport;
 window.selectMonth = selectMonth;
 window.applyTableFilter = applyTableFilter;
@@ -23,6 +25,7 @@ window.closeModal = closeModal;
 window.summarizeData = summarizeData; 
 window.changeLayout = changeLayout;
 window.setActivePane = setActivePane;
+window.filterHourlyImagesByDate = filterHourlyImagesByDate; 
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -111,8 +114,8 @@ async function generateAccessToken(creds) {
 
 function changeLayout(numPanes) {
     const container = document.getElementById("view-container");
-    container.innerHTML = ""; // Clear existing panes
-    container.className = `grid-${numPanes}`; // Update CSS grid class
+    container.innerHTML = ""; 
+    container.className = `grid-${numPanes}`; 
 
     for (let i = 0; i < numPanes; i++) {
         const paneId = `pane-${i}`;
@@ -138,12 +141,9 @@ function changeLayout(numPanes) {
 }
 
 function setActivePane(id) {
-    // 1. Visual Update
     document.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
     const pane = document.getElementById(id);
     if(pane) pane.classList.add("active");
-    
-    // 2. State Update
     activePaneId = id;
 }
 
@@ -155,6 +155,7 @@ function resetUI() {
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
+    document.getElementById("hourly-ui").classList.add("hidden"); 
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
@@ -276,35 +277,153 @@ function openTrackerCategory(groupName) {
     }
 }
 
+// ==========================================
+// 6. HOURLY SALES DASHBOARD (IMAGES)
+// ==========================================
+
+async function loadHourlyDashboard() {
+    resetUI();
+    document.getElementById("hourly-ui").classList.remove("hidden");
+    const dateList = document.getElementById("hourly-date-list");
+    const imageList = document.getElementById("hourly-file-list");
+    document.getElementById("hourly-images-container").classList.add("hidden");
+    
+    dateList.innerHTML = "⏳ Scanning Drive for Hourly Images...";
+    imageList.innerHTML = "";
+
+    // Query: Sort by Created Time Descending (Newest First)
+    const query = `'${CONFIG.HOURLY_SALES_FOLDER_ID}' in parents and (mimeType contains 'image/') and trashed = false`;
+    // We request createdTime to group them
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name, thumbnailLink, createdTime)&orderBy=createdTime desc`;
+
+    try {
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+        
+        if (data.files && data.files.length > 0) {
+            hourlyFilesCache = data.files; // Store globally
+            
+            // Group by Date
+            const dates = {};
+            data.files.forEach(file => {
+                const dateObj = new Date(file.createdTime);
+                const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); // e.g., "Dec 20, 2025"
+                if (!dates[dateKey]) dates[dateKey] = [];
+                dates[dateKey].push(file);
+            });
+
+            // Render Date Buttons
+            dateList.innerHTML = "";
+            Object.keys(dates).forEach(date => {
+                const count = dates[date].length;
+                const btn = document.createElement("button");
+                btn.className = "folder-btn";
+                btn.style.background = "#e1bee7"; // Light Purple
+                btn.style.width = "auto";
+                btn.style.padding = "10px 20px";
+                btn.innerHTML = `📅 <b>${date}</b> <br><span style="font-size:0.8em;">(${count} updates)</span>`;
+                btn.onclick = () => filterHourlyImagesByDate(date);
+                dateList.appendChild(btn);
+            });
+
+        } else {
+            dateList.innerHTML = "No hourly images found in the configured folder.";
+        }
+    } catch (e) {
+        dateList.innerHTML = "Error: " + e.message;
+    }
+}
+
+function filterHourlyImagesByDate(dateKey) {
+    const container = document.getElementById("hourly-images-container");
+    const list = document.getElementById("hourly-file-list");
+    container.classList.remove("hidden");
+    list.innerHTML = "";
+
+    // Filter files for selected date
+    const filteredFiles = hourlyFilesCache.filter(f => new Date(f.createdTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) === dateKey);
+
+    // Sort by Time Ascending for the day
+    filteredFiles.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
+
+    filteredFiles.forEach(file => {
+        const timeObj = new Date(file.createdTime);
+        const timeStr = timeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const btn = document.createElement("button");
+        btn.className = "folder-btn";
+        btn.style.background = "#ffffff"; 
+        btn.style.border = "1px solid #ddd";
+        btn.style.display = "flex";
+        btn.style.flexDirection = "column";
+        btn.style.alignItems = "center";
+        btn.style.width = "160px"; 
+        btn.style.height = "140px";
+        btn.style.gap = "5px";
+        btn.style.padding = "10px";
+        
+        // Thumbnail
+        const img = file.thumbnailLink 
+            ? `<img src="${file.thumbnailLink}" style="width:100%; height:80px; object-fit:contain; border-radius:4px;">` 
+            : `<div style="font-size:30px;">🖼️</div>`;
+
+        btn.innerHTML = `
+            ${img}
+            <div style="font-size:14px; font-weight:bold; color:#0056b3;">${timeStr}</div>
+            <div style="font-size:10px; color:#666; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%;">${file.name}</div>
+        `;
+        btn.onclick = () => renderImage(file.id, file.name);
+        list.appendChild(btn);
+    });
+}
+
+async function renderImage(fileId, fileName) {
+    const pane = document.getElementById(activePaneId);
+    if (!pane) { alert("Error: No active view selected"); return; }
+    
+    const contentArea = pane.querySelector(".content-area");
+    contentArea.innerHTML = "<p>⏳ Loading Image...</p>";
+    
+    try {
+        const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        if (!response.ok) throw new Error("Failed to load image");
+        
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
+        
+        contentArea.innerHTML = `
+            <div style="display:flex; justify-content:center; align-items:center; height:100%; width:100%; background:#f9f9f9; padding:10px; box-sizing:border-box;">
+                <img src="${imageUrl}" style="max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+            </div>
+        `;
+        pane.querySelector(".pane-label").innerText = `📷 ${fileName}`;
+    } catch (e) {
+        contentArea.innerHTML = `<p style="color:red">Error loading image: ${e.message}</p>`;
+    }
+}
+
 
 // ==========================================
-// 6. DATA LOADING ENGINE
+// 7. DATA LOADING ENGINE (SALES & TRACKERS)
 // ==========================================
 
 async function findAndLoadReport() {
     const storeId = document.getElementById("store-id-input").value.trim();
     const statusDiv = document.getElementById("loading-status");
 
-    // 1. Validation
-    if (!currentMonthFolderId) {
-        alert("⚠️ Please select a Month folder first (Step 1).");
-        return;
-    }
-    if (!storeId) {
-        alert("⚠️ Please enter a Store ID.");
-        return;
-    }
+    // Validation
+    if (!currentMonthFolderId) { alert("⚠️ Please select a Month folder first (Step 1)."); return; }
+    if (!storeId) { alert("⚠️ Please enter a Store ID."); return; }
 
-    // 2. Identify Active Pane
     const pane = document.getElementById(activePaneId);
     if (!pane) { alert("Error: No active view selected"); return; }
     
-    // 3. UI Feedback
     statusDiv.innerHTML = `🔍 Searching for Store ${storeId}...`;
     const contentArea = pane.querySelector(".content-area");
     contentArea.innerHTML = `<div style="text-align:center; padding:20px; color:#666;">🔍 Searching Drive for ${storeId}...</div>`;
 
-    // 4. Search Google Drive
+    // Search Drive
     const query = `'${currentMonthFolderId}' in parents and name contains '${storeId}' and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id, name)`;
 
@@ -462,7 +581,7 @@ function arrayToCSV(data) {
 }
 
 // ==========================================
-// 7. AI SUMMARY ENGINE
+// 8. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -525,7 +644,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 8. SQL FILTERING & RENDERING
+// 9. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
@@ -567,7 +686,7 @@ async function applyTableFilter() {
 
 let currentArrowData = null; 
 
-// RENDER TABLE (Cleaned for CSS Styling)
+// RENDER TABLE (CSS Styled)
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
@@ -583,15 +702,12 @@ function renderTableFromArrow(arrowResult) {
 
     const headers = Object.keys(rows[0]);
     
-    // We added class="data-table" so styles.css can make it beautiful
     let html = `<table class="data-table"><thead><tr>`;
     
-    // Clean Headers (Styles handled by CSS now)
     headers.forEach(h => html += `<th>${h}</th>`);
     html += `</tr></thead><tbody>`;
 
     rows.forEach((row, index) => {
-        // Row Click Logic
         html += `<tr onclick="window.showRowDetails(${index})" title="Click to view full details">`;
         headers.forEach(h => {
              let val = row[h];
