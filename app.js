@@ -10,6 +10,8 @@ let conn = null;
 let activePaneId = "pane-0"; 
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
+
+// Excel Conversion Globals
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
 
@@ -25,6 +27,7 @@ window.loadWalkinCategory = loadWalkinCategory;
 window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; 
 window.loadWorkDashboard = loadWorkDashboard; 
 window.handleLocalFileUpload = handleLocalFileUpload; 
+window.processExcelConversion = processExcelConversion; // NEW
 window.loadRemotePivotFile = loadRemotePivotFile; 
 window.fetchDailyUpdates = fetchDailyUpdates; 
 window.findAndLoadReport = findAndLoadReport;
@@ -837,7 +840,7 @@ async function loadWorkDashboard() {
     const list = document.getElementById("work-file-list");
     list.innerHTML = "⏳ Scanning Drive...";
 
-    // Ensure Local File Upload Input is cleared (Safe Check Added)
+    // Ensure Local File Upload Input is cleared
     const uploadInput = document.getElementById("local-file-upload");
     if(uploadInput) uploadInput.value = "";
 
@@ -865,9 +868,19 @@ async function loadWorkDashboard() {
                 let icon = "📄";
                 if(file.name.endsWith(".parquet")) icon = "📦";
                 if(file.name.endsWith(".csv")) icon = "📝";
+                if(file.name.endsWith(".xlsx")) icon = "📊";
 
                 btn.innerHTML = `<div style="font-size:30px;">${icon}</div><div style="font-size:11px;">${file.name}</div>`;
-                btn.onclick = () => loadRemotePivotFile(file.id, file.name);
+                
+                // Smart Handling for Remote Files
+                if (file.name.endsWith(".xlsx")) {
+                     // TODO: Remote Excel Fetch + Convert logic could go here. 
+                     // For now, let's treat it as pivot load attempt
+                     btn.onclick = () => loadRemotePivotFile(file.id, file.name);
+                } else {
+                     btn.onclick = () => loadRemotePivotFile(file.id, file.name);
+                }
+                
                 list.appendChild(btn);
             });
         } else {
@@ -882,14 +895,13 @@ async function loadRemotePivotFile(fileId, fileName) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Downloading Pivot Data...";
     
-    // Switch to Pivot View Mode (Hide Grid, Show Pivot)
+    // Switch to Pivot View
     document.getElementById("view-container").classList.add("hidden");
     document.getElementById("filter-box").classList.add("hidden");
     document.getElementById("pivot-wrapper").classList.remove("hidden");
     document.getElementById("pivot-output").innerHTML = "<h3>⏳ Processing large file in DuckDB...</h3>";
 
     try {
-        // 1. Download File Blob
         const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const arrayBuffer = await response.arrayBuffer();
@@ -903,6 +915,10 @@ async function loadRemotePivotFile(fileId, fileName) {
         statusDiv.innerHTML = "Error";
     }
 }
+
+// ==========================================
+// 13. LOCAL FILE UPLOAD & EXCEL CONVERSION
+// ==========================================
 
 async function handleLocalFileUpload(input) {
     const file = input.files[0];
@@ -937,17 +953,15 @@ async function handleLocalFileUpload(input) {
             statusDiv.innerHTML = "";
         };
         reader.readAsArrayBuffer(file);
-        return; // Stop here, wait for user selection
+        return; 
     }
 
-    // 2. Standard CSV/Parquet Handling (Existing Logic)
+    // 2. Standard CSV/Parquet Handling
     loadDirectToPivot(file);
 }
 
-// ==========================================
-// NEW: EXCEL CONVERSION LOGIC
-// ==========================================
-window.processExcelConversion = async function() {
+// === EXCEL CONVERSION PROCESSOR ===
+async function processExcelConversion() {
     const modal = document.getElementById("convert-modal");
     const sheetName = document.getElementById("sheet-selector").value;
     const format = document.querySelector('input[name="convert-fmt"]:checked').value;
@@ -973,24 +987,19 @@ window.processExcelConversion = async function() {
 
     if (format === 'csv') {
         fileBlob = new Blob([csvOutput], { type: 'text/csv' });
-        fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); // Prepare for DuckDB
+        fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); 
     } 
     else if (format === 'parquet') {
-        // DuckDB is best at creating Parquet from CSV. 
-        // We will load CSV into DuckDB first, then COPY to Parquet.
-        
-        // Register CSV temporarily
+        // Create Parquet via DuckDB
         const tempCsvName = "temp_convert.csv";
         await db.registerFileText(tempCsvName, csvOutput);
         
-        // Create Table
-        await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}')`);
+        // --- KEY FIX: ignore_errors=true added here ---
+        await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}', ignore_errors=true)`);
         
-        // Export to Parquet in DuckDB's Virtual FS
         const parquetName = `${currentExcelFileName}.parquet`;
         await conn.query(`COPY temp_table TO '${parquetName}' (FORMAT PARQUET)`);
         
-        // Retrieve the Parquet buffer from DuckDB to save/use
         const parquetBuffer = await db.copyFileToBuffer(parquetName);
         fileDataForDuck = parquetBuffer;
         fileBlob = new Blob([parquetBuffer], { type: 'application/octet-stream' });
@@ -1019,7 +1028,6 @@ window.processExcelConversion = async function() {
     statusDiv.innerHTML = "✅ Loaded & Ready!";
 };
 
-// Helper to reuse existing logic for CSV/Parquet uploads
 async function loadDirectToPivot(file) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Loading Local File...";
@@ -1040,24 +1048,32 @@ async function loadDirectToPivot(file) {
     }
 }
 
+// === CENTRAL PIVOT LOADER ===
 async function processAndRenderPivot(uint8Array, fileName) {
     // 1. Register in DuckDB
     const tableName = `pivot_table_${Date.now()}`;
     await db.registerFileBuffer(fileName, uint8Array);
 
     // 2. Load Table
-    if (fileName.endsWith(".parquet")) {
-        await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
-    } else {
-        // Assume CSV
-        await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
+    try {
+        if (fileName.endsWith(".parquet")) {
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
+        } else {
+            // --- KEY FIX: ignore_errors=true added here ---
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
+        }
+    } catch(e) {
+        // Fallback catch, though ignore_errors should catch data issues
+        console.error("DuckDB Loading Error:", e);
+        document.getElementById("pivot-output").innerHTML = `<p style="color:red">SQL Error: ${e.message}</p>`;
+        return;
     }
 
-    // 3. Fetch All Data for Pivot (Limit to prevent crash on massive files if needed)
+    // 3. Fetch All Data for Pivot (Limit to 500k rows to prevent crash)
     const result = await conn.query(`SELECT * FROM ${tableName} LIMIT 500000`);
     const rows = result.toArray().map(r => r.toJSON());
 
-    // 4. Render Pivot UI (Depends on jQuery & PivotTable.js in HTML)
+    // 4. Render Pivot UI
     if (typeof $ !== 'undefined' && $.pivotUtilities) {
         $("#pivot-output").pivotUI(rows, {
             renderers: $.pivotUtilities.renderers,
@@ -1070,7 +1086,7 @@ async function processAndRenderPivot(uint8Array, fileName) {
 }
 
 // ==========================================
-// 13. DATA LOADING ENGINE (CORE)
+// 14. DATA LOADING ENGINE (CORE)
 // ==========================================
 
 async function findAndLoadReport() {
@@ -1161,7 +1177,9 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             const csvFileName = `temp_${tableName}.csv`;
             
             await db.registerFileText(csvFileName, csvText);
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}')`);
+            
+            // --- KEY FIX: ignore_errors=true added here ---
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
@@ -1190,7 +1208,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}')`);
+                 // --- KEY FIX: ignore_errors=true added here ---
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
@@ -1222,8 +1241,9 @@ function arrayToCSV(data) {
     ).join('\n');
 }
 
+// ... (Rest of AI Summary, SQL Filter, Render Table functions unchanged)
 // ==========================================
-// 14. AI SUMMARY ENGINE
+// 15. AI SUMMARY ENGINE
 // ==========================================
 
 async function summarizeData() {
@@ -1284,7 +1304,7 @@ async function summarizeData() {
 }
 
 // ==========================================
-// 15. SQL FILTERING & RENDERING
+// 16. SQL FILTERING & RENDERING
 // ==========================================
 
 async function setupFilterDropdown(tableName) {
