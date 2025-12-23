@@ -55,6 +55,25 @@
             overflow: auto;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
+        .pvtAxisContainer, .pvtVals { background: #f9f9f9; border: 1px solid #ddd; }
+    .pvtRendererArea { padding: 10px; }
+    #pivot-wrapper {
+        background: white;
+        border: 1px solid #ccc;
+        padding: 20px;
+        border-radius: 8px;
+        min-height: 600px;
+        overflow: auto;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    /* --- ADD THIS NEW BLOCK BELOW --- */
+    /* Force Pivot Table Text to Black */
+    .pvtTable td, .pvtTable th, 
+    .pvtAxisLabel, .pvtRowLabel, .pvtColLabel, 
+    .pvtVal, .pvtTotal, .pvtGrandTotal {
+        color: #000000 !important;
+    }
     </style>
 </head>
 <body>
