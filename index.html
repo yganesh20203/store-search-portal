@@ -102,7 +102,7 @@
                     <button onclick="window.loadTrackerDashboard()" class="nav-btn">📈 Google Sheets</button>
                     <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
                     <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
-                    <button onclick="window.loadApprovalsDashboard()" class="nav-btn" style="background:#a5d6a7;">✅ Approvals</button> <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
+                    <button onclick="window.loadApprovalsDashboard()" class="nav-btn" style="background:#a5d6a7;">📧 Mail Search</button> <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
                     <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Inbox</button>
                     <button onclick="window.loadWorkDashboard()" class="nav-btn" style="background:#80deea;">🛠️ Work on Reports</button>
                 </div>
@@ -162,8 +162,32 @@
 
                 <div id="approvals-ui" class="hidden">
                     <hr>
-                    <h3>✅ Pending Approvals</h3>
-                    <div id="approvals-list-container" class="folder-grid" style="display:block;"></div>
+                    <h3>📧 Mail Search Filter</h3>
+                    <p style="color:#666; font-size:13px;">Find approval emails or specific threads quickly.</p>
+                    
+                    <div style="background:#e8f5e9; padding:20px; border-radius:8px; max-width:600px; border:1px solid #c8e6c9;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                            <div style="grid-column: span 2;">
+                                <label style="font-weight:bold; font-size:12px;">Target Email (Sender/Recipient):</label>
+                                <input type="email" id="mail-target" placeholder="e.g. manager@example.com" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                            </div>
+                            <div>
+                                <label style="font-weight:bold; font-size:12px;">From Date:</label>
+                                <input type="date" id="mail-from-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                            </div>
+                            <div>
+                                <label style="font-weight:bold; font-size:12px;">To Date:</label>
+                                <input type="date" id="mail-to-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                            </div>
+                            <div style="grid-column: span 2;">
+                                <label style="font-weight:bold; font-size:12px;">Keywords (Subject/Body):</label>
+                                <input type="text" id="mail-keywords" placeholder="e.g. 'Approved' 'Budget' 'Urgent'" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                            </div>
+                        </div>
+                        <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px 20px; border:none; border-radius:4px; font-size:14px; font-weight:bold; cursor:pointer; width:100%; display:flex; justify-content:center; align-items:center; gap:10px;">
+                            <span>🚀</span> Search in Gmail
+                        </button>
+                    </div>
                 </div>
 
                 <div id="walkin-ui" class="hidden">
