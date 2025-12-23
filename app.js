@@ -10,6 +10,8 @@ let conn = null;
 let activePaneId = "pane-0"; 
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
+let currentExcelWorkbook = null;
+let currentExcelFileName = "";
 
 // Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
@@ -906,6 +908,119 @@ async function handleLocalFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
 
+    const fileName = file.name.toLowerCase();
+
+    // 1. Check if it's an Excel file
+    if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+        const statusDiv = document.getElementById("loading-status");
+        statusDiv.innerHTML = "⏳ Reading Excel File...";
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            currentExcelWorkbook = XLSX.read(data, { type: 'array' });
+            currentExcelFileName = file.name.split('.')[0];
+            
+            // Show Conversion Modal
+            const modal = document.getElementById("convert-modal");
+            const select = document.getElementById("sheet-selector");
+            select.innerHTML = "";
+            
+            currentExcelWorkbook.SheetNames.forEach(name => {
+                const opt = document.createElement("option");
+                opt.value = name;
+                opt.innerText = name;
+                select.appendChild(opt);
+            });
+
+            modal.classList.remove("hidden");
+            statusDiv.innerHTML = "";
+        };
+        reader.readAsArrayBuffer(file);
+        return; // Stop here, wait for user selection
+    }
+
+    // 2. Standard CSV/Parquet Handling (Existing Logic)
+    loadDirectToPivot(file);
+}
+
+// ==========================================
+// NEW: EXCEL CONVERSION LOGIC
+// ==========================================
+window.processExcelConversion = async function() {
+    const modal = document.getElementById("convert-modal");
+    const sheetName = document.getElementById("sheet-selector").value;
+    const format = document.querySelector('input[name="convert-fmt"]:checked').value;
+    const saveFile = document.getElementById("save-converted").checked;
+    const statusDiv = document.getElementById("loading-status");
+
+    modal.classList.add("hidden");
+    statusDiv.innerHTML = `⏳ Converting '${sheetName}' to ${format.toUpperCase()}...`;
+
+    // 1. Get Data from Sheet
+    const worksheet = currentExcelWorkbook.Sheets[sheetName];
+    // Convert to CSV string first
+    const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
+
+    if (!csvOutput || csvOutput.trim().length === 0) {
+        alert("Selected sheet is empty.");
+        return;
+    }
+
+    let finalFileName = `${currentExcelFileName}_${sheetName}.${format}`;
+    let fileBlob = null;
+    let fileDataForDuck = null;
+
+    if (format === 'csv') {
+        fileBlob = new Blob([csvOutput], { type: 'text/csv' });
+        fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); // Prepare for DuckDB
+    } 
+    else if (format === 'parquet') {
+        // DuckDB is best at creating Parquet from CSV. 
+        // We will load CSV into DuckDB first, then COPY to Parquet.
+        
+        // Register CSV temporarily
+        const tempCsvName = "temp_convert.csv";
+        await db.registerFileText(tempCsvName, csvOutput);
+        
+        // Create Table
+        await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}')`);
+        
+        // Export to Parquet in DuckDB's Virtual FS
+        const parquetName = `${currentExcelFileName}.parquet`;
+        await conn.query(`COPY temp_table TO '${parquetName}' (FORMAT PARQUET)`);
+        
+        // Retrieve the Parquet buffer from DuckDB to save/use
+        const parquetBuffer = await db.copyFileToBuffer(parquetName);
+        fileDataForDuck = parquetBuffer;
+        fileBlob = new Blob([parquetBuffer], { type: 'application/octet-stream' });
+        
+        // Cleanup
+        await db.dropFile(tempCsvName);
+        await db.dropFile(parquetName); 
+        await conn.query("DROP TABLE temp_table");
+    }
+
+    // 2. Download File if requested
+    if (saveFile && fileBlob) {
+        const url = URL.createObjectURL(fileBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = finalFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // 3. Load into Pivot Engine
+    statusDiv.innerHTML = "⏳ Loading into Pivot...";
+    await processAndRenderPivot(fileDataForDuck, finalFileName);
+    statusDiv.innerHTML = "✅ Loaded & Ready!";
+};
+
+// Helper to reuse existing logic for CSV/Parquet uploads
+async function loadDirectToPivot(file) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Loading Local File...";
 
