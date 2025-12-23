@@ -11,11 +11,10 @@ let activePaneId = "pane-0";
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
 
-// Excel Conversion Globals
+// Excel & Pivot Globals
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
-let currentPivotTableName = "";
-
+let currentPivotTableName = ""; 
 
 // Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
@@ -29,7 +28,7 @@ window.loadWalkinCategory = loadWalkinCategory;
 window.loadDailyUpdateDashboard = loadDailyUpdateDashboard; 
 window.loadWorkDashboard = loadWorkDashboard; 
 window.handleLocalFileUpload = handleLocalFileUpload; 
-window.processExcelConversion = processExcelConversion; // NEW
+window.processExcelConversion = processExcelConversion; 
 window.loadRemotePivotFile = loadRemotePivotFile; 
 window.fetchDailyUpdates = fetchDailyUpdates; 
 window.findAndLoadReport = findAndLoadReport;
@@ -975,6 +974,7 @@ async function processExcelConversion() {
 
     // 1. Get Data from Sheet
     const worksheet = currentExcelWorkbook.Sheets[sheetName];
+    // Convert to CSV string first
     const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
 
     if (!csvOutput || csvOutput.trim().length === 0) {
@@ -991,10 +991,11 @@ async function processExcelConversion() {
         fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); 
     } 
     else if (format === 'parquet') {
+        // Create Parquet via DuckDB
         const tempCsvName = "temp_convert.csv";
         await db.registerFileText(tempCsvName, csvOutput);
         
-        // --- CHANGE 1: ADD ignore_errors=true ---
+        // --- CRITICAL FIX: ignore_errors=true ---
         await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}', ignore_errors=true)`);
         
         const parquetName = `${currentExcelFileName}.parquet`;
@@ -1048,11 +1049,11 @@ async function loadDirectToPivot(file) {
     }
 }
 
-// Replace the existing processAndRenderPivot function
+// === CENTRAL PIVOT LOADER ===
 async function processAndRenderPivot(uint8Array, fileName) {
     // 1. Register in DuckDB
     const tableName = `pivot_table_${Date.now()}`;
-    currentPivotTableName = tableName; // --- CHANGE 2: Store Global Name ---
+    currentPivotTableName = tableName; // Track for filtering
     
     await db.registerFileBuffer(fileName, uint8Array);
 
@@ -1061,7 +1062,7 @@ async function processAndRenderPivot(uint8Array, fileName) {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
-            // --- CHANGE 3: ADD ignore_errors=true ---
+            // --- CRITICAL FIX: ignore_errors=true ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
         }
     } catch(e) {
@@ -1070,40 +1071,22 @@ async function processAndRenderPivot(uint8Array, fileName) {
         return;
     }
 
-    // --- CHANGE 4: SETUP & SHOW FILTERS ---
+    // 3. Setup Filters for this file & SHOW FILTER BOX
     await setupFilterDropdown(tableName); 
-    document.getElementById("filter-box").classList.remove("hidden"); // Make filters visible
+    document.getElementById("filter-box").classList.remove("hidden"); // <--- THIS MAKES IT VISIBLE
     document.getElementById("filter-input").value = ""; 
 
     // 4. Initial Render
     await runPivotQueryAndRender(`SELECT * FROM ${tableName} LIMIT 500000`);
 }
 
+// Helper to draw Pivot
 async function runPivotQueryAndRender(query) {
     try {
         const result = await conn.query(query);
         const rows = result.toArray().map(r => r.toJSON());
 
         if (typeof $ !== 'undefined' && $.pivotUtilities) {
-            $("#pivot-output").pivotUI(rows, {
-                renderers: $.pivotUtilities.renderers,
-                rendererName: "Table"
-            });
-        }
-    } catch (e) {
-        console.error("Pivot Render Error:", e);
-    }
-}
-// Add this new function
-async function runPivotQueryAndRender(query) {
-    try {
-        const result = await conn.query(query);
-        const rows = result.toArray().map(r => r.toJSON());
-
-        if (typeof $ !== 'undefined' && $.pivotUtilities) {
-            // We use specific options to preserve the user's current view if possible
-            // Note: PivotTable.js resets state on new data by default. 
-            // To keep drag-drop state, you'd need to read the config first (advanced).
             $("#pivot-output").pivotUI(rows, {
                 renderers: $.pivotUtilities.renderers,
                 rendererName: "Table"
@@ -1207,7 +1190,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             await db.registerFileText(csvFileName, csvText);
             
-            // --- KEY FIX: ignore_errors=true added here ---
+            // --- CRITICAL FIX: ignore_errors=true ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
@@ -1237,7 +1220,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // --- KEY FIX: ignore_errors=true added here ---
+                 // --- CRITICAL FIX: ignore_errors=true ---
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
             }
             
@@ -1270,7 +1253,6 @@ function arrayToCSV(data) {
     ).join('\n');
 }
 
-// ... (Rest of AI Summary, SQL Filter, Render Table functions unchanged)
 // ==========================================
 // 15. AI SUMMARY ENGINE
 // ==========================================
@@ -1350,13 +1332,12 @@ async function setupFilterDropdown(tableName) {
     });
 }
 
-
 async function applyTableFilter() {
     const filterText = document.getElementById("filter-input").value.replace(/'/g, "''"); 
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
     
-    // --- CHANGE 5: Detect Pivot Mode ---
+    // DETECT MODE: Are we in Pivot Mode (Pivot Wrapper is visible)?
     const isPivotMode = !document.getElementById("pivot-wrapper").classList.contains("hidden");
 
     let tableName = "";
@@ -1373,7 +1354,6 @@ async function applyTableFilter() {
     
     if (filterText) {
         if (column === "all") {
-             // Simple search across first column if "All" selected
              query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
         }
         else {
@@ -1386,9 +1366,9 @@ async function applyTableFilter() {
     // Execute based on mode
     try {
         if (isPivotMode) {
-            await runPivotQueryAndRender(query); // Update Pivot
+            await runPivotQueryAndRender(query); // Pivot Mode
         } else {
-            const result = await conn.query(query); // Update Grid
+            const result = await conn.query(query); // Grid Mode
             renderTableFromArrow(result);
         }
     } catch (e) {
