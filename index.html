@@ -63,7 +63,6 @@
         .pvtVal, .pvtTotal, .pvtGrandTotal {
             color: #000000 !important;
         }
-        /* ------------------------------------------------------- */
     </style>
 </head>
 <body>
@@ -103,7 +102,7 @@
                     <button onclick="window.loadTrackerDashboard()" class="nav-btn">📈 Google Sheets</button>
                     <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
                     <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
-                    <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
+                    <button onclick="window.loadApprovalsDashboard()" class="nav-btn" style="background:#a5d6a7;">✅ Approvals</button> <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
                     <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Inbox</button>
                     <button onclick="window.loadWorkDashboard()" class="nav-btn" style="background:#80deea;">🛠️ Work on Reports</button>
                 </div>
@@ -159,6 +158,12 @@
                             <div id="ticket-list-container" style="max-height:400px; overflow:auto; border:1px solid #eee;">Loading...</div>
                         </div>
                     </div>
+                </div>
+
+                <div id="approvals-ui" class="hidden">
+                    <hr>
+                    <h3>✅ Pending Approvals</h3>
+                    <div id="approvals-list-container" class="folder-grid" style="display:block;"></div>
                 </div>
 
                 <div id="walkin-ui" class="hidden">
@@ -252,7 +257,6 @@
         <div class="modal-content">
             <div class="modal-header"><h3>💬 Submit Feedback</h3><span class="close-btn" onclick="window.closeFeedbackModal()">&times;</span></div>
             <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
-                <p>What feature would you like to see next?</p>
                 <textarea id="feedback-text" rows="5" placeholder="Type your feedback here..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
             </div>
             <div class="modal-footer"><button onclick="window.submitFeedback()" style="background:#28a745; color:white;">Submit Feedback</button></div>
@@ -279,14 +283,12 @@
             <div class="modal-body">
                 <p>Select a sheet to convert:</p>
                 <select id="sheet-selector" style="width: 100%; padding: 8px; margin-bottom: 15px; border-radius: 4px;"></select>
-                
                 <p>Select output format:</p>
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <label><input type="radio" name="convert-fmt" value="csv" checked> CSV (Fast)</label>
-                    <label><input type="radio" name="convert-fmt" value="parquet"> Parquet (Efficient)</label>
+                    <label><input type="radio" name="convert-fmt" value="csv" checked> CSV</label>
+                    <label><input type="radio" name="convert-fmt" value="parquet"> Parquet</label>
                 </div>
-
-                <label><input type="checkbox" id="save-converted" checked> Download converted file?</label>
+                <label><input type="checkbox" id="save-converted" checked> Download file?</label>
             </div>
             <div class="modal-footer">
                 <button onclick="window.processExcelConversion()" style="background:#007bff; color:white;">Convert & Load</button>
