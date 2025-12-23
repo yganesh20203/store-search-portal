@@ -16,7 +16,7 @@ let currentExcelWorkbook = null;
 let currentExcelFileName = "";
 let currentPivotTableName = ""; 
 
-// Attach functions to Window for HTML access
+// Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -48,6 +48,9 @@ window.openResolveModal = openResolveModal;
 window.closeResolveModal = closeResolveModal; 
 window.confirmResolve = confirmResolve; 
 window.showRowDetails = showRowDetails;
+// Approvals Feature
+window.loadApprovalsDashboard = loadApprovalsDashboard;
+window.handleApproval = handleApproval;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -173,6 +176,7 @@ function resetUI() {
     document.getElementById("tracker-ui").classList.add("hidden");
     document.getElementById("hourly-ui").classList.add("hidden"); 
     document.getElementById("ticket-ui").classList.add("hidden"); 
+    document.getElementById("approvals-ui").classList.add("hidden"); // Added
     document.getElementById("walkin-ui").classList.add("hidden");
     document.getElementById("daily-ui").classList.add("hidden");
     document.getElementById("work-ui").classList.add("hidden"); 
@@ -382,17 +386,13 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
     titleElem.innerText = `📂 ${title}`;
     list.innerHTML = "⏳ Loading...";
 
-    // Handle History
-    if (backMode === 'dashboard') {
-        walkinHistoryStack = []; 
-    }
+    if (backMode === 'dashboard') walkinHistoryStack = []; 
 
     if (!folderId || folderId.includes("PASTE")) {
         list.innerHTML = "<p style='color:red'>Folder ID not configured in config.js</p>";
         return;
     }
 
-    // Render Back Button
     if (walkinHistoryStack.length > 0) {
         const backBtn = document.createElement("button");
         backBtn.className = "folder-btn";
@@ -436,36 +436,28 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 if (isFolder) {
                     icon = `<div style="font-size:40px;">📁</div>`;
-                    btn.style.background = "#fff8e1"; // Highlight Folders
-                } 
-                else if (file.mimeType.includes("image") && file.thumbnailLink) {
+                    btn.style.background = "#fff8e1"; 
+                } else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
-                } 
-                else if (file.mimeType.includes("spreadsheet")) {
+                } else if (file.mimeType.includes("spreadsheet")) {
                     icon = `<div style="font-size:30px;">📊</div>`;
-                } 
-                else {
+                } else {
                     icon = `<div style="font-size:30px;">📄</div>`;
                 }
 
                 btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
 
-                // --- SMART CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
                         walkinHistoryStack.push({ title: title, id: folderId });
                         loadWalkinCategory(file.name, file.id, 'push');
-                    } 
-                    else if (file.mimeType.includes("image")) {
+                    } else if (file.mimeType.includes("image")) {
                         renderImage(file.id, file.name);
-                    } 
-                    else if (file.mimeType.includes("spreadsheet")) {
+                    } else if (file.mimeType.includes("spreadsheet")) {
                         loadFileIntoDuckDB(file.id, file.name, 'sheet', 0);
-                    } 
-                    else if (file.mimeType.includes("octet-stream") || file.name.endsWith(".parquet") || file.name.endsWith(".csv")) {
+                    } else if (file.mimeType.includes("octet-stream") || file.name.endsWith(".parquet") || file.name.endsWith(".csv")) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
-                    }
-                    else {
+                    } else {
                         window.open(file.webViewLink, '_blank');
                     }
                 };
@@ -741,14 +733,86 @@ async function confirmResolve() {
 }
 
 // ==========================================
-// 11. DAILY UPDATE DASHBOARD (INBOX)
+// 11. APPROVALS DASHBOARD (REINTRODUCED)
+// ==========================================
+
+async function loadApprovalsDashboard() {
+    resetUI();
+    document.getElementById("approvals-ui").classList.remove("hidden");
+    const container = document.getElementById("approvals-list-container");
+    container.innerHTML = "⏳ Fetching pending approvals...";
+
+    try {
+        // Fallback to TICKET_SHEET_ID if APPROVALS not set
+        const sheetId = CONFIG.APPROVALS_SHEET_ID || CONFIG.TICKET_SHEET_ID;
+        if (!sheetId) { container.innerHTML = "<p>Approvals Sheet ID not configured.</p>"; return; }
+
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "<p>No pending approvals.</p>";
+            return;
+        }
+
+        let html = `<table class="data-table"><thead><tr><th>ID</th><th>Date</th><th>Request</th><th>Status</th><th>Actions</th></tr></thead><tbody>`;
+        
+        for (let i = data.values.length - 1; i >= 1; i--) {
+            const row = data.values[i];
+            const id = row[0];
+            const date = row[1];
+            const task = row[4]; 
+            const status = row[5];
+            
+            if (status === "OPEN" || status === "PENDING") {
+                html += `<tr>
+                    <td>${id}</td>
+                    <td>${date}</td>
+                    <td>${task}</td>
+                    <td><span style="background:#fff3cd; padding:2px 5px; border-radius:3px;">${status}</span></td>
+                    <td>
+                        <button onclick="window.handleApproval('${id}', ${i+1}, 'APPROVED')" style="color:green; font-weight:bold;">✔ Approve</button>
+                        <button onclick="window.handleApproval('${id}', ${i+1}, 'REJECTED')" style="color:red; font-weight:bold;">✖ Reject</button>
+                    </td>
+                </tr>`;
+            }
+        }
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = "Error: " + e.message;
+    }
+}
+
+async function handleApproval(id, rowIndex, newStatus) {
+    const btn = event.target;
+    btn.innerText = "⏳...";
+    try {
+        const sheetId = CONFIG.APPROVALS_SHEET_ID || CONFIG.TICKET_SHEET_ID;
+        const range = `Sheet1!F${rowIndex}:F${rowIndex}`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+        
+        await fetch(url, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [[ newStatus ]] })
+        });
+        
+        loadApprovalsDashboard(); 
+    } catch(e) {
+        alert("Error: " + e.message);
+    }
+}
+
+// ==========================================
+// 12. DAILY UPDATE DASHBOARD (INBOX)
 // ==========================================
 
 async function loadDailyUpdateDashboard() {
     resetUI();
     document.getElementById("daily-ui").classList.remove("hidden");
     
-    // Auto-load if email is saved
     const savedEmail = localStorage.getItem("portal_user_email");
     if (savedEmail) {
         document.getElementById("user-identity-email").value = savedEmail;
@@ -780,7 +844,6 @@ async function fetchDailyUpdates() {
         let foundCount = 0;
         let html = "";
 
-        // Loop Data (Skip Header)
         data.values.slice(1).forEach(row => {
             const rEmail = row[0]?.toString().trim().toLowerCase();
             const rSubject = row[1];
@@ -832,7 +895,7 @@ async function fetchDailyUpdates() {
 }
 
 // ==========================================
-// 12. WORK ON REPORTS (PIVOT MODE - UPGRADED)
+// 13. WORK ON REPORTS (PIVOT MODE)
 // ==========================================
 
 async function loadWorkDashboard() {
@@ -841,7 +904,6 @@ async function loadWorkDashboard() {
     const list = document.getElementById("work-file-list");
     list.innerHTML = "⏳ Scanning Drive...";
 
-    // Ensure Local File Upload Input is cleared
     const uploadInput = document.getElementById("local-file-upload");
     if(uploadInput) uploadInput.value = "";
 
@@ -873,10 +935,7 @@ async function loadWorkDashboard() {
 
                 btn.innerHTML = `<div style="font-size:30px;">${icon}</div><div style="font-size:11px;">${file.name}</div>`;
                 
-                // Smart Handling for Remote Files
                 if (file.name.endsWith(".xlsx")) {
-                     // TODO: Remote Excel Fetch + Convert logic could go here. 
-                     // For now, let's treat it as pivot load attempt
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
                 } else {
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
@@ -896,7 +955,6 @@ async function loadRemotePivotFile(fileId, fileName) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Downloading Pivot Data...";
     
-    // Switch to Pivot View
     document.getElementById("view-container").classList.add("hidden");
     document.getElementById("filter-box").classList.add("hidden");
     document.getElementById("pivot-wrapper").classList.remove("hidden");
@@ -917,17 +975,12 @@ async function loadRemotePivotFile(fileId, fileName) {
     }
 }
 
-// ==========================================
-// 13. LOCAL FILE UPLOAD & EXCEL CONVERSION
-// ==========================================
-
 async function handleLocalFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
 
     const fileName = file.name.toLowerCase();
 
-    // 1. Check if it's an Excel file
     if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
         const statusDiv = document.getElementById("loading-status");
         statusDiv.innerHTML = "⏳ Reading Excel File...";
@@ -938,7 +991,6 @@ async function handleLocalFileUpload(input) {
             currentExcelWorkbook = XLSX.read(data, { type: 'array' });
             currentExcelFileName = file.name.split('.')[0];
             
-            // Show Conversion Modal
             const modal = document.getElementById("convert-modal");
             const select = document.getElementById("sheet-selector");
             select.innerHTML = "";
@@ -957,11 +1009,9 @@ async function handleLocalFileUpload(input) {
         return; 
     }
 
-    // 2. Standard CSV/Parquet Handling
     loadDirectToPivot(file);
 }
 
-// === EXCEL CONVERSION PROCESSOR ===
 async function processExcelConversion() {
     const modal = document.getElementById("convert-modal");
     const sheetName = document.getElementById("sheet-selector").value;
@@ -972,9 +1022,7 @@ async function processExcelConversion() {
     modal.classList.add("hidden");
     statusDiv.innerHTML = `⏳ Converting '${sheetName}' to ${format.toUpperCase()}...`;
 
-    // 1. Get Data from Sheet
     const worksheet = currentExcelWorkbook.Sheets[sheetName];
-    // Convert to CSV string first
     const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
 
     if (!csvOutput || csvOutput.trim().length === 0) {
@@ -991,11 +1039,9 @@ async function processExcelConversion() {
         fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); 
     } 
     else if (format === 'parquet') {
-        // Create Parquet via DuckDB
         const tempCsvName = "temp_convert.csv";
         await db.registerFileText(tempCsvName, csvOutput);
         
-        // --- CRITICAL FIX: ignore_errors=true ---
         await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}', ignore_errors=true)`);
         
         const parquetName = `${currentExcelFileName}.parquet`;
@@ -1005,13 +1051,11 @@ async function processExcelConversion() {
         fileDataForDuck = parquetBuffer;
         fileBlob = new Blob([parquetBuffer], { type: 'application/octet-stream' });
         
-        // Cleanup
         await db.dropFile(tempCsvName);
         await db.dropFile(parquetName); 
         await conn.query("DROP TABLE temp_table");
     }
 
-    // 2. Download File if requested
     if (saveFile && fileBlob) {
         const url = URL.createObjectURL(fileBlob);
         const a = document.createElement('a');
@@ -1023,7 +1067,6 @@ async function processExcelConversion() {
         URL.revokeObjectURL(url);
     }
 
-    // 3. Load into Pivot Engine
     statusDiv.innerHTML = "⏳ Loading into Pivot...";
     await processAndRenderPivot(fileDataForDuck, finalFileName);
     statusDiv.innerHTML = "✅ Loaded & Ready!";
@@ -1033,7 +1076,6 @@ async function loadDirectToPivot(file) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Loading Local File...";
 
-    // Switch to Pivot View
     document.getElementById("view-container").classList.add("hidden");
     document.getElementById("filter-box").classList.add("hidden");
     document.getElementById("pivot-wrapper").classList.remove("hidden");
@@ -1049,20 +1091,16 @@ async function loadDirectToPivot(file) {
     }
 }
 
-// === CENTRAL PIVOT LOADER ===
 async function processAndRenderPivot(uint8Array, fileName) {
-    // 1. Register in DuckDB
     const tableName = `pivot_table_${Date.now()}`;
-    currentPivotTableName = tableName; // Track for filtering
+    currentPivotTableName = tableName; 
     
     await db.registerFileBuffer(fileName, uint8Array);
 
-    // 2. Load Table
     try {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
-            // --- CRITICAL FIX: ignore_errors=true ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
         }
     } catch(e) {
@@ -1071,16 +1109,13 @@ async function processAndRenderPivot(uint8Array, fileName) {
         return;
     }
 
-    // 3. Setup Filters for this file & SHOW FILTER BOX
     await setupFilterDropdown(tableName); 
-    document.getElementById("filter-box").classList.remove("hidden"); // <--- THIS MAKES IT VISIBLE
+    document.getElementById("filter-box").classList.remove("hidden"); 
     document.getElementById("filter-input").value = ""; 
 
-    // 4. Initial Render
     await runPivotQueryAndRender(`SELECT * FROM ${tableName} LIMIT 500000`);
 }
 
-// Helper to draw Pivot
 async function runPivotQueryAndRender(query) {
     try {
         const result = await conn.query(query);
@@ -1190,7 +1225,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             await db.registerFileText(csvFileName, csvText);
             
-            // --- CRITICAL FIX: ignore_errors=true ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
@@ -1220,7 +1254,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // --- CRITICAL FIX: ignore_errors=true ---
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
             }
             
@@ -1239,7 +1272,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     }
 }
 
-// Helper: JSON -> CSV
 function arrayToCSV(data) {
     return data.map(row =>
         row.map(field => {
@@ -1337,7 +1369,6 @@ async function applyTableFilter() {
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
     
-    // DETECT MODE: Are we in Pivot Mode (Pivot Wrapper is visible)?
     const isPivotMode = !document.getElementById("pivot-wrapper").classList.contains("hidden");
 
     let tableName = "";
@@ -1345,11 +1376,9 @@ async function applyTableFilter() {
         tableName = currentPivotTableName;
         if (!tableName) return;
     } else {
-        // Standard Grid Mode
         tableName = `table_${activePaneId.replace('-', '_')}`;
     }
     
-    // Construct Query
     let query = `SELECT * FROM ${tableName}`;
     
     if (filterText) {
@@ -1363,12 +1392,11 @@ async function applyTableFilter() {
     
     if (limit !== "all") query += ` LIMIT ${limit}`;
 
-    // Execute based on mode
     try {
         if (isPivotMode) {
-            await runPivotQueryAndRender(query); // Pivot Mode
+            await runPivotQueryAndRender(query); 
         } else {
-            const result = await conn.query(query); // Grid Mode
+            const result = await conn.query(query); 
             renderTableFromArrow(result);
         }
     } catch (e) {
@@ -1378,7 +1406,6 @@ async function applyTableFilter() {
 
 let currentArrowData = null; 
 
-// RENDER TABLE (CSS Styled)
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
