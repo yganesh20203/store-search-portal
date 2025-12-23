@@ -14,6 +14,7 @@ let walkinHistoryStack = [];
 // Excel Conversion Globals
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
+let currentPivotTableName = ""; 
 
 // Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
@@ -1048,10 +1049,12 @@ async function loadDirectToPivot(file) {
     }
 }
 
-// === CENTRAL PIVOT LOADER ===
+// Replace the existing processAndRenderPivot function
 async function processAndRenderPivot(uint8Array, fileName) {
     // 1. Register in DuckDB
     const tableName = `pivot_table_${Date.now()}`;
+    currentPivotTableName = tableName; // Store globally
+    
     await db.registerFileBuffer(fileName, uint8Array);
 
     // 2. Load Table
@@ -1059,29 +1062,40 @@ async function processAndRenderPivot(uint8Array, fileName) {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
-            // --- KEY FIX: ignore_errors=true added here ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
         }
     } catch(e) {
-        // Fallback catch, though ignore_errors should catch data issues
         console.error("DuckDB Loading Error:", e);
         document.getElementById("pivot-output").innerHTML = `<p style="color:red">SQL Error: ${e.message}</p>`;
         return;
     }
 
-    // 3. Fetch All Data for Pivot (Limit to 500k rows to prevent crash)
-    const result = await conn.query(`SELECT * FROM ${tableName} LIMIT 500000`);
-    const rows = result.toArray().map(r => r.toJSON());
+    // 3. Setup Filters for this file
+    await setupFilterDropdown(tableName); // Populate the dropdown
+    document.getElementById("filter-box").classList.remove("hidden"); // Show the filter UI
+    document.getElementById("filter-input").value = ""; // Clear previous searches
 
-    // 4. Render Pivot UI
-    if (typeof $ !== 'undefined' && $.pivotUtilities) {
-        $("#pivot-output").pivotUI(rows, {
-            renderers: $.pivotUtilities.renderers,
-            cols: [], rows: [],
-            rendererName: "Table"
-        });
-    } else {
-        document.getElementById("pivot-output").innerHTML = "<p style='color:red'>Missing PivotTable.js or jQuery libraries in HTML.</p>";
+    // 4. Initial Render (Limit to 500k rows)
+    await runPivotQueryAndRender(`SELECT * FROM ${tableName} LIMIT 500000`);
+}
+
+// Add this new function
+async function runPivotQueryAndRender(query) {
+    try {
+        const result = await conn.query(query);
+        const rows = result.toArray().map(r => r.toJSON());
+
+        if (typeof $ !== 'undefined' && $.pivotUtilities) {
+            // We use specific options to preserve the user's current view if possible
+            // Note: PivotTable.js resets state on new data by default. 
+            // To keep drag-drop state, you'd need to read the config first (advanced).
+            $("#pivot-output").pivotUI(rows, {
+                renderers: $.pivotUtilities.renderers,
+                rendererName: "Table"
+            });
+        }
+    } catch (e) {
+        console.error("Pivot Render Error:", e);
     }
 }
 
@@ -1321,26 +1335,55 @@ async function setupFilterDropdown(tableName) {
     });
 }
 
+
 async function applyTableFilter() {
     const filterText = document.getElementById("filter-input").value.replace(/'/g, "''"); 
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
-    const tableName = `table_${activePaneId.replace('-', '_')}`;
     
+    // DETECT MODE: Are we in Pivot Mode (Pivot Wrapper is visible)?
+    const isPivotMode = !document.getElementById("pivot-wrapper").classList.contains("hidden");
+
+    let tableName = "";
+    if (isPivotMode) {
+        tableName = currentPivotTableName;
+        if (!tableName) return;
+    } else {
+        // Standard Grid Mode
+        tableName = `table_${activePaneId.replace('-', '_')}`;
+    }
+    
+    // Construct Query
     let query = `SELECT * FROM ${tableName}`;
     
     if (filterText) {
-        if (column === "all") query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
-        else query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
+        if (column === "all") {
+             // DuckDB workaround for "search all columns" if specific logic isn't set
+             // Simple fallback: Search the first varchar column or just fail gracefully if schema unknown
+             // Better: specific column search
+             query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
+        }
+        else {
+             query += ` WHERE CAST("${column}" AS VARCHAR) LIKE '%${filterText}%'`;
+        }
     }
     
     if (limit !== "all") query += ` LIMIT ${limit}`;
 
+    // Execute based on mode
     try {
-        const result = await conn.query(query);
-        renderTableFromArrow(result);
+        if (isPivotMode) {
+            // For Pivot, we don't want to re-render on every keystroke because it's heavy.
+            // You might want to wrap this in a debounce or check for "Enter" key in HTML.
+            // For now, we run it directly:
+            await runPivotQueryAndRender(query);
+        } else {
+            // Standard Grid Render
+            const result = await conn.query(query);
+            renderTableFromArrow(result);
+        }
     } catch (e) {
-        console.log("Empty or Error");
+        console.log("Filter Error or Empty Query");
     }
 }
 
