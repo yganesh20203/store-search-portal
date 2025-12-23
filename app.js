@@ -16,7 +16,7 @@ let currentExcelWorkbook = null;
 let currentExcelFileName = "";
 let currentPivotTableName = ""; 
 
-// Attach functions to Window for HTML access
+// Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -48,9 +48,9 @@ window.openResolveModal = openResolveModal;
 window.closeResolveModal = closeResolveModal; 
 window.confirmResolve = confirmResolve; 
 window.showRowDetails = showRowDetails;
-// Approvals / Mail Redirect Feature
+// Mail Search Feature
 window.loadApprovalsDashboard = loadApprovalsDashboard;
-window.redirectMailSearch = redirectMailSearch; // NEW
+window.redirectMailSearch = redirectMailSearch;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -179,7 +179,7 @@ function resetUI() {
     document.getElementById("walkin-ui").classList.add("hidden");
     document.getElementById("daily-ui").classList.add("hidden");
     document.getElementById("work-ui").classList.add("hidden");
-    document.getElementById("approvals-ui").classList.add("hidden"); // Reset new UI
+    document.getElementById("approvals-ui").classList.add("hidden"); 
     
     // Reset Data View Containers
     document.getElementById("view-container").classList.remove("hidden"); // Default Grid
@@ -745,7 +745,7 @@ async function confirmResolve() {
 }
 
 // ==========================================
-// 11. APPROVALS / MAIL SEARCH (NEW)
+// 11. APPROVALS / MAIL SEARCH (UPDATED)
 // ==========================================
 
 function loadApprovalsDashboard() {
