@@ -14,7 +14,8 @@ let walkinHistoryStack = [];
 // Excel Conversion Globals
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
-let currentPivotTableName = ""; 
+let currentPivotTableName = "";
+
 
 // Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
@@ -974,7 +975,6 @@ async function processExcelConversion() {
 
     // 1. Get Data from Sheet
     const worksheet = currentExcelWorkbook.Sheets[sheetName];
-    // Convert to CSV string first
     const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
 
     if (!csvOutput || csvOutput.trim().length === 0) {
@@ -991,11 +991,10 @@ async function processExcelConversion() {
         fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); 
     } 
     else if (format === 'parquet') {
-        // Create Parquet via DuckDB
         const tempCsvName = "temp_convert.csv";
         await db.registerFileText(tempCsvName, csvOutput);
         
-        // --- KEY FIX: ignore_errors=true added here ---
+        // --- CHANGE 1: ADD ignore_errors=true ---
         await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}', ignore_errors=true)`);
         
         const parquetName = `${currentExcelFileName}.parquet`;
@@ -1053,7 +1052,7 @@ async function loadDirectToPivot(file) {
 async function processAndRenderPivot(uint8Array, fileName) {
     // 1. Register in DuckDB
     const tableName = `pivot_table_${Date.now()}`;
-    currentPivotTableName = tableName; // Store globally
+    currentPivotTableName = tableName; // --- CHANGE 2: Store Global Name ---
     
     await db.registerFileBuffer(fileName, uint8Array);
 
@@ -1062,6 +1061,7 @@ async function processAndRenderPivot(uint8Array, fileName) {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
+            // --- CHANGE 3: ADD ignore_errors=true ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
         }
     } catch(e) {
@@ -1070,15 +1070,30 @@ async function processAndRenderPivot(uint8Array, fileName) {
         return;
     }
 
-    // 3. Setup Filters for this file
-    await setupFilterDropdown(tableName); // Populate the dropdown
-    document.getElementById("filter-box").classList.remove("hidden"); // Show the filter UI
-    document.getElementById("filter-input").value = ""; // Clear previous searches
+    // --- CHANGE 4: SETUP & SHOW FILTERS ---
+    await setupFilterDropdown(tableName); 
+    document.getElementById("filter-box").classList.remove("hidden"); // Make filters visible
+    document.getElementById("filter-input").value = ""; 
 
-    // 4. Initial Render (Limit to 500k rows)
+    // 4. Initial Render
     await runPivotQueryAndRender(`SELECT * FROM ${tableName} LIMIT 500000`);
 }
 
+async function runPivotQueryAndRender(query) {
+    try {
+        const result = await conn.query(query);
+        const rows = result.toArray().map(r => r.toJSON());
+
+        if (typeof $ !== 'undefined' && $.pivotUtilities) {
+            $("#pivot-output").pivotUI(rows, {
+                renderers: $.pivotUtilities.renderers,
+                rendererName: "Table"
+            });
+        }
+    } catch (e) {
+        console.error("Pivot Render Error:", e);
+    }
+}
 // Add this new function
 async function runPivotQueryAndRender(query) {
     try {
@@ -1341,7 +1356,7 @@ async function applyTableFilter() {
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
     
-    // DETECT MODE: Are we in Pivot Mode (Pivot Wrapper is visible)?
+    // --- CHANGE 5: Detect Pivot Mode ---
     const isPivotMode = !document.getElementById("pivot-wrapper").classList.contains("hidden");
 
     let tableName = "";
@@ -1358,9 +1373,7 @@ async function applyTableFilter() {
     
     if (filterText) {
         if (column === "all") {
-             // DuckDB workaround for "search all columns" if specific logic isn't set
-             // Simple fallback: Search the first varchar column or just fail gracefully if schema unknown
-             // Better: specific column search
+             // Simple search across first column if "All" selected
              query += ` WHERE CAST(column0 AS VARCHAR) LIKE '%${filterText}%'`; 
         }
         else {
@@ -1373,13 +1386,9 @@ async function applyTableFilter() {
     // Execute based on mode
     try {
         if (isPivotMode) {
-            // For Pivot, we don't want to re-render on every keystroke because it's heavy.
-            // You might want to wrap this in a debounce or check for "Enter" key in HTML.
-            // For now, we run it directly:
-            await runPivotQueryAndRender(query);
+            await runPivotQueryAndRender(query); // Update Pivot
         } else {
-            // Standard Grid Render
-            const result = await conn.query(query);
+            const result = await conn.query(query); // Update Grid
             renderTableFromArrow(result);
         }
     } catch (e) {
