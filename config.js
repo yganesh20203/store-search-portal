@@ -46,4 +46,33 @@ const CONFIG = {
             { name: "Dec 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1778957169" }
         ]
     }
+    WAREHOUSE_LOCATIONS: [
+        { name: "Zirakhpur", lat: 30.6374571, lng: 76.8239134, region: "North" },
+        { name: "Meerut", lat: 29.0356465, lng: 77.6701403, region: "Central" },
+        { name: "Agra 1", lat: 27.2171019, lng: 78.0922942, region: "North" },
+        { name: "Hyderabad", lat: 17.335601, lng: 78.427409, region: "South" },
+        { name: "Agra 2", lat: 27.2203079, lng: 77.9270342, region: "North" },
+        { name: "Bhopal 2", lat: 23.1538093, lng: 77.4774699, region: "Central" },
+        { name: "Indore 1", lat: 22.7503476, lng: 75.9336537, region: "Central" },
+        { name: "Ludhiana-3", lat: 30.8861031, lng: 75.9394469, region: "North" },
+        { name: "Rajahmundry", lat: 17.0069742, lng: 81.8113343, region: "South" },
+        { name: "Amritsar", lat: 31.590188, lng: 74.961798, region: "North" },
+        { name: "Vizag", lat: 17.6852547, lng: 83.1879391, region: "South" },
+        { name: "Lucknow", lat: 26.7992258, lng: 81.0040274, region: "Central" },
+        { name: "Jalandhar", lat: 31.2920647, lng: 75.6573569, region: "North" },
+        { name: "Bhopal 1", lat: 23.3040501, lng: 77.4189171, region: "Central" },
+        { name: "Amravati", lat: 20.882687, lng: 77.7455037, region: "Central" },
+        { name: "Karimnagar", lat: 18.4585025, lng: 79.0976901, region: "South" },
+        { name: "Jammu", lat: 32.7442937, lng: 74.8326817, region: "North" },
+        { name: "Ludhiana-1", lat: 30.9507084, lng: 75.8243597, region: "North" },
+        { name: "Indore 2", lat: 22.6531497, lng: 75.8018304, region: "Central" },
+        { name: "Guntur", lat: 16.3082614, lng: 80.4641649, region: "South" },
+        { name: "Kota", lat: 25.1347848, lng: 75.8553842, region: "Central" },
+        { name: "Tirupathi", lat: 13.63341419, lng: 79.48998826, region: "South" },
+        { name: "Vijayawada", lat: 16.511119, lng: 80.713661, region: "South" },
+        { name: "Kurnool", lat: 15.8076338, lng: 78.0391466, region: "South" },
+        { name: "Raipur", lat: 21.2918435, lng: 81.6272861, region: "Central" },
+        
+    
+    ]
 };
