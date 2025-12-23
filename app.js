@@ -51,6 +51,7 @@ window.showRowDetails = showRowDetails;
 // Mail Search Feature
 window.loadApprovalsDashboard = loadApprovalsDashboard;
 window.redirectMailSearch = redirectMailSearch;
+window.loadBusinessDashboard = loadBusinessDashboard;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
