@@ -8,6 +8,7 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
@@ -262,5 +263,28 @@
 
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
+    <div id="convert-modal" class="modal hidden">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3>📂 Convert Excel File</h3>
+            <span class="close-btn" onclick="document.getElementById('convert-modal').classList.add('hidden')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Select a sheet to convert:</p>
+            <select id="sheet-selector" style="width: 100%; padding: 8px; margin-bottom: 15px; border-radius: 4px;"></select>
+            
+            <p>Select output format:</p>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <label><input type="radio" name="convert-fmt" value="csv" checked> CSV (Fast)</label>
+                <label><input type="radio" name="convert-fmt" value="parquet"> Parquet (Efficient)</label>
+            </div>
+
+            <label><input type="checkbox" id="save-converted" checked> Download converted file?</label>
+        </div>
+        <div class="modal-footer">
+            <button onclick="window.processExcelConversion()" style="background:#007bff; color:white;">Convert & Load</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
