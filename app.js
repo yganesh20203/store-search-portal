@@ -1514,6 +1514,7 @@ async function loadBusinessDashboard() {
         // Initialize Layer Groups
         mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
         mapLayers.metro = L.layerGroup().addTo(mapInstance);
+        mapLayers.dmart = L.layerGroup().addTo(mapInstance);
 
         // Plot Flipkart Stores (Blue)
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
@@ -1534,6 +1535,15 @@ async function loadBusinessDashboard() {
                 })
                 .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
                 .addTo(mapLayers.metro);
+            });
+        }
+        if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
+            CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
+                L.circleMarker([wh.lat, wh.lng], {
+                    radius: 6, fillColor: "#388E3C", color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8
+                })
+                .bindPopup(`<b>🛒 DMart</b><br>${wh.name}`)
+                .addTo(mapLayers.dmart);
             });
         }
     }
