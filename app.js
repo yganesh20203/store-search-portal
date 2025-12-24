@@ -1497,6 +1497,7 @@ window.onclick = function(event) {
 // 18. KNOW YOUR BUSINESS (MAP DASHBOARD)
 // ==========================================
 
+
 async function loadBusinessDashboard() {
     resetUI();
     document.getElementById("business-ui").classList.remove("hidden");
@@ -1511,55 +1512,68 @@ async function loadBusinessDashboard() {
             attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
         }).addTo(mapInstance);
 
+        // --- DEFINE COLORED PINS ---
+        const blueIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+        const redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+        const greenIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
         // Initialize Layer Groups
         mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
         mapLayers.metro = L.layerGroup().addTo(mapInstance);
         mapLayers.dmart = L.layerGroup().addTo(mapInstance);
 
-        // Plot Flipkart Stores (Blue)
+        // Plot Flipkart Stores (Blue Pins)
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
             CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
-                L.circleMarker([wh.lat, wh.lng], {
-                    radius: 8, fillColor: "#1976D2", color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8
-                })
+                L.marker([wh.lat, wh.lng], { icon: blueIcon }) // CHANGED TO MARKER
                 .bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`)
                 .addTo(mapLayers.flipkart);
             });
         }
 
-        // Plot Metro Stores (Red)
+        // Plot Metro Stores (Red Pins)
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
             CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
-                L.circleMarker([wh.lat, wh.lng], {
-                    radius: 8, fillColor: "#D32F2F", color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8
-                })
+                L.marker([wh.lat, wh.lng], { icon: redIcon }) // CHANGED TO MARKER
                 .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
                 .addTo(mapLayers.metro);
             });
         }
+
+        // Plot DMart Stores (Green Pins)
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
             CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
-                L.circleMarker([wh.lat, wh.lng], {
-                    radius: 6, fillColor: "#388E3C", color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8
-                })
+                L.marker([wh.lat, wh.lng], { icon: greenIcon }) // CHANGED TO MARKER
                 .bindPopup(`<b>🛒 DMart</b><br>${wh.name}`)
                 .addTo(mapLayers.dmart);
             });
         }
     }
     
-    // --- CRITICAL FIX: Force Map Resize ---
+    // --- Force Map Resize ---
     setTimeout(() => {
         mapInstance.invalidateSize();
     }, 200);
 
-    // 3. Calculate Pincode Metrics using DuckDB
-    // Note: We need a loaded table. We'll try to use 'currentPivotTableName' or active table.
+    // 3. Calculate Pincode Metrics (Existing Logic...)
     const tableName = currentPivotTableName || `table_${activePaneId.replace('-', '_')}`;
     const container = document.getElementById("pincode-table-container");
 
     try {
-        // Check if table exists
         const check = await conn.query(`SHOW TABLES`);
         const tables = check.toArray().map(r => r.name);
         if (!tables.includes(tableName)) {
@@ -1567,11 +1581,9 @@ async function loadBusinessDashboard() {
             return;
         }
 
-        // Run Aggregation Query
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const cols = schema.toArray().map(r => r.column_name.toLowerCase());
         
-        // Auto-detect columns (fuzzy match)
         const pinCol = cols.find(c => c.includes("pin") || c.includes("zip")) || cols[0];
         const salesCol = cols.find(c => c.includes("amount") || c.includes("price") || c.includes("value") || c.includes("sales"));
         const statusCol = cols.find(c => c.includes("status") || c.includes("delivery"));
@@ -1581,7 +1593,6 @@ async function loadBusinessDashboard() {
             return;
         }
 
-        // Query: Group by Pincode
         const query = `
             SELECT 
                 "${pinCol}" as Pincode,
@@ -1597,7 +1608,6 @@ async function loadBusinessDashboard() {
         const result = await conn.query(query);
         const rows = result.toArray().map(r => r.toJSON());
 
-        // Update Summary Cards
         const totalSales = rows.reduce((acc, r) => acc + (r.Total_Sales || 0), 0);
         const totalCust = rows.reduce((acc, r) => acc + (r.Total_Orders || 0), 0);
         const avgDel = rows.length > 0 ? (rows.reduce((acc, r) => acc + (r.Delivery_Percent || 0), 0) / rows.length) : 0;
@@ -1606,7 +1616,6 @@ async function loadBusinessDashboard() {
         document.getElementById("kyb-total-sales").innerText = "₹" + Math.floor(totalSales).toLocaleString();
         document.getElementById("kyb-avg-del").innerText = Math.floor(avgDel) + "%";
 
-        // Render Table
         let html = `<table class="data-table">
             <thead><tr><th>Pincode</th><th>Orders/Cust</th><th>Sales (₹)</th><th>Delivery %</th></tr></thead>
             <tbody>`;
