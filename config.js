@@ -112,7 +112,7 @@ const CONFIG = {
             { name: "Vijayawada (Mogalrajpuram)", lat: 16.502, lng: 80.648 },
             { name: "Visakhapatnam (Madhurawada)", lat: 17.820, lng: 83.360 },
             { name: "Zirakpur (Baltana)", lat: 30.641, lng: 76.815 }
-        ]
+        ],
        "DMart Stores": [
             { name: "Amritsar (Lawrence Rd)", lat: 31.640, lng: 74.877 },
             { name: "Amritsar (GT Road)", lat: 31.634, lng: 74.899 },
