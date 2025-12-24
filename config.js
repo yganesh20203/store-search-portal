@@ -45,7 +45,7 @@ const CONFIG = {
             { name: "Nov 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1189778759" },
             { name: "Dec 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1778957169" }
         ]
-    }
+    },
     WAREHOUSE_LOCATIONS: [
         { name: "Zirakhpur", lat: 30.6374571, lng: 76.8239134, region: "North" },
         { name: "Meerut", lat: 29.0356465, lng: 77.6701403, region: "Central" },
