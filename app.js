@@ -15,7 +15,7 @@ let walkinHistoryStack = [];
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
 let currentPivotTableName = ""; 
-
+let mapInstance = null;
 // Attach functions to Window
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
@@ -181,6 +181,7 @@ function resetUI() {
     document.getElementById("daily-ui").classList.add("hidden");
     document.getElementById("work-ui").classList.add("hidden");
     document.getElementById("approvals-ui").classList.add("hidden"); 
+    document.getElementById("business-ui").classList.add("hidden");
     
     // Reset Data View Containers
     document.getElementById("view-container").classList.remove("hidden"); // Default Grid
@@ -1480,4 +1481,118 @@ function closeModal() {
 window.onclick = function(event) {
     const modal = document.getElementById("detail-modal");
     if (event.target == modal) closeModal();
+}
+async function loadBusinessDashboard() {
+    resetUI();
+    document.getElementById("business-ui").classList.remove("hidden");
+    
+    // 1. Initialize Map (if not already done)
+    if (!mapInstance) {
+        // Center on India
+        mapInstance = L.map('business-map').setView([20.5937, 78.9629], 5);
+        
+        // Add OpenStreetMap Tile Layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(mapInstance);
+    }
+    
+    // Clear existing layers (optional, simple approach)
+    mapInstance.eachLayer((layer) => {
+        if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+            mapInstance.removeLayer(layer);
+        }
+    });
+
+    // 2. Plot Warehouses from Config
+    if (CONFIG.WAREHOUSE_LOCATIONS) {
+        CONFIG.WAREHOUSE_LOCATIONS.forEach(wh => {
+            L.marker([wh.lat, wh.lng])
+                .addTo(mapInstance)
+                .bindPopup(`<b>🏭 ${wh.name}</b><br>Region: ${wh.region}`)
+                .openPopup();
+        });
+    }
+
+    // 3. Calculate Pincode Metrics using DuckDB
+    // Note: We need a loaded table. We'll try to use 'currentPivotTableName' or active table.
+    const tableName = currentPivotTableName || `table_${activePaneId.replace('-', '_')}`;
+    const container = document.getElementById("pincode-table-container");
+
+    try {
+        // Check if table exists
+        const check = await conn.query(`SHOW TABLES`);
+        const tables = check.toArray().map(r => r.name);
+        if (!tables.includes(tableName)) {
+            container.innerHTML = "<p>⚠️ No sales data loaded. Please load a Sales Report in 'Work on Reports' first.</p>";
+            return;
+        }
+
+        // Run Aggregation Query
+        // Assuming columns like 'Pincode', 'Order_ID' (count), 'Sales_Amount' (sum), 'Delivery_Status'
+        // You might need to adjust column names based on your actual CSV headers.
+        
+        const schema = await conn.query(`DESCRIBE ${tableName}`);
+        const cols = schema.toArray().map(r => r.column_name.toLowerCase());
+        
+        // Auto-detect columns (fuzzy match)
+        const pinCol = cols.find(c => c.includes("pin") || c.includes("zip")) || cols[0];
+        const salesCol = cols.find(c => c.includes("amount") || c.includes("price") || c.includes("value") || c.includes("sales"));
+        const statusCol = cols.find(c => c.includes("status") || c.includes("delivery"));
+
+        if (!salesCol) {
+            container.innerHTML = "<p>⚠️ Could not identify Sales/Amount column for aggregation.</p>";
+            return;
+        }
+
+        // Query: Group by Pincode
+        const query = `
+            SELECT 
+                "${pinCol}" as Pincode,
+                COUNT(*) as Total_Orders,
+                SUM("${salesCol}") as Total_Sales,
+                ${statusCol ? `ROUND(COUNT(CASE WHEN "${statusCol}" ILIKE '%Delivered%' THEN 1 END) * 100.0 / COUNT(*), 1)` : '0'} as Delivery_Percent
+            FROM ${tableName}
+            GROUP BY 1
+            ORDER BY Total_Sales DESC
+            LIMIT 50
+        `;
+
+        const result = await conn.query(query);
+        const rows = result.toArray().map(r => r.toJSON());
+
+        // Update Summary Cards
+        const totalSales = rows.reduce((acc, r) => acc + (r.Total_Sales || 0), 0);
+        const totalCust = rows.reduce((acc, r) => acc + (r.Total_Orders || 0), 0);
+        const avgDel = rows.length > 0 ? (rows.reduce((acc, r) => acc + (r.Delivery_Percent || 0), 0) / rows.length) : 0;
+
+        document.getElementById("kyb-total-cust").innerText = totalCust.toLocaleString();
+        document.getElementById("kyb-total-sales").innerText = "₹" + Math.floor(totalSales).toLocaleString();
+        document.getElementById("kyb-avg-del").innerText = Math.floor(avgDel) + "%";
+
+        // Render Table
+        let html = `<table class="data-table">
+            <thead><tr><th>Pincode</th><th>Orders/Cust</th><th>Sales (₹)</th><th>Delivery %</th></tr></thead>
+            <tbody>`;
+        
+        rows.forEach(r => {
+            html += `<tr>
+                <td>📍 ${r.Pincode}</td>
+                <td>${r.Total_Orders}</td>
+                <td>${Math.floor(r.Total_Sales).toLocaleString()}</td>
+                <td>
+                    <div style="background:#eee; border-radius:4px; width:100%; height:10px;">
+                        <div style="background:${r.Delivery_Percent > 80 ? 'green' : 'orange'}; width:${r.Delivery_Percent}%; height:100%; border-radius:4px;"></div>
+                    </div>
+                    <div style="font-size:10px; text-align:center;">${r.Delivery_Percent}%</div>
+                </td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<p style="color:red">Error aggregating data: ${e.message}<br>Ensure a file is loaded in 'Work on Reports' view.</p>`;
+    }
 }
