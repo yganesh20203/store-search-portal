@@ -15,8 +15,11 @@ let walkinHistoryStack = [];
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
 let currentPivotTableName = ""; 
+
+// Map Global
 let mapInstance = null;
-// Attach functions to Window
+
+// Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -51,6 +54,7 @@ window.showRowDetails = showRowDetails;
 // Mail Search Feature
 window.loadApprovalsDashboard = loadApprovalsDashboard;
 window.redirectMailSearch = redirectMailSearch;
+// KYB (Map) Feature
 window.loadBusinessDashboard = loadBusinessDashboard;
 
 // ==========================================
@@ -181,7 +185,7 @@ function resetUI() {
     document.getElementById("daily-ui").classList.add("hidden");
     document.getElementById("work-ui").classList.add("hidden");
     document.getElementById("approvals-ui").classList.add("hidden"); 
-    document.getElementById("business-ui").classList.add("hidden");
+    document.getElementById("business-ui").classList.add("hidden"); 
     
     // Reset Data View Containers
     document.getElementById("view-container").classList.remove("hidden"); // Default Grid
@@ -753,6 +757,7 @@ async function confirmResolve() {
 function loadApprovalsDashboard() {
     resetUI();
     document.getElementById("approvals-ui").classList.remove("hidden");
+    // No fetching logic here, just showing the Mail Search UI
 }
 
 function redirectMailSearch() {
@@ -763,13 +768,10 @@ function redirectMailSearch() {
 
     let queryParts = [];
 
-    // Gmail Search Syntax Construction
     if (target) {
-        // Broad search for interactions with this person
         queryParts.push(`(from:${target} OR to:${target})`);
     }
     if (fromDate) {
-        // Date format YYYY/MM/DD works best for Gmail search url
         queryParts.push(`after:${fromDate.replace(/-/g, '/')}`);
     }
     if (toDate) {
@@ -787,7 +789,6 @@ function redirectMailSearch() {
     const queryString = encodeURIComponent(queryParts.join(" "));
     const gmailUrl = `https://mail.google.com/mail/u/0/#search/${queryString}`;
     
-    // Open in new tab
     window.open(gmailUrl, '_blank');
 }
 
@@ -926,8 +927,6 @@ async function loadWorkDashboard() {
                 
                 // Smart Handling for Remote Files
                 if (file.name.endsWith(".xlsx")) {
-                     // TODO: Remote Excel Fetch + Convert logic could go here. 
-                     // For now, let's treat it as pivot load attempt
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
                 } else {
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
@@ -1482,6 +1481,11 @@ window.onclick = function(event) {
     const modal = document.getElementById("detail-modal");
     if (event.target == modal) closeModal();
 }
+
+// ==========================================
+// 18. KNOW YOUR BUSINESS (MAP DASHBOARD)
+// ==========================================
+
 async function loadBusinessDashboard() {
     resetUI();
     document.getElementById("business-ui").classList.remove("hidden");
@@ -1491,13 +1495,18 @@ async function loadBusinessDashboard() {
         // Center on India
         mapInstance = L.map('business-map').setView([20.5937, 78.9629], 5);
         
-        // Add OpenStreetMap Tile Layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+        // Add OpenTopoMap Tile Layer (Terrain Style)
+        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
         }).addTo(mapInstance);
     }
     
-    // Clear existing layers (optional, simple approach)
+    // --- CRITICAL FIX: Force Map Resize ---
+    setTimeout(() => {
+        mapInstance.invalidateSize();
+    }, 200);
+
+    // Clear existing layers
     mapInstance.eachLayer((layer) => {
         if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
             mapInstance.removeLayer(layer);
@@ -1509,8 +1518,7 @@ async function loadBusinessDashboard() {
         CONFIG.WAREHOUSE_LOCATIONS.forEach(wh => {
             L.marker([wh.lat, wh.lng])
                 .addTo(mapInstance)
-                .bindPopup(`<b>🏭 ${wh.name}</b><br>Region: ${wh.region}`)
-                .openPopup();
+                .bindPopup(`<b>🏭 ${wh.name}</b><br>Region: ${wh.region}`);
         });
     }
 
@@ -1529,9 +1537,6 @@ async function loadBusinessDashboard() {
         }
 
         // Run Aggregation Query
-        // Assuming columns like 'Pincode', 'Order_ID' (count), 'Sales_Amount' (sum), 'Delivery_Status'
-        // You might need to adjust column names based on your actual CSV headers.
-        
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const cols = schema.toArray().map(r => r.column_name.toLowerCase());
         
