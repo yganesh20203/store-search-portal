@@ -18,6 +18,10 @@ let currentPivotTableName = "";
 
 // Map Global
 let mapInstance = null;
+let mapLayers = {
+    flipkart: null,
+    metro: null
+};
 
 // Attach functions to Window for HTML access
 window.unlockAndLogin = unlockAndLogin;
@@ -56,6 +60,7 @@ window.loadApprovalsDashboard = loadApprovalsDashboard;
 window.redirectMailSearch = redirectMailSearch;
 // KYB (Map) Feature
 window.loadBusinessDashboard = loadBusinessDashboard;
+window.toggleMapLayer = toggleMapLayer; // NEW
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
@@ -768,10 +773,13 @@ function redirectMailSearch() {
 
     let queryParts = [];
 
+    // Gmail Search Syntax Construction
     if (target) {
+        // Broad search for interactions with this person
         queryParts.push(`(from:${target} OR to:${target})`);
     }
     if (fromDate) {
+        // Date format YYYY/MM/DD works best for Gmail search url
         queryParts.push(`after:${fromDate.replace(/-/g, '/')}`);
     }
     if (toDate) {
@@ -789,6 +797,7 @@ function redirectMailSearch() {
     const queryString = encodeURIComponent(queryParts.join(" "));
     const gmailUrl = `https://mail.google.com/mail/u/0/#search/${queryString}`;
     
+    // Open in new tab
     window.open(gmailUrl, '_blank');
 }
 
@@ -927,6 +936,8 @@ async function loadWorkDashboard() {
                 
                 // Smart Handling for Remote Files
                 if (file.name.endsWith(".xlsx")) {
+                     // TODO: Remote Excel Fetch + Convert logic could go here. 
+                     // For now, let's treat it as pivot load attempt
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
                 } else {
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
@@ -1499,28 +1510,38 @@ async function loadBusinessDashboard() {
         L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
         }).addTo(mapInstance);
+
+        // Initialize Layer Groups
+        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
+        mapLayers.metro = L.layerGroup().addTo(mapInstance);
+
+        // Plot Flipkart Stores (Blue)
+        if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
+            CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
+                L.circleMarker([wh.lat, wh.lng], {
+                    radius: 8, fillColor: "#1976D2", color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8
+                })
+                .bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`)
+                .addTo(mapLayers.flipkart);
+            });
+        }
+
+        // Plot Metro Stores (Red)
+        if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
+            CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
+                L.circleMarker([wh.lat, wh.lng], {
+                    radius: 8, fillColor: "#D32F2F", color: "#fff", weight: 1, opacity: 1, fillOpacity: 0.8
+                })
+                .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
+                .addTo(mapLayers.metro);
+            });
+        }
     }
     
     // --- CRITICAL FIX: Force Map Resize ---
     setTimeout(() => {
         mapInstance.invalidateSize();
     }, 200);
-
-    // Clear existing layers
-    mapInstance.eachLayer((layer) => {
-        if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
-            mapInstance.removeLayer(layer);
-        }
-    });
-
-    // 2. Plot Warehouses from Config
-    if (CONFIG.WAREHOUSE_LOCATIONS) {
-        CONFIG.WAREHOUSE_LOCATIONS.forEach(wh => {
-            L.marker([wh.lat, wh.lng])
-                .addTo(mapInstance)
-                .bindPopup(`<b>🏭 ${wh.name}</b><br>Region: ${wh.region}`);
-        });
-    }
 
     // 3. Calculate Pincode Metrics using DuckDB
     // Note: We need a loaded table. We'll try to use 'currentPivotTableName' or active table.
@@ -1599,5 +1620,21 @@ async function loadBusinessDashboard() {
     } catch (e) {
         console.error(e);
         container.innerHTML = `<p style="color:red">Error aggregating data: ${e.message}<br>Ensure a file is loaded in 'Work on Reports' view.</p>`;
+    }
+}
+
+// Toggle Map Layers
+function toggleMapLayer(layerKey) {
+    if (!mapInstance) return;
+    
+    const checkbox = document.getElementById(`chk-${layerKey}`);
+    const layer = mapLayers[layerKey];
+    
+    if (checkbox && layer) {
+        if (checkbox.checked) {
+            mapInstance.addLayer(layer);
+        } else {
+            mapInstance.removeLayer(layer);
+        }
     }
 }
