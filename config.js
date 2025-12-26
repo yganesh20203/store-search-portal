@@ -52,7 +52,7 @@ const CONFIG = {
             { name: "Oct 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "267301889" },
             { name: "Nov 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1189778759" },
             { name: "Dec 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1778957169" }
-        ]
+        ],
 
         "X Doc Attainment": [
             { name: "May'25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "0"},
