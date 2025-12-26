@@ -2,10 +2,10 @@
    1. GLOBAL RESET & BASE STYLES
    ========================================= */
 body { 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
     margin: 0; 
     padding: 20px; 
-    background-color: #f4f6f8;
+    background-color: #f0f2f5; /* Softer gray-blue background */
     color: #333;
 }
 
@@ -85,15 +85,8 @@ body {
 }
 
 /* =========================================
-   3. DASHBOARD LAYOUT & PANES
+   3. DASHBOARD LAYOUT & MODERN UI
    ========================================= */
-
-/* Main Background */
-body {
-    background-color: #f0f2f5; /* Softer gray-blue background */
-    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
-    color: #333;
-}
 
 /* Header Styling */
 header {
@@ -191,10 +184,105 @@ header {
     color: #1e3c72;
 }
 
-/* Specific Colors for Nav Buttons (Optional overrides) */
-/* You can keep inline styles or move them here for cleaner HTML */
+/* UI Sections (Sales, Member, etc.) Containers */
+#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, #approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui {
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+    border: 1px solid #eaeaea;
+}
 
-/* Content Panes (The View Areas) */
+hr { border: 0; height: 1px; background: #eee; margin: 20px 0; }
+
+h3 { margin-top: 0; color: #333; font-size: 1.2rem; }
+
+/* =========================================
+   4. IMPROVED SUB-BUTTON / FOLDER GRID STYLING
+   ========================================= */
+
+.folder-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); /* Responsive Grid */
+    gap: 20px; /* Better spacing between items */
+    margin-top: 20px; 
+    padding: 5px; /* Prevent shadow clipping */
+}
+
+.folder-btn { 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px; /* Space between icon and text */
+    
+    padding: 20px 15px; 
+    background: #ffffff; 
+    border: 1px solid #e0e0e0; 
+    border-radius: 16px; /* Smooth rounded corners */
+    
+    cursor: pointer; 
+    font-weight: 600; 
+    color: #444;
+    font-size: 13px;
+    
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02); /* Subtle shadow */
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    
+    min-height: 110px; /* Uniform height */
+    word-wrap: break-word;
+}
+
+/* Hover Effect: Lift up + Shadow */
+.folder-btn:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 10px 20px rgba(0,0,0,0.08); 
+    border-color: #bbdefb; /* Light blue border on hover */
+    background: #fcfdff;
+    color: #1565c0;
+}
+
+/* Active State (Selected) */
+.folder-btn.active { 
+    background: #e3f2fd; 
+    border-color: #2196f3; 
+    color: #0d47a1; 
+    box-shadow: inset 0 0 0 1px #2196f3;
+}
+
+/* Icons inside buttons (Optional: makes emojis larger) */
+.folder-btn div:first-child, /* For divs wrapping icons */
+.folder-btn img {
+    font-size: 32px; /* Bigger emoji/icon */
+    margin-bottom: 5px;
+}
+
+/* Walkin Categories Specific (Green/Blue Tints) */
+#walkin-category-list .folder-btn {
+    border-bottom: 4px solid #4db6ac; /* Teal accent */
+}
+
+/* Tracker Sheets Specific (Yellow Tints) */
+#tracker-file-list .folder-btn {
+    border-bottom: 4px solid #ffd54f; /* Amber accent */
+}
+
+/* Sales Reports Specific (Blue Tints) */
+#month-list .folder-btn {
+    border-bottom: 4px solid #42a5f5; /* Blue accent */
+}
+
+/* =========================================
+   5. VIEW PANES & GRID LAYOUT
+   ========================================= */
+#view-container { display: grid; gap: 15px; min-height: 600px; margin-top: 20px; }
+.grid-1 { grid-template-columns: 1fr; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
 .pane {
     background: #ffffff;
     border: 1px solid #e0e0e0;
@@ -202,6 +290,9 @@ header {
     box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     overflow: hidden;
     position: relative;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
     transition: all 0.2s;
 }
 
@@ -221,23 +312,27 @@ header {
     font-weight: 700;
     border-bottom: 1px solid #eee;
     border-left: 1px solid #eee;
+    position: absolute; 
+    top: 0; 
+    right: 0;
+    z-index: 100;
 }
 
-/* UI Sections (Sales, Member, etc.) Containers */
-#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, #approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui {
-    background: #fff;
-    padding: 25px;
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    margin-bottom: 20px;
-    border: 1px solid #eaeaea;
+.content-area {
+    padding: 0;
+    overflow: auto;
+    flex-grow: 1;
+    max-height: 80vh;
 }
 
-hr { border: 0; height: 1px; background: #eee; margin: 20px 0; }
+.empty-msg {
+    text-align: center;
+    color: #999;
+    margin-top: 50px;
+}
 
-h3 { margin-top: 0; color: #333; font-size: 1.2rem; }
 /* =========================================
-   4. DATA TABLE STYLES (Professional)
+   6. DATA TABLE STYLES (Professional)
    ========================================= */
 .data-table {
     width: 100%;
@@ -283,7 +378,7 @@ h3 { margin-top: 0; color: #333; font-size: 1.2rem; }
 }
 
 /* =========================================
-   5. MODAL STYLES
+   7. MODAL STYLES
    ========================================= */
 .modal {
     display: flex;
@@ -328,7 +423,7 @@ h3 { margin-top: 0; color: #333; font-size: 1.2rem; }
 .detail-table td { padding: 10px; border: 1px solid #eee; }
 
 /* =========================================
-   6. PIVOT TABLE & MAP OVERRIDES
+   8. PIVOT TABLE & MAP OVERRIDES
    ========================================= */
 
 /* Pivot Table Container */
