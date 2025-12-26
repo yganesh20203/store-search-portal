@@ -1657,3 +1657,17 @@ function toggleMapLayer(layerKey) {
         }
     }
 }
+
+
+window.logout = logout;
+
+
+function logout() {
+
+    if(!confirm("Are you sure you want to logout?")) return;
+
+
+    localStorage.removeItem("portal_user_email");
+   
+    window.location.reload();
+}
