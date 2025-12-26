@@ -1498,22 +1498,46 @@ window.onclick = function(event) {
 // 18. KNOW YOUR BUSINESS (MAP DASHBOARD)
 // ==========================================
 
-
 async function loadBusinessDashboard() {
     resetUI();
     document.getElementById("business-ui").classList.remove("hidden");
     
     // 1. Initialize Map (if not already done)
     if (!mapInstance) {
-        // Center on India
-        mapInstance = L.map('business-map').setView([20.5937, 78.9629], 5);
-        
-        // Add OpenTopoMap Tile Layer (Terrain Style)
-        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
-        }).addTo(mapInstance);
+        // --- A. Define Base Layers ---
+        const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        });
 
-        // --- DEFINE COLORED PINS ---
+        const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
+        });
+
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        });
+
+        // --- B. Create Map with Default Layer ---
+        mapInstance = L.map('business-map', {
+            center: [20.5937, 78.9629], // Center on India
+            zoom: 5,
+            layers: [streets] // Default to Streets
+        });
+
+        // --- C. Add Layer Control (The Switcher Box) ---
+        const baseMaps = {
+            "🗺️ Streets": streets,
+            "🏔️ Terrain": terrain,
+            "🛰️ Satellite": satellite
+        };
+        L.control.layers(baseMaps).addTo(mapInstance);
+
+        // --- D. Initialize Warehouse Layer Groups ---
+        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
+        mapLayers.metro = L.layerGroup().addTo(mapInstance);
+        mapLayers.dmart = L.layerGroup().addTo(mapInstance);
+
+        // --- E. Define Custom Icons ---
         const blueIcon = new L.Icon({
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
             shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -1532,45 +1556,39 @@ async function loadBusinessDashboard() {
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
         });
 
-        // Initialize Layer Groups
-        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
-        mapLayers.metro = L.layerGroup().addTo(mapInstance);
-        mapLayers.dmart = L.layerGroup().addTo(mapInstance);
-
-        // Plot Flipkart Stores (Blue Pins)
+        // --- F. Plot Markers from Config ---
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
             CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: blueIcon }) // CHANGED TO MARKER
+                L.marker([wh.lat, wh.lng], { icon: blueIcon }) 
                 .bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`)
                 .addTo(mapLayers.flipkart);
             });
         }
 
-        // Plot Metro Stores (Red Pins)
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
             CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: redIcon }) // CHANGED TO MARKER
+                L.marker([wh.lat, wh.lng], { icon: redIcon }) 
                 .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
                 .addTo(mapLayers.metro);
             });
         }
 
-        // Plot DMart Stores (Green Pins)
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
             CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: greenIcon }) // CHANGED TO MARKER
+                L.marker([wh.lat, wh.lng], { icon: greenIcon }) 
                 .bindPopup(`<b>🛒 DMart</b><br>${wh.name}`)
                 .addTo(mapLayers.dmart);
             });
         }
     }
     
-    // --- Force Map Resize ---
+    // --- Force Map Resize (Critical for visibility) ---
     setTimeout(() => {
         mapInstance.invalidateSize();
     }, 200);
 
-    // 3. Calculate Pincode Metrics (Existing Logic...)
+    // ... (Keep the rest of the Pincode Logic below as it is) ...
+    // 3. Calculate Pincode Metrics using DuckDB
     const tableName = currentPivotTableName || `table_${activePaneId.replace('-', '_')}`;
     const container = document.getElementById("pincode-table-container");
 
