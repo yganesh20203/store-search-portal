@@ -87,101 +87,155 @@ body {
 /* =========================================
    3. DASHBOARD LAYOUT & PANES
    ========================================= */
+
+/* Main Background */
+body {
+    background-color: #f0f2f5; /* Softer gray-blue background */
+    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+    color: #333;
+}
+
+/* Header Styling */
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    background: white;
-    padding: 15px 20px;
+    margin-bottom: 25px;
+    background: #ffffff;
+    padding: 15px 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05); /* Soft shadow */
+    border: 1px solid rgba(255,255,255,0.5);
+}
+
+/* Custom Select Dropdown */
+.select-wrapper select {
+    padding: 8px 12px;
     border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-
-.control-panel {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-}
-
-.nav-btn {
-    padding: 10px 16px;
-    font-size: 14px;
     border: 1px solid #ddd;
-    background: white;
-    border-radius: 6px;
+    background-color: #f9f9f9;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+}
+.select-wrapper select:hover { border-color: #bbb; }
+
+/* Action Buttons (Feedback, etc) */
+.action-btn {
+    background: #fff;
+    border: 1px solid #1e3c72;
+    color: #1e3c72;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
-    font-weight: 500;
 }
+.action-btn:hover { background: #f0f4ff; transform: translateY(-1px); }
 
-.nav-btn:hover {
-    background: #f0f0f0;
+/* Logout Button */
+.logout-btn {
+    background: #ff5252;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(255, 82, 82, 0.3);
+    transition: all 0.2s;
+}
+.logout-btn:hover {
+    background: #ff1744;
+    box-shadow: 0 4px 8px rgba(255, 82, 82, 0.4);
     transform: translateY(-1px);
 }
 
-.folder-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-
-.folder-btn { 
-    padding: 15px; 
-    background: #fff; 
-    border: 1px solid #ccc; 
-    border-radius: 8px; 
-    cursor: pointer; 
-    font-weight: bold; 
-    min-width: 120px;
-    transition: background 0.2s;
-}
-.folder-btn:hover { background: #f9f9f9; border-color: #999; }
-.folder-btn.active { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; }
-
-/* Grid Layout */
-#view-container { display: grid; gap: 15px; min-height: 600px; margin-top: 20px; }
-.grid-1 { grid-template-columns: 1fr; }
-.grid-2 { grid-template-columns: 1fr 1fr; }
-.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-.grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-
-.pane {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    overflow: hidden;
-    background: white;
-    position: relative;
-    min-height: 400px;
+/* Navigation Bar (The Big Buttons) */
+.control-panel {
     display: flex;
-    flex-direction: column;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 25px;
+    padding: 5px;
+}
+
+.nav-btn {
+    flex: 1; /* Make them equal width */
+    min-width: 140px;
+    padding: 14px 10px;
+    font-size: 13px;
+    border: none;
+    background: #ffffff;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    color: #444;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Hover Effect for Nav Buttons */
+.nav-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    color: #1e3c72;
+}
+
+/* Specific Colors for Nav Buttons (Optional overrides) */
+/* You can keep inline styles or move them here for cleaner HTML */
+
+/* Content Panes (The View Areas) */
+.pane {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s;
 }
 
 .pane.active {
-    border: 2px solid #007bff;
-    box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.1);
+    border: 2px solid #1e3c72;
+    box-shadow: 0 0 0 4px rgba(30, 60, 114, 0.15);
 }
 
 .pane-label {
-    background: #f8f9fa;
-    padding: 5px 10px;
-    font-size: 12px;
+    background: #f1f3f5;
     color: #666;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 12px;
+    border-bottom-left-radius: 8px;
+    font-weight: 700;
     border-bottom: 1px solid #eee;
-    font-weight: bold;
+    border-left: 1px solid #eee;
 }
 
-.content-area {
-    padding: 0;
-    overflow: auto;
-    flex-grow: 1;
-    max-height: 80vh;
+/* UI Sections (Sales, Member, etc.) Containers */
+#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, #approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui {
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+    border: 1px solid #eaeaea;
 }
 
-.empty-msg {
-    text-align: center;
-    color: #999;
-    margin-top: 50px;
-}
+hr { border: 0; height: 1px; background: #eee; margin: 20px 0; }
 
+h3 { margin-top: 0; color: #333; font-size: 1.2rem; }
 /* =========================================
    4. DATA TABLE STYLES (Professional)
    ========================================= */
