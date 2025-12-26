@@ -53,6 +53,17 @@ const CONFIG = {
             { name: "Nov 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1189778759" },
             { name: "Dec 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1778957169" }
         ]
+
+        "X Doc Attainment": [
+            { name: "May'25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "0"},
+            { name: "June'25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "1639752770"},
+            { name: "July'25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "571996569"},
+            { name: "Aug 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "327310676"},
+            { name: "Sep 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "785861585"},
+            { name: "Oct 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "1053170721"},
+            { name: "Nov 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "446051990"},
+            { name: "Dec 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "629896893"}
+        ],
     },
    WAREHOUSE_GROUPS: {
         "Flipkart Wholesale": [
