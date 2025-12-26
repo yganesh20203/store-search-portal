@@ -34,6 +34,14 @@ const CONFIG = {
             { name: "Nov 25", id: "1eYd1U5ooBjdgjwL3g4wWnUocNgnhaH6defIccVtx4CI", gid: "1247998899" },
             { name: "Dec 25", id: "1eYd1U5ooBjdgjwL3g4wWnUocNgnhaH6defIccVtx4CI", gid: "1616527984" }
         ],
+
+        "Capacity Utilization":[
+            { name: "August 25", id: "1lYB9VXpKd60nl52_shy5F9UFemUy7V-HpKoz68XHLf4", gid: "818154212"},
+            { name: "September 25", id: "1lYB9VXpKd60nl52_shy5F9UFemUy7V-HpKoz68XHLf4", gid: "982141838"},
+            { name: "Oct 25", id: "1lYB9VXpKd60nl52_shy5F9UFemUy7V-HpKoz68XHLf4", gid: "1699633789"},
+            { name: "Nov 25", id: "1lYB9VXpKd60nl52_shy5F9UFemUy7V-HpKoz68XHLf4", gid: "744660009"},
+            { name: "Dec 25", id: "1lYB9VXpKd60nl52_shy5F9UFemUy7V-HpKoz68XHLf4", gid: "1785850527"}
+        ],
         
         "🎯 DSD Attainment": [
             { name: "May 25", id: "1U6y-mEgv7WoqdsmqESM3bhZqV-3d0ApgSY5G7MCbvaI", gid: "1367784345" },
