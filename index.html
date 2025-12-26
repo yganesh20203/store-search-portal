@@ -93,20 +93,27 @@
 
         <div id="dashboard" class="hidden">
             <header>
-                <h2>Store Search App</h2>
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <select onchange="window.changeLayout(this.value)" style="padding:5px; border-radius:4px; font-weight:bold;">
-                        <option value="1">🔲 Single View</option>
-                        <option value="2">columns Split (2)</option>
-                        <option value="3">columns Split (3)</option>
-                        <option value="4">Grid Split (4)</option>
-                    </select>
-                    
-                    <button class="feedback-btn" onclick="window.openFeedbackModal()">💬 Feedback</button>
-                    
-                    <div id="user-info">Service Account Connected</div>
-                </div>
-            </header>
+    <div style="display:flex; align-items:center; gap:15px;">
+        <h2 style="margin:0; color:#1e3c72; font-weight:700; letter-spacing:-0.5px;">🛍️ Store Portal</h2>
+        <span id="user-info" style="font-size:12px; background:#e3f2fd; color:#1565c0; padding:4px 8px; border-radius:12px; font-weight:600;">
+            ● Connected
+        </span>
+    </div>
+
+    <div style="display:flex; gap:12px; align-items:center;">
+        <div class="select-wrapper">
+            <select onchange="window.changeLayout(this.value)">
+                <option value="1">View: Single</option>
+                <option value="2">View: Split (2)</option>
+                <option value="3">View: Split (3)</option>
+                <option value="4">View: Grid (4)</option>
+            </select>
+        </div>
+        
+        <button class="action-btn" onclick="window.openFeedbackModal()">💬 Feedback</button>
+        <button class="logout-btn" onclick="window.logout()">🔒 Logout</button>
+    </div>
+</header>
             
             <main>
                 <div class="control-panel">
