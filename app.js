@@ -61,6 +61,7 @@ window.redirectMailSearch = redirectMailSearch;
 // KYB (Map) Feature
 window.loadBusinessDashboard = loadBusinessDashboard;
 window.toggleMapLayer = toggleMapLayer; // NEW
+window.logout = logout;
 
 // ==========================================
 // 2. INITIALIZE DUCKDB
