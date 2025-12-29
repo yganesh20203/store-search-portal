@@ -67,45 +67,18 @@ window.logout = logout;
 // ==========================================
 // 3. INITIALIZE DUCKDB
 // ==========================================
-// ==========================================
-// 3. INITIALIZE DUCKDB (UPDATED FIX)
-// ==========================================
 async function initDuckDB() {
     if (db) return; 
     console.log("Initializing DuckDB...");
     try {
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-        
         const worker = await duckdb.createWorker(bundle.mainWorker);
         const logger = new duckdb.ConsoleLogger();
         db = new duckdb.AsyncDuckDB(logger, worker);
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
         conn = await db.connect();
-
-        // ==================================================
-        // FIX: Manually Register JSON Extension URL
-        // ==================================================
-        // The regex finds the base URL from the main worker path
-        const mainUrl = bundle.mainWorker; 
-        const baseUrl = mainUrl.substring(0, mainUrl.lastIndexOf('/') + 1);
-        
-        // Construct the specific URL for the json extension
-        // Note: The extension filename usually matches the eh/mvp mode
-        const jsonExtUrl = `${baseUrl}json.duckdb_extension.wasm`;
-
-        console.log("📍 Registering JSON extension from:", jsonExtUrl);
-
-        // Register the path so "INSTALL json" knows where to look
-        await db.registerExtension('json', jsonExtUrl);
-
-        // Now install and load explicitly
-        await conn.query(`
-            INSTALL json;
-            LOAD json;
-        `);
-        
-        console.log("🦆 DuckDB Ready & JSON Extension Loaded!");
+        console.log("🦆 DuckDB Ready!");
     } catch (e) {
         console.error("DuckDB Init Failed:", e);
     }
@@ -384,7 +357,6 @@ function openTrackerCategory(groupName) {
     }
 }
 
-// ... (Walkin, Hourly, Ticket, Daily logic remains same - omitted for brevity but functionality preserved) ...
 async function loadWalkinDashboard() {
     resetUI();
     document.getElementById("walkin-ui").classList.remove("hidden");
@@ -1147,46 +1119,27 @@ async function findAndLoadReport() {
     }
 }
 
-function arrayToCSV(data) {
-    return data.map(row =>
-        row.map(field => {
-            if (field === null || field === undefined) return '';
-            let stringField = String(field);
-            // Escape double quotes and wrap field in quotes if it contains special chars
-            if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n') || stringField.includes('\r')) {
-                stringField = '"' + stringField.replace(/"/g, '""') + '"';
-            }
-            return stringField;
-        }).join(',')
-    ).join('\n');
-}
-
 async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     const statusDiv = document.getElementById("loading-status");
-    statusDiv.innerHTML = "⏳ Fetching & Normalizing Data...";
+    statusDiv.innerHTML = "⏳ Fetching Data...";
     
     const pane = document.getElementById(activePaneId);
     if (!pane) { alert("Error: No active view selected"); return; }
     
     const contentArea = pane.querySelector(".content-area");
-    // Normalize table name to avoid syntax errors
     const tableName = `table_${activePaneId.replace('-', '_')}`;
 
     contentArea.innerHTML = "<p>⏳ Loading...</p>";
     document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
-        let sheetTitle = fileName;
-
-        // ===============================================
-        // CASE A: GOOGLE SHEETS (CONVERT TO JSON)
-        // ===============================================
         if (type === 'sheet') {
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
             const metaData = await metaResp.json();
             
+            let sheetTitle = "";
             const targetGid = gid ? parseInt(gid) : 0;
             const foundSheet = metaData.sheets.find(s => s.properties.sheetId === targetGid);
             if (foundSheet) sheetTitle = foundSheet.properties.title;
@@ -1198,84 +1151,40 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            let rawData = dataJson.values;
-            let finalJsonData = [];
+            let finalValues = dataJson.values;
+            
+            // REVERTED HEADER MERGING LOGIC (SIMPLER)
+            if (finalValues.length >= 2) {
+                const rowDates = finalValues[0];
+                const rowMetrics = finalValues[1];
+                let newHeader = [];
+                let lastDate = "";
 
-            // --- HEADER MERGING LOGIC ---
-            if (rawData.length >= 2) {
-                const row1 = rawData[0]; 
-                const row2 = rawData[1]; 
-                let mergedHeader = [];
-                let headerCounts = {}; 
-                
-                const maxCols = Math.max(row1.length, row2.length);
-
-                for (let i = 0; i < maxCols; i++) {
-                    let r1 = (row1[i] || "").toString().trim();
-                    let r2 = (row2[i] || "").toString().trim();
+                for (let i = 0; i < rowMetrics.length; i++) {
+                    let dateVal = rowDates[i] || "";
+                    let metricVal = rowMetrics[i] || `col${i}`;
                     
-                    let finalName = r2;
-                    if (r1 && r1 !== r2 && !r2.toLowerCase().includes("market") && !r2.toLowerCase().includes("store") && !r2.toLowerCase().includes("code")) {
-                        finalName = `${r1} - ${r2}`;
-                    }
-                    if (!finalName) finalName = `Column_${i+1}`;
-
-                    // Sanitize keys for JSON
-                    finalName = finalName.replace(/["'.]/g, "").trim();
-
-                    if (headerCounts[finalName]) {
-                        headerCounts[finalName]++;
-                        finalName = `${finalName}_${headerCounts[finalName]}`;
+                    if (dateVal !== "") lastDate = dateVal;
+                    
+                    if (lastDate) {
+                        newHeader.push(`${lastDate} - ${metricVal}`);
                     } else {
-                        headerCounts[finalName] = 1;
+                        newHeader.push(metricVal);
                     }
-                    mergedHeader.push(finalName);
                 }
-
-                // CONVERT TO JSON OBJECTS
-                // We map the body rows to the headers manually
-                const bodyRows = rawData.slice(2); 
-                finalJsonData = bodyRows.map(row => {
-                    let obj = {};
-                    mergedHeader.forEach((key, index) => {
-                         // Use null for missing values to keep structure consistent
-                         obj[key] = (row[index] !== undefined && row[index] !== "") ? row[index] : null;
-                    });
-                    return obj;
-                });
-
-            } else {
-                // Handle single row header edge case
-                 const headers = rawData[0].map((h, i) => h || `Col_${i}`);
-                 finalJsonData = []; // No data rows
+                finalValues = [newHeader, ...finalValues.slice(2)];
             }
+
+            const csvText = arrayToCSV(finalValues);
+            const csvFileName = `temp_${tableName}.csv`;
             
-           
-
-            // REGISTER JSON FILE IN DUCKDB
-            const jsonFileName = `temp_${tableName}.json`;
-            const jsonString = JSON.stringify(finalJsonData);
-            await db.registerFileText(jsonFileName, jsonString);
-
-            // ==================================================
-            // FIX: Ensure JSON is loaded before query
-            // ==================================================
-            try {
-                // We just try to load it. If it's already loaded, this is fine.
-                // We use LOAD directly because we registered it in initDuckDB
-                await conn.query(`LOAD json;`); 
-            } catch (e) {
-                // If it fails, it might already be loaded or registered
-                console.warn("JSON Load check warning:", e.message);
-            }
-
-            // LOAD JSON
-            await conn.query(`
-                CREATE OR REPLACE TABLE ${tableName} AS 
-                SELECT * FROM read_json_auto('${jsonFileName}')
-            `);
+            await db.registerFileText(csvFileName, csvText);
+            
+            // REVERTED TO read_csv_auto (No header=true enforcement)
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
+            
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
-            
+
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -1288,12 +1197,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                         🤖 AI Summary
                     </button>
                 </div>`;
-        } 
-        
-        // ===============================================
-        // CASE B: PARQUET / EXCEL / CSV FILES
-        // ===============================================
-        else {
+
+        } else {
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -1305,17 +1210,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // For CSV files, we stick to the safe settings
-                 await conn.query(`
-                    CREATE OR REPLACE TABLE ${tableName} AS 
-                    SELECT * FROM read_csv('${fileName}', 
-                        header=true, 
-                        auto_detect=true, 
-                        sample_size=-1,
-                        ignore_errors=true, 
-                        null_padding=true
-                    )
-                 `);
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
@@ -1327,14 +1222,23 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         statusDiv.innerHTML = "";
 
     } catch (e) {
-        console.error("FULL LOAD ERROR:", e);
+        console.error(e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-        contentArea.innerHTML = `<div style="color:red; text-align:center; padding:20px;">
-            <h3>❌ Failed to Load</h3>
-            <p>${e.message}</p>
-            <p style="font-size:10px; color:#666;">Check console (F12) for details.</p>
-        </div>`;
+        contentArea.innerHTML = `<p style="color:red">Failed to load</p>`;
     }
+}
+
+function arrayToCSV(data) {
+    return data.map(row =>
+        row.map(field => {
+            if (field === null || field === undefined) return '';
+            let stringField = String(field);
+            if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n')) {
+                stringField = '"' + stringField.replace(/"/g, '""') + '"';
+            }
+            return stringField;
+        }).join(',')
+    ).join('\n');
 }
 
 async function summarizeData() {
