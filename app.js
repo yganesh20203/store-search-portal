@@ -12,6 +12,7 @@ let hourlyFilesCache = [];
 let walkinHistoryStack = []; 
 let currentArrowData = [];
 let currentChartInstance = null;
+let chartState = { x: null, y: [] };
 
 // Excel & Pivot Globals
 let currentExcelWorkbook = null;
@@ -1158,22 +1159,20 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             let finalValues = dataJson.values;
 
-            // --- CHANGE 1: IGNORE FIRST ROW (Start from Row 2) ---
+            // --- IGNORE FIRST ROW (Start from Row 2) ---
             if (finalValues.length > 1) {
-                finalValues = finalValues.slice(1); // Removes Index 0 (Row 1)
+                finalValues = finalValues.slice(1); 
             }
             
-            // --- ENSURE UNIQUE HEADERS (On the new top row) ---
+            // --- ENSURE UNIQUE HEADERS ---
             let headers = finalValues[0];
             let uniqueHeaders = [];
             let headerCounts = {};
 
             if (headers) {
                 headers.forEach((h) => {
-                    // Clean the header name
                     let cleanH = (h || "Column").toString().trim().replace(/"/g, ''); 
                     if(!cleanH) cleanH = "Column";
-
                     if (headerCounts[cleanH]) {
                         headerCounts[cleanH]++;
                         uniqueHeaders.push(`${cleanH}_${headerCounts[cleanH]}`);
@@ -1189,41 +1188,29 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             const csvFileName = `temp_${tableName}.csv`;
             
             await db.registerFileText(csvFileName, csvText);
-            
-            // --- CHANGE 2: FIXED SQL QUERY (Added auto_detect=true) ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${csvFileName}', header=true, auto_detect=true, ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
-            // --- UI INJECTION START ---
+            // --- UI INJECTION START (UPDATED FOR BUILDER) ---
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             
-            // 1. Setup the Buttons (Added Graph Toggle)
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
                     <a href="${editUrl}" target="_blank" style="text-decoration:none;">
-                        <button style="background:#28a745; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
-                            ✏️ Open Sheet
-                        </button>
+                        <button style="background:#28a745; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">✏️ Open Sheet</button>
                     </a>
-                    <button onclick="window.summarizeData()" style="background:#6f42c1; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
-                        🤖 AI Summary
-                    </button>
-                    <button id="viz-toggle-btn" onclick="window.toggleVisualization()" style="background:#607d8b; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-left:auto;">
-                        📈 Show Graph
-                    </button>
+                    <button onclick="window.summarizeData()" style="background:#6f42c1; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">🤖 AI Summary</button>
+                    <button id="viz-toggle-btn" onclick="window.toggleVisualization()" style="background:#607d8b; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-left:auto;">📈 Show Graph</button>
                 </div>`;
 
-            // 2. Setup the View Containers (Table + Graph)
-            // We clear contentArea and add two wrappers: one for Table, one for Chart
+            // We now create a container for the TABLE and a container for the BUILDER
             contentArea.innerHTML = `
                 <div class="data-table-wrapper" style="height:100%; overflow:auto;"></div>
-                <div class="chart-wrapper hidden" style="height:100%; width:100%; position:relative; padding:10px;">
-                    <canvas id="viz-canvas"></canvas>
-                </div>
+                <div id="chart-builder-root" class="chart-builder-container hidden"></div>
             `;
             
-            // 3. Reset Global Chart Instance
+            // Reset Chart State
             if (typeof currentChartInstance !== 'undefined' && currentChartInstance) {
                 currentChartInstance.destroy();
                 currentChartInstance = null;
@@ -1231,35 +1218,28 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             // --- UI INJECTION END ---
 
         } else {
-            // Parquet/CSV File Logic (Unchanged for now, but uses same wrappers if needed)
+            // Parquet Logic
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
-
             const arrayBuffer = await response.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             await db.registerFileBuffer(fileName, uint8Array);
-            
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
             }
-            
             pane.querySelector(".pane-label").innerText = fileName;
-            
-            // Standard container structure for Parquet too, for consistency
              contentArea.innerHTML = `
                 <div class="data-table-wrapper" style="height:100%; overflow:auto;"></div>
-                <div class="chart-wrapper hidden" style="height:100%; width:100%; position:relative; padding:10px;">
-                    <canvas id="viz-canvas"></canvas>
-                </div>
+                <div id="chart-builder-root" class="chart-builder-container hidden"></div>
             `;
         }
 
         statusDiv.innerHTML = "✅ Data Loaded!";
         await setupFilterDropdown(tableName);
-        await applyTableFilter(); // This will now render into .data-table-wrapper
+        await applyTableFilter();
         statusDiv.innerHTML = "";
 
     } catch (e) {
@@ -1592,36 +1572,33 @@ function toggleMapLayer(layerKey) {
 
 function toggleVisualization() {
     const pane = document.getElementById(activePaneId);
-    const contentArea = pane.querySelector(".content-area");
-    const tableContainer = contentArea.querySelector(".data-table-wrapper");
-    const chartContainer = contentArea.querySelector(".chart-wrapper");
+    const tableWrapper = pane.querySelector(".data-table-wrapper");
+    const builderRoot = pane.querySelector("#chart-builder-root");
     const toggleBtn = document.getElementById("viz-toggle-btn");
 
-    if (!chartContainer || !tableContainer) return;
+    if (!builderRoot || !tableWrapper) return;
 
-    // Check current state by looking for the 'hidden' class
-    const isGraphMode = tableContainer.classList.contains("hidden");
+    const isGraphMode = tableWrapper.classList.contains("hidden");
 
     if (isGraphMode) {
-        // Switch to Table Mode
-        tableContainer.classList.remove("hidden");
-        chartContainer.classList.add("hidden");
+        // Show Table
+        tableWrapper.classList.remove("hidden");
+        builderRoot.classList.add("hidden");
         toggleBtn.innerText = "📈 Show Graph";
-        toggleBtn.style.background = "#607d8b"; // Blue-grey
+        toggleBtn.style.background = "#607d8b";
     } else {
-        // Switch to Graph Mode
-        tableContainer.classList.add("hidden");
-        chartContainer.classList.remove("hidden");
+        // Show Graph Builder
+        tableWrapper.classList.add("hidden");
+        builderRoot.classList.remove("hidden");
         toggleBtn.innerText = "📋 Show Table";
-        toggleBtn.style.background = "#e91e63"; // Pink
+        toggleBtn.style.background = "#e91e63";
         
-        // Render chart if not already done
-        if (!currentChartInstance) {
-            renderVisualization(chartContainer.querySelector("canvas"));
+        // Initialize the drag-and-drop builder if empty
+        if (builderRoot.innerHTML.trim() === "") {
+            initChartBuilder(builderRoot);
         }
     }
 }
-
 
 function renderVisualization(canvasCtx) {
     if (!currentArrowData || currentArrowData.length === 0) {
@@ -1701,6 +1678,151 @@ function renderVisualization(canvasCtx) {
             scales: {
                 y: { beginAtZero: true }
             }
+        }
+    });
+}
+
+
+function initChartBuilder(container) {
+    if (!currentArrowData || currentArrowData.length === 0) {
+        container.innerHTML = "<p style='padding:20px;'>No data available.</p>";
+        return;
+    }
+
+    const columns = Object.keys(currentArrowData[0]);
+
+    // 1. Build HTML Structure
+    container.innerHTML = `
+        <div class="chart-sidebar">
+            <h4 style="margin:0 0 10px 0; color:#444;">Columns</h4>
+            <div id="col-list-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+        <div class="chart-main">
+            <div class="drop-zone-container">
+                <div id="drop-x" class="drop-zone" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'x')">
+                    <span style="color:#888; pointer-events:none;">📍 X-Axis (Label)</span>
+                    <span style="font-size:10px; color:#aaa; pointer-events:none;">Drag 1 column here</span>
+                </div>
+                <div id="drop-y" class="drop-zone" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'y')">
+                    <span style="color:#888; pointer-events:none;">📊 Y-Axis (Values)</span>
+                    <span style="font-size:10px; color:#aaa; pointer-events:none;">Drag columns here</span>
+                </div>
+            </div>
+            <div class="chart-canvas-container">
+                <canvas id="viz-canvas"></canvas>
+            </div>
+        </div>
+    `;
+
+    // 2. Populate Column List (Draggable Items)
+    const listContainer = container.querySelector("#col-list-container");
+    columns.forEach(col => {
+        const div = document.createElement("div");
+        div.className = "draggable-col";
+        div.draggable = true;
+        div.innerText = col;
+        div.ondragstart = (e) => {
+            e.dataTransfer.setData("text/plain", col);
+            e.dataTransfer.effectAllowed = "copy";
+        };
+        listContainer.appendChild(div);
+    });
+}
+
+// Global Drag & Drop Handlers
+window.allowDrop = (ev) => {
+    ev.preventDefault();
+    ev.currentTarget.classList.add("drag-over");
+};
+
+window.handleDrop = (ev, axis) => {
+    ev.preventDefault();
+    ev.currentTarget.classList.remove("drag-over");
+    const colName = ev.dataTransfer.getData("text/plain");
+
+    if (axis === 'x') {
+        // X Axis: Only 1 Allowed
+        chartState.x = colName;
+        renderPill(document.getElementById("drop-x"), colName, true);
+    } else {
+        // Y Axis: Multiple Allowed (Check duplicates)
+        if (!chartState.y.includes(colName)) {
+            chartState.y.push(colName);
+            renderPill(document.getElementById("drop-y"), colName, false);
+        }
+    }
+    updateUserChart();
+};
+
+function renderPill(container, text, isSingle) {
+    if (isSingle) {
+        // Clear existing if X axis
+        const existing = container.querySelector(".pill");
+        if(existing) existing.remove();
+    }
+    
+    const pill = document.createElement("div");
+    pill.className = "pill";
+    pill.innerHTML = `${text} <span class="remove" onclick="removeChartCol(this, '${text}', '${isSingle ? 'x' : 'y'}')">×</span>`;
+    container.appendChild(pill);
+}
+
+window.removeChartCol = (el, colName, axis) => {
+    el.parentElement.remove();
+    if (axis === 'x') {
+        chartState.x = null;
+    } else {
+        chartState.y = chartState.y.filter(c => c !== colName);
+    }
+    updateUserChart();
+};
+
+function updateUserChart() {
+    const canvas = document.getElementById("viz-canvas");
+    if (!canvas) return;
+
+    // Destroy old chart
+    if (currentChartInstance) {
+        currentChartInstance.destroy();
+        currentChartInstance = null;
+    }
+
+    // Validation
+    if (!chartState.x || chartState.y.length === 0) return;
+
+    // Prepare Data
+    const labels = currentArrowData.map(row => row[chartState.x]);
+    const datasets = chartState.y.map((colKey, index) => {
+        const color = `hsl(${(index * 60) + 200}, 70%, 50%)`; // Blue-ish hues
+        return {
+            label: colKey,
+            data: currentArrowData.map(row => {
+                let val = row[colKey];
+                if (typeof val === 'string') {
+                    // Try to convert "$1,200.50" -> 1200.50
+                    val = parseFloat(val.replace(/,/g, '').replace(/[^\d.-]/g, ''));
+                }
+                return val || 0;
+            }),
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 1,
+            tension: 0.1
+        };
+    });
+
+    // Render Chart
+    currentChartInstance = new Chart(canvas, {
+        type: datasets.length > 2 ? 'line' : 'bar',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                title: { display: true, text: `Analysis: ${chartState.y.join(' vs ')} by ${chartState.x}` }
+            },
+            scales: { y: { beginAtZero: true } }
         }
     });
 }
