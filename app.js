@@ -64,36 +64,23 @@ window.loadBusinessDashboard = loadBusinessDashboard;
 window.toggleMapLayer = toggleMapLayer;
 window.logout = logout;
 
+// ==========================================
+// 3. INITIALIZE DUCKDB
+// ==========================================
 async function initDuckDB() {
     if (db) return; 
     console.log("Initializing DuckDB...");
     try {
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
-        
-        // Select the best bundle for the browser
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
-        
         const worker = await duckdb.createWorker(bundle.mainWorker);
         const logger = new duckdb.ConsoleLogger();
-        
-        // Create the DB instance
         db = new duckdb.AsyncDuckDB(logger, worker);
-        
-        // Instantiate the Wasm module
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-        
-        // Connect
         conn = await db.connect();
-        
         console.log("🦆 DuckDB Ready!");
-        
     } catch (e) {
         console.error("DuckDB Init Failed:", e);
-        const errorMsg = document.getElementById("error-msg");
-        if(errorMsg) {
-            errorMsg.innerText = "DuckDB Init Failed: " + e.message;
-            errorMsg.style.display = "block";
-        }
     }
 }
 
@@ -201,6 +188,7 @@ function setActivePane(id) {
 }
 
 function resetUI() {
+    // Hide all Dashboard Controls
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
@@ -212,13 +200,15 @@ function resetUI() {
     document.getElementById("approvals-ui").classList.add("hidden"); 
     document.getElementById("business-ui").classList.add("hidden"); 
     
-    document.getElementById("view-container").classList.remove("hidden");
-    document.getElementById("pivot-wrapper").classList.add("hidden");
-    document.getElementById("filter-box").classList.remove("hidden");
+    // Reset Data View Containers
+    document.getElementById("view-container").classList.remove("hidden"); // Default Grid
+    document.getElementById("pivot-wrapper").classList.add("hidden");     // Hide Pivot
+    document.getElementById("filter-box").classList.remove("hidden");     // Show SQL Filters
     
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
+// --- FEEDBACK ---
 function openFeedbackModal() { document.getElementById("feedback-modal").classList.remove("hidden"); }
 function closeFeedbackModal() { document.getElementById("feedback-modal").classList.add("hidden"); }
 
@@ -1066,7 +1056,7 @@ async function processAndRenderPivot(uint8Array, fileName) {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, ignore_errors=true)`);
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
         }
     } catch(e) {
         console.error("DuckDB Loading Error:", e);
@@ -1166,7 +1156,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             let finalValues = dataJson.values;
             
-            // REVERTED HEADER MERGING LOGIC (SIMPLER)
+            // CONSTRUCT MERGED HEADER LOGIC
             if (finalValues.length >= 2) {
                 const rowDates = finalValues[0];
                 const rowMetrics = finalValues[1];
@@ -1179,7 +1169,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     
                     if (dateVal !== "") lastDate = dateVal;
                     
-                    if (lastDate) {
+                    if (lastDate && lastDate !== metricVal) {
                         newHeader.push(`${lastDate} - ${metricVal}`);
                     } else {
                         newHeader.push(metricVal);
@@ -1193,7 +1183,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             await db.registerFileText(csvFileName, csvText);
             
-            // REVERTED TO read_csv_auto (No header=true enforcement)
+            // REVERTED TO read_csv_auto FOR STABILITY
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
