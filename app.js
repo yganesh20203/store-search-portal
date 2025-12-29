@@ -20,10 +20,13 @@ let currentPivotTableName = "";
 let mapInstance = null;
 let mapLayers = {
     flipkart: null,
-    metro: null
+    metro: null,
+    dmart: null
 };
 
-// Attach functions to Window for HTML access
+// ==========================================
+// 2. ATTACH FUNCTIONS TO WINDOW
+// ==========================================
 window.unlockAndLogin = unlockAndLogin;
 window.loadSalesDashboard = loadSalesDashboard;
 window.loadMemberDashboard = loadMemberDashboard;
@@ -55,16 +58,14 @@ window.openResolveModal = openResolveModal;
 window.closeResolveModal = closeResolveModal; 
 window.confirmResolve = confirmResolve; 
 window.showRowDetails = showRowDetails;
-// Mail Search Feature
 window.loadApprovalsDashboard = loadApprovalsDashboard;
 window.redirectMailSearch = redirectMailSearch;
-// KYB (Map) Feature
 window.loadBusinessDashboard = loadBusinessDashboard;
-window.toggleMapLayer = toggleMapLayer; // NEW
+window.toggleMapLayer = toggleMapLayer;
 window.logout = logout;
 
 // ==========================================
-// 2. INITIALIZE DUCKDB
+// 3. INITIALIZE DUCKDB
 // ==========================================
 async function initDuckDB() {
     if (db) return; 
@@ -84,7 +85,7 @@ async function initDuckDB() {
 }
 
 // ==========================================
-// 3. AUTHENTICATION
+// 4. AUTHENTICATION & LOGOUT
 // ==========================================
 async function unlockAndLogin() {
     const userPass = document.getElementById("access-key").value;
@@ -144,8 +145,14 @@ async function generateAccessToken(creds) {
     return data.access_token;
 }
 
+function logout() {
+    if(!confirm("Are you sure you want to logout?")) return;
+    localStorage.removeItem("portal_user_email");
+    window.location.reload();
+}
+
 // ==========================================
-// 4. UI HELPERS & FEEDBACK
+// 5. UI HELPERS & FEEDBACK
 // ==========================================
 
 function changeLayout(numPanes) {
@@ -234,7 +241,7 @@ async function submitFeedback() {
 }
 
 // ==========================================
-// 5. SALES DASHBOARD
+// 6. DASHBOARD LOADERS
 // ==========================================
 
 async function loadSalesDashboard() {
@@ -274,10 +281,6 @@ function selectMonth(folderId, btnElement) {
     document.getElementById("store-search-box").classList.remove("hidden");
 }
 
-// ==========================================
-// 6. MEMBER DASHBOARD
-// ==========================================
-
 async function loadMemberDashboard() {
     resetUI();
     document.getElementById("member-ui").classList.remove("hidden");
@@ -308,10 +311,6 @@ async function loadMemberDashboard() {
         listContainer.innerHTML = "Error: " + e.message;
     }
 }
-
-// ==========================================
-// 7. TRACKER DASHBOARD
-// ==========================================
 
 async function loadTrackerDashboard() {
     resetUI();
@@ -361,10 +360,6 @@ function openTrackerCategory(groupName) {
     }
 }
 
-// ==========================================
-// 8. WALKIN DASHBOARD
-// ==========================================
-
 async function loadWalkinDashboard() {
     resetUI();
     document.getElementById("walkin-ui").classList.remove("hidden");
@@ -398,17 +393,13 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
     titleElem.innerText = `📂 ${title}`;
     list.innerHTML = "⏳ Loading...";
 
-    // Handle History
-    if (backMode === 'dashboard') {
-        walkinHistoryStack = []; 
-    }
+    if (backMode === 'dashboard') walkinHistoryStack = []; 
 
     if (!folderId || folderId.includes("PASTE")) {
         list.innerHTML = "<p style='color:red'>Folder ID not configured in config.js</p>";
         return;
     }
 
-    // Render Back Button
     if (walkinHistoryStack.length > 0) {
         const backBtn = document.createElement("button");
         backBtn.className = "folder-btn";
@@ -452,36 +443,28 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
                 if (isFolder) {
                     icon = `<div style="font-size:40px;">📁</div>`;
-                    btn.style.background = "#fff8e1"; // Highlight Folders
-                } 
-                else if (file.mimeType.includes("image") && file.thumbnailLink) {
+                    btn.style.background = "#fff8e1"; 
+                } else if (file.mimeType.includes("image") && file.thumbnailLink) {
                     icon = `<img src="${file.thumbnailLink}" style="width:100%; height:60px; object-fit:contain;">`;
-                } 
-                else if (file.mimeType.includes("spreadsheet")) {
+                } else if (file.mimeType.includes("spreadsheet")) {
                     icon = `<div style="font-size:30px;">📊</div>`;
-                } 
-                else {
+                } else {
                     icon = `<div style="font-size:30px;">📄</div>`;
                 }
 
                 btn.innerHTML = `${icon}<div style="font-size:11px; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${file.name}</div>`;
 
-                // --- SMART CLICK LOGIC ---
                 btn.onclick = () => {
                     if (isFolder) {
                         walkinHistoryStack.push({ title: title, id: folderId });
                         loadWalkinCategory(file.name, file.id, 'push');
-                    } 
-                    else if (file.mimeType.includes("image")) {
+                    } else if (file.mimeType.includes("image")) {
                         renderImage(file.id, file.name);
-                    } 
-                    else if (file.mimeType.includes("spreadsheet")) {
+                    } else if (file.mimeType.includes("spreadsheet")) {
                         loadFileIntoDuckDB(file.id, file.name, 'sheet', 0);
-                    } 
-                    else if (file.mimeType.includes("octet-stream") || file.name.endsWith(".parquet") || file.name.endsWith(".csv")) {
+                    } else if (file.mimeType.includes("octet-stream") || file.name.endsWith(".parquet") || file.name.endsWith(".csv")) {
                         loadFileIntoDuckDB(file.id, file.name, 'parquet');
-                    }
-                    else {
+                    } else {
                         window.open(file.webViewLink, '_blank');
                     }
                 };
@@ -494,10 +477,6 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
         list.innerHTML = "Error: " + e.message;
     }
 }
-
-// ==========================================
-// 9. HOURLY SALES DASHBOARD
-// ==========================================
 
 async function loadHourlyDashboard() {
     resetUI();
@@ -611,10 +590,6 @@ async function renderImage(fileId, timeLabel) {
         contentArea.innerHTML = `<p style="color:red">Error loading image: ${e.message}</p>`;
     }
 }
-
-// ==========================================
-// 10. TICKETING SYSTEM
-// ==========================================
 
 async function loadTicketDashboard() {
     resetUI();
@@ -756,14 +731,9 @@ async function confirmResolve() {
     }
 }
 
-// ==========================================
-// 11. APPROVALS / MAIL SEARCH (UPDATED)
-// ==========================================
-
 function loadApprovalsDashboard() {
     resetUI();
     document.getElementById("approvals-ui").classList.remove("hidden");
-    // No fetching logic here, just showing the Mail Search UI
 }
 
 function redirectMailSearch() {
@@ -774,13 +744,10 @@ function redirectMailSearch() {
 
     let queryParts = [];
 
-    // Gmail Search Syntax Construction
     if (target) {
-        // Broad search for interactions with this person
         queryParts.push(`(from:${target} OR to:${target})`);
     }
     if (fromDate) {
-        // Date format YYYY/MM/DD works best for Gmail search url
         queryParts.push(`after:${fromDate.replace(/-/g, '/')}`);
     }
     if (toDate) {
@@ -798,19 +765,13 @@ function redirectMailSearch() {
     const queryString = encodeURIComponent(queryParts.join(" "));
     const gmailUrl = `https://mail.google.com/mail/u/0/#search/${queryString}`;
     
-    // Open in new tab
     window.open(gmailUrl, '_blank');
 }
-
-// ==========================================
-// 12. DAILY UPDATE DASHBOARD (INBOX)
-// ==========================================
 
 async function loadDailyUpdateDashboard() {
     resetUI();
     document.getElementById("daily-ui").classList.remove("hidden");
     
-    // Auto-load if email is saved
     const savedEmail = localStorage.getItem("portal_user_email");
     if (savedEmail) {
         document.getElementById("user-identity-email").value = savedEmail;
@@ -842,7 +803,6 @@ async function fetchDailyUpdates() {
         let foundCount = 0;
         let html = "";
 
-        // Loop Data (Skip Header)
         data.values.slice(1).forEach(row => {
             const rEmail = row[0]?.toString().trim().toLowerCase();
             const rSubject = row[1];
@@ -893,17 +853,12 @@ async function fetchDailyUpdates() {
     }
 }
 
-// ==========================================
-// 13. WORK ON REPORTS (PIVOT MODE)
-// ==========================================
-
 async function loadWorkDashboard() {
     resetUI();
     document.getElementById("work-ui").classList.remove("hidden");
     const list = document.getElementById("work-file-list");
     list.innerHTML = "⏳ Scanning Drive...";
 
-    // Ensure Local File Upload Input is cleared
     const uploadInput = document.getElementById("local-file-upload");
     if(uploadInput) uploadInput.value = "";
 
@@ -935,10 +890,7 @@ async function loadWorkDashboard() {
 
                 btn.innerHTML = `<div style="font-size:30px;">${icon}</div><div style="font-size:11px;">${file.name}</div>`;
                 
-                // Smart Handling for Remote Files
                 if (file.name.endsWith(".xlsx")) {
-                     // TODO: Remote Excel Fetch + Convert logic could go here. 
-                     // For now, let's treat it as pivot load attempt
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
                 } else {
                      btn.onclick = () => loadRemotePivotFile(file.id, file.name);
@@ -958,7 +910,6 @@ async function loadRemotePivotFile(fileId, fileName) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Downloading Pivot Data...";
     
-    // Switch to Pivot View
     document.getElementById("view-container").classList.add("hidden");
     document.getElementById("filter-box").classList.add("hidden");
     document.getElementById("pivot-wrapper").classList.remove("hidden");
@@ -979,17 +930,12 @@ async function loadRemotePivotFile(fileId, fileName) {
     }
 }
 
-// ==========================================
-// 14. LOCAL FILE UPLOAD & EXCEL CONVERSION
-// ==========================================
-
 async function handleLocalFileUpload(input) {
     const file = input.files[0];
     if (!file) return;
 
     const fileName = file.name.toLowerCase();
 
-    // 1. Check if it's an Excel file
     if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
         const statusDiv = document.getElementById("loading-status");
         statusDiv.innerHTML = "⏳ Reading Excel File...";
@@ -1000,7 +946,6 @@ async function handleLocalFileUpload(input) {
             currentExcelWorkbook = XLSX.read(data, { type: 'array' });
             currentExcelFileName = file.name.split('.')[0];
             
-            // Show Conversion Modal
             const modal = document.getElementById("convert-modal");
             const select = document.getElementById("sheet-selector");
             select.innerHTML = "";
@@ -1019,11 +964,9 @@ async function handleLocalFileUpload(input) {
         return; 
     }
 
-    // 2. Standard CSV/Parquet Handling
     loadDirectToPivot(file);
 }
 
-// === EXCEL CONVERSION PROCESSOR ===
 async function processExcelConversion() {
     const modal = document.getElementById("convert-modal");
     const sheetName = document.getElementById("sheet-selector").value;
@@ -1034,9 +977,7 @@ async function processExcelConversion() {
     modal.classList.add("hidden");
     statusDiv.innerHTML = `⏳ Converting '${sheetName}' to ${format.toUpperCase()}...`;
 
-    // 1. Get Data from Sheet
     const worksheet = currentExcelWorkbook.Sheets[sheetName];
-    // Convert to CSV string first
     const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
 
     if (!csvOutput || csvOutput.trim().length === 0) {
@@ -1053,11 +994,9 @@ async function processExcelConversion() {
         fileDataForDuck = new Uint8Array(await fileBlob.arrayBuffer()); 
     } 
     else if (format === 'parquet') {
-        // Create Parquet via DuckDB
         const tempCsvName = "temp_convert.csv";
         await db.registerFileText(tempCsvName, csvOutput);
         
-        // --- CRITICAL FIX: ignore_errors=true ---
         await conn.query(`CREATE OR REPLACE TABLE temp_table AS SELECT * FROM read_csv_auto('${tempCsvName}', ignore_errors=true)`);
         
         const parquetName = `${currentExcelFileName}.parquet`;
@@ -1067,13 +1006,11 @@ async function processExcelConversion() {
         fileDataForDuck = parquetBuffer;
         fileBlob = new Blob([parquetBuffer], { type: 'application/octet-stream' });
         
-        // Cleanup
         await db.dropFile(tempCsvName);
         await db.dropFile(parquetName); 
         await conn.query("DROP TABLE temp_table");
     }
 
-    // 2. Download File if requested
     if (saveFile && fileBlob) {
         const url = URL.createObjectURL(fileBlob);
         const a = document.createElement('a');
@@ -1085,7 +1022,6 @@ async function processExcelConversion() {
         URL.revokeObjectURL(url);
     }
 
-    // 3. Load into Pivot Engine
     statusDiv.innerHTML = "⏳ Loading into Pivot...";
     await processAndRenderPivot(fileDataForDuck, finalFileName);
     statusDiv.innerHTML = "✅ Loaded & Ready!";
@@ -1095,7 +1031,6 @@ async function loadDirectToPivot(file) {
     const statusDiv = document.getElementById("loading-status");
     statusDiv.innerHTML = "⏳ Loading Local File...";
 
-    // Switch to Pivot View
     document.getElementById("view-container").classList.add("hidden");
     document.getElementById("filter-box").classList.add("hidden");
     document.getElementById("pivot-wrapper").classList.remove("hidden");
@@ -1111,20 +1046,16 @@ async function loadDirectToPivot(file) {
     }
 }
 
-// === CENTRAL PIVOT LOADER ===
 async function processAndRenderPivot(uint8Array, fileName) {
-    // 1. Register in DuckDB
     const tableName = `pivot_table_${Date.now()}`;
-    currentPivotTableName = tableName; // Track for filtering
+    currentPivotTableName = tableName; 
     
     await db.registerFileBuffer(fileName, uint8Array);
 
-    // 2. Load Table
     try {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
-            // --- CRITICAL FIX: ignore_errors=true ---
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
         }
     } catch(e) {
@@ -1133,16 +1064,13 @@ async function processAndRenderPivot(uint8Array, fileName) {
         return;
     }
 
-    // 3. Setup Filters for this file & SHOW FILTER BOX
     await setupFilterDropdown(tableName); 
-    document.getElementById("filter-box").classList.remove("hidden"); // <--- THIS MAKES IT VISIBLE
+    document.getElementById("filter-box").classList.remove("hidden"); 
     document.getElementById("filter-input").value = ""; 
 
-    // 4. Initial Render
     await runPivotQueryAndRender(`SELECT * FROM ${tableName} LIMIT 500000`);
 }
 
-// Helper to draw Pivot
 async function runPivotQueryAndRender(query) {
     try {
         const result = await conn.query(query);
@@ -1158,10 +1086,6 @@ async function runPivotQueryAndRender(query) {
         console.error("Pivot Render Error:", e);
     }
 }
-
-// ==========================================
-// 15. DATA LOADING ENGINE (CORE)
-// ==========================================
 
 async function findAndLoadReport() {
     const storeId = document.getElementById("store-id-input").value.trim();
@@ -1231,6 +1155,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
             let finalValues = dataJson.values;
+            
+            // CONSTRUCT MERGED HEADER LOGIC
             if (finalValues.length >= 2) {
                 const rowDates = finalValues[0];
                 const rowMetrics = finalValues[1];
@@ -1240,10 +1166,17 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 for (let i = 0; i < rowMetrics.length; i++) {
                     let dateVal = rowDates[i] || "";
                     let metricVal = rowMetrics[i] || `col${i}`;
+                    
                     if (dateVal !== "") lastDate = dateVal;
-                    if (lastDate) newHeader.push(`${lastDate} - ${metricVal}`);
-                    else newHeader.push(metricVal);
+                    
+                    // Logic to combine headers if both exist
+                    if (lastDate && lastDate !== metricVal) {
+                        newHeader.push(`${lastDate} - ${metricVal}`);
+                    } else {
+                        newHeader.push(metricVal);
+                    }
                 }
+                // Replace the first two rows with the single merged header row
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
 
@@ -1252,8 +1185,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             await db.registerFileText(csvFileName, csvText);
             
-            // --- CRITICAL FIX: ignore_errors=true ---
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
+            // --- CRITICAL FIX: header=true force DuckDB to use the first row as headers ---
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', header=true, ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
@@ -1282,8 +1215,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // --- CRITICAL FIX: ignore_errors=true ---
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', header=true, ignore_errors=true)`);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
@@ -1301,7 +1233,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     }
 }
 
-// Helper: JSON -> CSV
 function arrayToCSV(data) {
     return data.map(row =>
         row.map(field => {
@@ -1314,10 +1245,6 @@ function arrayToCSV(data) {
         }).join(',')
     ).join('\n');
 }
-
-// ==========================================
-// 16. AI SUMMARY ENGINE
-// ==========================================
 
 async function summarizeData() {
     const modal = document.getElementById("detail-modal");
@@ -1376,10 +1303,6 @@ async function summarizeData() {
     }
 }
 
-// ==========================================
-// 17. SQL FILTERING & RENDERING
-// ==========================================
-
 async function setupFilterDropdown(tableName) {
     const schema = await conn.query(`DESCRIBE ${tableName}`);
     const dropdown = document.getElementById("column-select");
@@ -1399,7 +1322,6 @@ async function applyTableFilter() {
     const column = document.getElementById("column-select").value;
     const limit = document.getElementById("row-limit-select").value;
     
-    // DETECT MODE: Are we in Pivot Mode (Pivot Wrapper is visible)?
     const isPivotMode = !document.getElementById("pivot-wrapper").classList.contains("hidden");
 
     let tableName = "";
@@ -1407,11 +1329,9 @@ async function applyTableFilter() {
         tableName = currentPivotTableName;
         if (!tableName) return;
     } else {
-        // Standard Grid Mode
         tableName = `table_${activePaneId.replace('-', '_')}`;
     }
     
-    // Construct Query
     let query = `SELECT * FROM ${tableName}`;
     
     if (filterText) {
@@ -1425,12 +1345,11 @@ async function applyTableFilter() {
     
     if (limit !== "all") query += ` LIMIT ${limit}`;
 
-    // Execute based on mode
     try {
         if (isPivotMode) {
-            await runPivotQueryAndRender(query); // Pivot Mode
+            await runPivotQueryAndRender(query); 
         } else {
-            const result = await conn.query(query); // Grid Mode
+            const result = await conn.query(query); 
             renderTableFromArrow(result);
         }
     } catch (e) {
@@ -1438,9 +1357,6 @@ async function applyTableFilter() {
     }
 }
 
-let currentArrowData = null; 
-
-// RENDER TABLE (CSS Styled)
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
@@ -1494,101 +1410,55 @@ window.onclick = function(event) {
     if (event.target == modal) closeModal();
 }
 
-// ==========================================
-// 18. KNOW YOUR BUSINESS (MAP DASHBOARD)
-// ==========================================
-
 async function loadBusinessDashboard() {
     resetUI();
     document.getElementById("business-ui").classList.remove("hidden");
     
-    // 1. Initialize Map (if not already done)
     if (!mapInstance) {
-        // --- A. Define Base Layers ---
-        const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        });
+        const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' });
+        const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap' });
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' });
 
-        const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)'
-        });
-
-        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-        });
-
-        // --- B. Create Map with Default Layer ---
         mapInstance = L.map('business-map', {
-            center: [20.5937, 78.9629], // Center on India
+            center: [20.5937, 78.9629],
             zoom: 5,
-            layers: [streets] // Default to Streets
+            layers: [streets]
         });
 
-        // --- C. Add Layer Control (The Switcher Box) ---
-        const baseMaps = {
-            "🗺️ Streets": streets,
-            "🏔️ Terrain": terrain,
-            "🛰️ Satellite": satellite
-        };
+        const baseMaps = { "🗺️ Streets": streets, "🏔️ Terrain": terrain, "🛰️ Satellite": satellite };
         L.control.layers(baseMaps).addTo(mapInstance);
 
-        // --- D. Initialize Warehouse Layer Groups ---
+        const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+        const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+        const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
         mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
         mapLayers.metro = L.layerGroup().addTo(mapInstance);
         mapLayers.dmart = L.layerGroup().addTo(mapInstance);
 
-        // --- E. Define Custom Icons ---
-        const blueIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-
-        const redIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-
-        const greenIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-        });
-
-        // --- F. Plot Markers from Config ---
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
             CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: blueIcon }) 
-                .bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`)
-                .addTo(mapLayers.flipkart);
+                L.marker([wh.lat, wh.lng], { icon: blueIcon }).bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`).addTo(mapLayers.flipkart);
             });
         }
 
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
             CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: redIcon }) 
-                .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
-                .addTo(mapLayers.metro);
+                L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`).addTo(mapLayers.metro);
             });
         }
 
         if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
             CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: greenIcon }) 
-                .bindPopup(`<b>🛒 DMart</b><br>${wh.name}`)
-                .addTo(mapLayers.dmart);
+                L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart);
             });
         }
     }
     
-    // --- Force Map Resize (Critical for visibility) ---
     setTimeout(() => {
         mapInstance.invalidateSize();
     }, 200);
 
-    // ... (Keep the rest of the Pincode Logic below as it is) ...
-    // 3. Calculate Pincode Metrics using DuckDB
     const tableName = currentPivotTableName || `table_${activePaneId.replace('-', '_')}`;
     const container = document.getElementById("pincode-table-container");
 
@@ -1661,7 +1531,6 @@ async function loadBusinessDashboard() {
     }
 }
 
-// Toggle Map Layers
 function toggleMapLayer(layerKey) {
     if (!mapInstance) return;
     
@@ -1675,18 +1544,4 @@ function toggleMapLayer(layerKey) {
             mapInstance.removeLayer(layer);
         }
     }
-}
-
-
-window.logout = logout;
-
-
-function logout() {
-
-    if(!confirm("Are you sure you want to logout?")) return;
-
-
-    localStorage.removeItem("portal_user_email");
-   
-    window.location.reload();
 }
