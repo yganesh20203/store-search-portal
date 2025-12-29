@@ -1691,13 +1691,19 @@ function initChartBuilder(container) {
 
     const columns = Object.keys(currentArrowData[0]);
 
-    // 1. Build HTML Structure
+    // 1. Build HTML Structure (With Reset Button)
     container.innerHTML = `
         <div class="chart-sidebar">
             <h4 style="margin:0 0 10px 0; color:#444;">Columns</h4>
             <div id="col-list-container" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
         <div class="chart-main">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; color:#555;">Drag & Drop Chart Builder</h4>
+                <button onclick="window.resetChartBuilder()" style="background:#ff9800; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; display:flex; align-items:center; gap:5px;">
+                    🔄 Reset Graph
+                </button>
+            </div>
             <div class="drop-zone-container">
                 <div id="drop-x" class="drop-zone" ondragover="allowDrop(event)" ondrop="handleDrop(event, 'x')">
                     <span style="color:#888; pointer-events:none;">📍 X-Axis (Label)</span>
@@ -1826,3 +1832,35 @@ function updateUserChart() {
         }
     });
 }
+
+window.resetChartBuilder = function() {
+    // 1. Reset Internal Data State
+    chartState = { x: null, y: [] };
+
+    // 2. Clear HTML Pills (Remove existing selections from the drop zones)
+    const xZone = document.getElementById("drop-x");
+    const yZone = document.getElementById("drop-y");
+    
+    // Remove only elements with class 'pill', keep the instruction text
+    if (xZone) {
+        xZone.querySelectorAll(".pill").forEach(el => el.remove());
+    }
+    if (yZone) {
+        yZone.querySelectorAll(".pill").forEach(el => el.remove());
+    }
+
+    // 3. Destroy the Chart Instance
+    if (currentChartInstance) {
+        currentChartInstance.destroy();
+        currentChartInstance = null;
+    }
+    
+    // 4. Visually Clear the Canvas
+    const canvas = document.getElementById("viz-canvas");
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    console.log("Graph builder reset.");
+};
