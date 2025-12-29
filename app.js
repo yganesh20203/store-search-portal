@@ -1235,9 +1235,19 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             }
             
             // REGISTER JSON FILE IN DUCKDB
+            // REGISTER JSON FILE IN DUCKDB
             const jsonFileName = `temp_${tableName}.json`;
             const jsonString = JSON.stringify(finalJsonData);
             await db.registerFileText(jsonFileName, jsonString);
+
+            // ==================================================
+            // FIX: Force Load JSON Extension immediately before use
+            // ==================================================
+            try {
+                await conn.query(`INSTALL json; LOAD json;`); 
+            } catch (e) {
+                console.warn("JSON Extension already loaded or install skipped.");
+            }
 
             // LOAD JSON
             // read_json_auto is much smarter than read_csv
