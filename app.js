@@ -1174,12 +1174,11 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             let rawData = dataJson.values;
 
             // --- HEADER MERGING LOGIC ---
-            // If we have at least 2 rows, we try to merge Row 1 + Row 2 for better headers
             if (rawData.length >= 2) {
                 const row1 = rawData[0]; 
                 const row2 = rawData[1]; 
                 let mergedHeader = [];
-                let headerCounts = {}; // To handle duplicate names
+                let headerCounts = {}; 
                 
                 const maxCols = Math.max(row1.length, row2.length);
 
@@ -1187,18 +1186,14 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     let r1 = (row1[i] || "").toString().trim();
                     let r2 = (row2[i] || "").toString().trim();
                     
-                    // Logic: If Row 1 exists and is distinct, prepend it.
-                    // e.g. "2023" + "Sales" -> "2023 - Sales"
                     let finalName = r2;
                     if (r1 && r1 !== r2 && !r2.toLowerCase().includes("market") && !r2.toLowerCase().includes("store")) {
                         finalName = `${r1} - ${r2}`;
                     }
                     if (!finalName) finalName = `Column_${i+1}`;
 
-                    // Sanitize: Remove quotes/newlines to prevent CSV breakage
                     finalName = finalName.replace(/["',\n\r]/g, " ").trim();
 
-                    // Deduplicate: "Sales" -> "Sales_2"
                     if (headerCounts[finalName]) {
                         headerCounts[finalName]++;
                         finalName = `${finalName}_${headerCounts[finalName]}`;
@@ -1209,11 +1204,9 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     mergedHeader.push(finalName);
                 }
 
-                // Replace the first two rows with our single clean header row
                 const bodyRows = rawData.slice(2); 
                 rawData = [mergedHeader, ...bodyRows];
             } else if (rawData.length === 1) {
-                // Single row sheet handling
                 rawData[0] = rawData[0].map((c, i) => c || `Column_${i+1}`);
             }
 
@@ -1224,14 +1217,13 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             const tempFileName = `temp_${tableName}.csv`;
             await db.registerFileText(tempFileName, csvText);
 
-            // KEY FIX: all_varchar=true
-            // This forces DuckDB to treat everything as String. 
-            // It prevents crashes from mixed types (e.g. "100" vs "N/A") and HugeInt errors.
+            // FIX: Added auto_detect=true alongside all_varchar=true
             await conn.query(`
                 CREATE OR REPLACE TABLE ${tableName} AS 
                 SELECT * FROM read_csv('${tempFileName}', 
                     header=true, 
-                    all_varchar=true, 
+                    auto_detect=true,   -- REQUIRED for read_csv to find columns
+                    all_varchar=true,   -- Forces all columns to Text type
                     ignore_errors=true,
                     null_padding=true
                 )
@@ -1239,7 +1231,6 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
             
-            // Add "Open Sheet" button
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -1269,8 +1260,17 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // Also use all_varchar=true for uploaded CSVs to be safe
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, all_varchar=true, ignore_errors=true, null_padding=true)`);
+                 // FIX: Added auto_detect=true here as well
+                 await conn.query(`
+                    CREATE OR REPLACE TABLE ${tableName} AS 
+                    SELECT * FROM read_csv('${fileName}', 
+                        header=true, 
+                        auto_detect=true, 
+                        all_varchar=true, 
+                        ignore_errors=true, 
+                        null_padding=true
+                    )
+                 `);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
@@ -1282,12 +1282,11 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         statusDiv.innerHTML = "";
 
     } catch (e) {
-        console.error("FULL LOAD ERROR:", e); // This logs the real error to console
+        console.error("FULL LOAD ERROR:", e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
         contentArea.innerHTML = `<div style="color:red; text-align:center; padding:20px;">
             <h3>❌ Failed to Load</h3>
             <p>${e.message}</p>
-            <p style="font-size:10px; color:#666;">Check console for details.</p>
         </div>`;
     }
 }
