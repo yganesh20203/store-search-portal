@@ -67,12 +67,16 @@ window.logout = logout;
 // ==========================================
 // 3. INITIALIZE DUCKDB
 // ==========================================
+// ==========================================
+// 3. INITIALIZE DUCKDB (UPDATED FIX)
+// ==========================================
 async function initDuckDB() {
     if (db) return; 
     console.log("Initializing DuckDB...");
     try {
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+        
         const worker = await duckdb.createWorker(bundle.mainWorker);
         const logger = new duckdb.ConsoleLogger();
         db = new duckdb.AsyncDuckDB(logger, worker);
@@ -80,11 +84,23 @@ async function initDuckDB() {
         conn = await db.connect();
 
         // ==================================================
-        // FIX: ENABLE JSON EXTENSION MANUALLY
+        // FIX: Manually Register JSON Extension URL
         // ==================================================
+        // The regex finds the base URL from the main worker path
+        const mainUrl = bundle.mainWorker; 
+        const baseUrl = mainUrl.substring(0, mainUrl.lastIndexOf('/') + 1);
+        
+        // Construct the specific URL for the json extension
+        // Note: The extension filename usually matches the eh/mvp mode
+        const jsonExtUrl = `${baseUrl}json.duckdb_extension.wasm`;
+
+        console.log("📍 Registering JSON extension from:", jsonExtUrl);
+
+        // Register the path so "INSTALL json" knows where to look
+        await db.registerExtension('json', jsonExtUrl);
+
+        // Now install and load explicitly
         await conn.query(`
-            SET autoinstall_known_extensions=1;
-            SET autoload_known_extensions=1;
             INSTALL json;
             LOAD json;
         `);
@@ -1234,28 +1250,30 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                  finalJsonData = []; // No data rows
             }
             
-            // REGISTER JSON FILE IN DUCKDB
+           
+
             // REGISTER JSON FILE IN DUCKDB
             const jsonFileName = `temp_${tableName}.json`;
             const jsonString = JSON.stringify(finalJsonData);
             await db.registerFileText(jsonFileName, jsonString);
 
             // ==================================================
-            // FIX: Force Load JSON Extension immediately before use
+            // FIX: Ensure JSON is loaded before query
             // ==================================================
             try {
-                await conn.query(`INSTALL json; LOAD json;`); 
+                // We just try to load it. If it's already loaded, this is fine.
+                // We use LOAD directly because we registered it in initDuckDB
+                await conn.query(`LOAD json;`); 
             } catch (e) {
-                console.warn("JSON Extension already loaded or install skipped.");
+                // If it fails, it might already be loaded or registered
+                console.warn("JSON Load check warning:", e.message);
             }
 
             // LOAD JSON
-            // read_json_auto is much smarter than read_csv
             await conn.query(`
                 CREATE OR REPLACE TABLE ${tableName} AS 
                 SELECT * FROM read_json_auto('${jsonFileName}')
             `);
-
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
             
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
