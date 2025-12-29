@@ -1155,57 +1155,41 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
             let finalValues = dataJson.values;
-            
-            // CONSTRUCT MERGED HEADER LOGIC
-            if (finalValues.length >= 2) {
-                const rowDates = finalValues[0];
-                const rowMetrics = finalValues[1];
-                let newHeader = [];
-                let lastDate = "";
 
-                for (let i = 0; i < rowMetrics.length; i++) {
-                    let dateVal = rowDates[i] || "";
-                    let metricVal = rowMetrics[i] || `col${i}`;
-                    
-                    if (dateVal !== "") lastDate = dateVal;
-                    
-                    if (lastDate && lastDate !== metricVal) {
-                        newHeader.push(`${lastDate} - ${metricVal}`);
-                    } else {
-                        newHeader.push(metricVal);
-                    }
-                }
-                finalValues = [newHeader, ...finalValues.slice(2)];
+            // --- CHANGE 1: IGNORE FIRST ROW (Start from Row 2) ---
+            if (finalValues.length > 1) {
+                finalValues = finalValues.slice(1); // Removes Index 0 (Row 1)
             }
-
-            // --- 🛑 FIX START: ENSURE UNIQUE HEADERS 🛑 ---
+            
+            // --- ENSURE UNIQUE HEADERS (On the new top row) ---
             let headers = finalValues[0];
             let uniqueHeaders = [];
             let headerCounts = {};
 
-            headers.forEach((h) => {
-                // Clean the header name
-                let cleanH = (h || "Column").toString().trim().replace(/"/g, ''); 
-                if(!cleanH) cleanH = "Column";
+            if (headers) {
+                headers.forEach((h) => {
+                    // Clean the header name
+                    let cleanH = (h || "Column").toString().trim().replace(/"/g, ''); 
+                    if(!cleanH) cleanH = "Column";
 
-                if (headerCounts[cleanH]) {
-                    headerCounts[cleanH]++;
-                    uniqueHeaders.push(`${cleanH}_${headerCounts[cleanH]}`);
-                } else {
-                    headerCounts[cleanH] = 1;
-                    uniqueHeaders.push(cleanH);
-                }
-            });
-            finalValues[0] = uniqueHeaders;
-            // --- 🛑 FIX END ---
+                    if (headerCounts[cleanH]) {
+                        headerCounts[cleanH]++;
+                        uniqueHeaders.push(`${cleanH}_${headerCounts[cleanH]}`);
+                    } else {
+                        headerCounts[cleanH] = 1;
+                        uniqueHeaders.push(cleanH);
+                    }
+                });
+                finalValues[0] = uniqueHeaders;
+            }
 
             const csvText = arrayToCSV(finalValues);
             const csvFileName = `temp_${tableName}.csv`;
             
             await db.registerFileText(csvFileName, csvText);
             
-            // Using read_csv with header=true explicitly
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${csvFileName}', header=true, ignore_errors=true)`);
+            // --- CHANGE 2: FIXED SQL QUERY (Added auto_detect=true) ---
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${csvFileName}', header=true, auto_detect=true, ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
@@ -1223,7 +1207,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
-            // (Parquet Logic - Unchanged)
+            // Parquet/CSV File Logic
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
