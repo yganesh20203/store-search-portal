@@ -1136,26 +1136,25 @@ function arrayToCSV(data) {
 
 async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     const statusDiv = document.getElementById("loading-status");
-    statusDiv.innerHTML = "⏳ Fetching Data...";
+    statusDiv.innerHTML = "⏳ Fetching & Normalizing Data...";
     
     const pane = document.getElementById(activePaneId);
     if (!pane) { alert("Error: No active view selected"); return; }
     
     const contentArea = pane.querySelector(".content-area");
+    // Normalize table name to avoid syntax errors
     const tableName = `table_${activePaneId.replace('-', '_')}`;
 
     contentArea.innerHTML = "<p>⏳ Loading...</p>";
     document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
-        let finalJsonObjects = [];
         let sheetTitle = fileName;
 
         // ===============================================
-        // 1. FETCH DATA (SHEET OR FILE)
+        // CASE A: GOOGLE SHEETS (CONVERT TO JSON)
         // ===============================================
         if (type === 'sheet') {
-            // ... (Standard Google Sheet Fetching Logic) ...
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
@@ -1171,14 +1170,17 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             const dataJson = await dataResp.json();
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
-            let rawData = dataJson.values;
 
-            // --- HEADER MERGING ---
+            let rawData = dataJson.values;
+            let finalJsonData = [];
+
+            // --- HEADER MERGING LOGIC ---
             if (rawData.length >= 2) {
                 const row1 = rawData[0]; 
                 const row2 = rawData[1]; 
                 let mergedHeader = [];
                 let headerCounts = {}; 
+                
                 const maxCols = Math.max(row1.length, row2.length);
 
                 for (let i = 0; i < maxCols; i++) {
@@ -1186,12 +1188,12 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     let r2 = (row2[i] || "").toString().trim();
                     
                     let finalName = r2;
-                    if (r1 && r1 !== r2 && !r2.toLowerCase().includes("market") && !r2.toLowerCase().includes("store")) {
+                    if (r1 && r1 !== r2 && !r2.toLowerCase().includes("market") && !r2.toLowerCase().includes("store") && !r2.toLowerCase().includes("code")) {
                         finalName = `${r1} - ${r2}`;
                     }
                     if (!finalName) finalName = `Column_${i+1}`;
-                    
-                    // Simple sanitization
+
+                    // Sanitize keys for JSON
                     finalName = finalName.replace(/["'.]/g, "").trim();
 
                     if (headerCounts[finalName]) {
@@ -1202,39 +1204,32 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     }
                     mergedHeader.push(finalName);
                 }
-                
-                // Convert Array-of-Arrays to Array-of-Objects (JSON)
-                // This is much safer than CSV
-                const headers = mergedHeader;
-                const bodyRows = rawData.slice(2);
-                
-                finalJsonObjects = bodyRows.map(row => {
+
+                // CONVERT TO JSON OBJECTS
+                // We map the body rows to the headers manually
+                const bodyRows = rawData.slice(2); 
+                finalJsonData = bodyRows.map(row => {
                     let obj = {};
-                    headers.forEach((h, index) => {
-                        // Ensure we don't crash if row is shorter than headers
-                        obj[h] = (row[index] !== undefined && row[index] !== null) ? row[index] : null;
+                    mergedHeader.forEach((key, index) => {
+                         // Use null for missing values to keep structure consistent
+                         obj[key] = (row[index] !== undefined && row[index] !== "") ? row[index] : null;
                     });
                     return obj;
                 });
-            }
-        } 
-        else {
-             // Handle local files (Parquet/Excel) - Keep existing logic for these
-             // ... (This part was likely working fine, focusing on Sheet fix) ...
-        }
 
-        // ===============================================
-        // 2. LOAD INTO DUCKDB (USING JSON)
-        // ===============================================
-        
-        if (type === 'sheet') {
+            } else {
+                // Handle single row header edge case
+                 const headers = rawData[0].map((h, i) => h || `Col_${i}`);
+                 finalJsonData = []; // No data rows
+            }
+            
+            // REGISTER JSON FILE IN DUCKDB
             const jsonFileName = `temp_${tableName}.json`;
-            const jsonString = JSON.stringify(finalJsonObjects);
-            
-            // Register JSON file
+            const jsonString = JSON.stringify(finalJsonData);
             await db.registerFileText(jsonFileName, jsonString);
-            
-            // Load using read_json_auto (Robust Type Detection)
+
+            // LOAD JSON
+            // read_json_auto is much smarter than read_csv
             await conn.query(`
                 CREATE OR REPLACE TABLE ${tableName} AS 
                 SELECT * FROM read_json_auto('${jsonFileName}')
@@ -1242,25 +1237,48 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
             
-            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${gid}`;
+            const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
-                    <a href="${editUrl}" target="_blank"><button style="background:#28a745; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer;">✏️ Open Sheet</button></a>
+                    <a href="${editUrl}" target="_blank" style="text-decoration:none;">
+                        <button style="background:#28a745; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                            ✏️ Open Sheet
+                        </button>
+                    </a>
+                    <button onclick="window.summarizeData()" style="background:#6f42c1; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
+                        🤖 AI Summary
+                    </button>
                 </div>`;
         } 
+        
+        // ===============================================
+        // CASE B: PARQUET / EXCEL / CSV FILES
+        // ===============================================
         else {
-            // FALLBACK FOR NON-SHEETS (PARQUET/CSV FILES)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+            if (!response.ok) throw new Error("Download failed");
+
             const arrayBuffer = await response.arrayBuffer();
-            await db.registerFileBuffer(fileName, new Uint8Array(arrayBuffer));
+            const uint8Array = new Uint8Array(arrayBuffer);
+            await db.registerFileBuffer(fileName, uint8Array);
             
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // Use Auto-Detect for CSVs
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, sample_size=-1, ignore_errors=true)`);
+                 // For CSV files, we stick to the safe settings
+                 await conn.query(`
+                    CREATE OR REPLACE TABLE ${tableName} AS 
+                    SELECT * FROM read_csv('${fileName}', 
+                        header=true, 
+                        auto_detect=true, 
+                        sample_size=-1,
+                        ignore_errors=true, 
+                        null_padding=true
+                    )
+                 `);
             }
+            
             pane.querySelector(".pane-label").innerText = fileName;
         }
 
@@ -1271,8 +1289,12 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
     } catch (e) {
         console.error("FULL LOAD ERROR:", e);
-        statusDiv.innerHTML = "Error";
-        contentArea.innerHTML = `<p style="color:red">Failed to load: ${e.message}</p>`;
+        statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+        contentArea.innerHTML = `<div style="color:red; text-align:center; padding:20px;">
+            <h3>❌ Failed to Load</h3>
+            <p>${e.message}</p>
+            <p style="font-size:10px; color:#666;">Check console (F12) for details.</p>
+        </div>`;
     }
 }
 
