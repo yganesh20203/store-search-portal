@@ -64,23 +64,36 @@ window.loadBusinessDashboard = loadBusinessDashboard;
 window.toggleMapLayer = toggleMapLayer;
 window.logout = logout;
 
-// ==========================================
-// 3. INITIALIZE DUCKDB
-// ==========================================
 async function initDuckDB() {
     if (db) return; 
     console.log("Initializing DuckDB...");
     try {
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+        
+        // Select the best bundle for the browser
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+        
         const worker = await duckdb.createWorker(bundle.mainWorker);
         const logger = new duckdb.ConsoleLogger();
+        
+        // Create the DB instance
         db = new duckdb.AsyncDuckDB(logger, worker);
+        
+        // Instantiate the Wasm module
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+        
+        // Connect
         conn = await db.connect();
+        
         console.log("🦆 DuckDB Ready!");
+        
     } catch (e) {
         console.error("DuckDB Init Failed:", e);
+        const errorMsg = document.getElementById("error-msg");
+        if(errorMsg) {
+            errorMsg.innerText = "DuckDB Init Failed: " + e.message;
+            errorMsg.style.display = "block";
+        }
     }
 }
 
