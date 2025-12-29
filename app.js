@@ -78,7 +78,18 @@ async function initDuckDB() {
         db = new duckdb.AsyncDuckDB(logger, worker);
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
         conn = await db.connect();
-        console.log("🦆 DuckDB Ready!");
+
+        // ==================================================
+        // FIX: ENABLE JSON EXTENSION MANUALLY
+        // ==================================================
+        await conn.query(`
+            SET autoinstall_known_extensions=1;
+            SET autoload_known_extensions=1;
+            INSTALL json;
+            LOAD json;
+        `);
+        
+        console.log("🦆 DuckDB Ready & JSON Extension Loaded!");
     } catch (e) {
         console.error("DuckDB Init Failed:", e);
     }
