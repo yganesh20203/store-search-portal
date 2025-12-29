@@ -1217,13 +1217,13 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             const tempFileName = `temp_${tableName}.csv`;
             await db.registerFileText(tempFileName, csvText);
 
-            // FIX: Added auto_detect=true alongside all_varchar=true
+            // FIX: Added auto_detect=true inside the read_csv options
             await conn.query(`
                 CREATE OR REPLACE TABLE ${tableName} AS 
                 SELECT * FROM read_csv('${tempFileName}', 
                     header=true, 
-                    auto_detect=true,   -- REQUIRED for read_csv to find columns
-                    all_varchar=true,   -- Forces all columns to Text type
+                    auto_detect=true,   -- REQUIRED: Tells DuckDB to find columns
+                    all_varchar=true,   -- REQUIRED: Forces everything to text
                     ignore_errors=true,
                     null_padding=true
                 )
@@ -1265,8 +1265,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     CREATE OR REPLACE TABLE ${tableName} AS 
                     SELECT * FROM read_csv('${fileName}', 
                         header=true, 
-                        auto_detect=true, 
-                        all_varchar=true, 
+                        auto_detect=true,   -- REQUIRED
+                        all_varchar=true,   -- REQUIRED
                         ignore_errors=true, 
                         null_padding=true
                     )
