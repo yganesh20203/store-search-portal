@@ -64,6 +64,11 @@ const CONFIG = {
             { name: "Nov 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "446051990"},
             { name: "Dec 25", id: "1G3NFNGubjulg_pPKN6isjcKYasd9qB2ByRkmxh59vAk", gid: "629896893"}
         ],
+
+        "UPI adherance": [
+
+            { name: "UPI adhoption MoM basis", id: "1UrUiR-prSLSiepgUndkdbzeISiYuH8m3KmE6Zze7J-Y", gid: "288589305"}
+        ],
     },
    WAREHOUSE_GROUPS: {
         "Flipkart Wholesale": [
