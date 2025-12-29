@@ -1178,13 +1178,34 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
 
+            // --- 🛑 FIX START: ENSURE UNIQUE HEADERS 🛑 ---
+            let headers = finalValues[0];
+            let uniqueHeaders = [];
+            let headerCounts = {};
+
+            headers.forEach((h) => {
+                // Clean the header name
+                let cleanH = (h || "Column").toString().trim().replace(/"/g, ''); 
+                if(!cleanH) cleanH = "Column";
+
+                if (headerCounts[cleanH]) {
+                    headerCounts[cleanH]++;
+                    uniqueHeaders.push(`${cleanH}_${headerCounts[cleanH]}`);
+                } else {
+                    headerCounts[cleanH] = 1;
+                    uniqueHeaders.push(cleanH);
+                }
+            });
+            finalValues[0] = uniqueHeaders;
+            // --- 🛑 FIX END ---
+
             const csvText = arrayToCSV(finalValues);
             const csvFileName = `temp_${tableName}.csv`;
             
             await db.registerFileText(csvFileName, csvText);
             
-            // REVERTED TO read_csv_auto FOR STABILITY
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', ignore_errors=true)`);
+            // Using read_csv with header=true explicitly
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${csvFileName}', header=true, ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
@@ -1202,6 +1223,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
+            // (Parquet Logic - Unchanged)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -1227,7 +1249,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     } catch (e) {
         console.error(e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-        contentArea.innerHTML = `<p style="color:red">Failed to load</p>`;
+        contentArea.innerHTML = `<p style="color:red; text-align:center; padding:20px;">Failed to load:<br>${e.message}</p>`;
     }
 }
 
@@ -1351,6 +1373,8 @@ async function applyTableFilter() {
             renderTableFromArrow(result);
         }
     } catch (e) {
+        // --- CHANGE IS HERE: Print the actual error ---
+        console.error("❌ SQL/Filter Error Details:", e);
         console.log("Filter Error or Empty Query");
     }
 }
