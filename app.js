@@ -1154,13 +1154,19 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             let finalValues = dataJson.values;
             
-            // CONSTRUCT MERGED HEADER LOGIC (Improved)
+            // ===============================================
+            // 1. IMPROVED HEADER MERGE & SANITIZATION LOGIC
+            // ===============================================
             if (finalValues.length >= 2) {
                 const rowDates = finalValues[0];
                 const rowMetrics = finalValues[1];
                 let newHeader = [];
                 let lastDate = "";
+                // Calculate max columns based on the first two rows
                 const maxCols = Math.max(rowDates.length, rowMetrics.length);
+
+                // Create a tracker for duplicate names
+                const headerCounts = {};
 
                 for (let i = 0; i < maxCols; i++) {
                     let topVal = (rowDates[i] || "").toString().trim();
@@ -1168,16 +1174,36 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     
                     if (topVal) lastDate = topVal;
                     
-                    let headerPart = botVal || `Col_${i+1}`;
+                    // Default to "Column_X" if both are empty
+                    let headerPart = botVal || (topVal ? "" : `Column_${i+1}`);
                     
-                    // Only prepend date if it's actually different and bottom isn't a static dimension like "Market"
-                    if (lastDate && topVal !== botVal && !botVal.toLowerCase().includes("market") && !botVal.toLowerCase().includes("store")) {
-                         newHeader.push(`${lastDate} - ${headerPart}`);
+                    let combinedName = "";
+                    // Only prepend date if it's actually different and bottom isn't a static dimension
+                    if (lastDate && topVal !== botVal && !botVal.toLowerCase().includes("market") && !botVal.toLowerCase().includes("store") && !botVal.toLowerCase().includes("code")) {
+                         combinedName = `${lastDate} - ${headerPart}`;
                     } else {
-                        newHeader.push(headerPart);
+                         combinedName = headerPart || topVal || `Column_${i+1}`;
                     }
+
+                    // SANITIZE: Remove double quotes and weird characters that break SQL
+                    combinedName = combinedName.replace(/"/g, '').trim();
+
+                    // DEDUPLICATE: Handle duplicate headers (e.g., "Sales", "Sales" -> "Sales", "Sales_2")
+                    if (headerCounts[combinedName]) {
+                        headerCounts[combinedName]++;
+                        combinedName = `${combinedName}_${headerCounts[combinedName]}`;
+                    } else {
+                        headerCounts[combinedName] = 1;
+                    }
+
+                    newHeader.push(combinedName);
                 }
+                
+                // Replace the loose headers with our clean, unique string headers
                 finalValues = [newHeader, ...finalValues.slice(2)];
+            } else if (finalValues.length === 1) {
+                // Handle single row sheet (rare but possible)
+                finalValues[0] = finalValues[0].map((h, i) => (h ? h.toString().trim() : `Column_${i+1}`));
             }
 
             const csvText = arrayToCSV(finalValues);
@@ -1185,8 +1211,20 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             await db.registerFileText(csvFileName, csvText);
             
-            // CRITICAL FIX: Use read_csv with explicit header=true
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${csvFileName}', header=true, auto_detect=true, ignore_errors=true)`);
+            // ===============================================
+            // 2. ROBUST DUCKDB LOADING (Fixes Mixed Types)
+            // ===============================================
+            // sample_size=-1 forces DuckDB to read the WHOLE file to determine types, 
+            // preventing crashes when numbers appear in text columns later in the file.
+            await conn.query(`
+                CREATE OR REPLACE TABLE ${tableName} AS 
+                SELECT * FROM read_csv('${csvFileName}', 
+                    header=true, 
+                    auto_detect=true, 
+                    sample_size=-1, 
+                    ignore_errors=true
+                )
+            `);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
@@ -1204,6 +1242,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                 </div>`;
 
         } else {
+            // Handle Parquet/CSV/Excel files from Drive
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -1215,7 +1254,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, ignore_errors=true)`);
+                 // Added sample_size=-1 here as well for CSVs
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, sample_size=-1, ignore_errors=true)`);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
@@ -1229,7 +1269,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     } catch (e) {
         console.error(e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-        contentArea.innerHTML = `<p style="color:red">Failed to load</p>`;
+        contentArea.innerHTML = `<p style="color:red">Failed to load data.<br>Technical details: ${e.message}</p>`;
     }
 }
 
