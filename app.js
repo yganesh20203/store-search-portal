@@ -10,6 +10,7 @@ let conn = null;
 let activePaneId = "pane-0"; 
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
+let currentArrowData = [];
 
 // Excel & Pivot Globals
 let currentExcelWorkbook = null;
