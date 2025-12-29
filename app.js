@@ -1120,9 +1120,23 @@ async function findAndLoadReport() {
     }
 }
 
+function arrayToCSV(data) {
+    return data.map(row =>
+        row.map(field => {
+            if (field === null || field === undefined) return '';
+            let stringField = String(field);
+            // Escape double quotes and wrap field in quotes if it contains special chars
+            if (stringField.includes('"') || stringField.includes(',') || stringField.includes('\n') || stringField.includes('\r')) {
+                stringField = '"' + stringField.replace(/"/g, '""') + '"';
+            }
+            return stringField;
+        }).join(',')
+    ).join('\n');
+}
+
 async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     const statusDiv = document.getElementById("loading-status");
-    statusDiv.innerHTML = "⏳ Fetching Data...";
+    statusDiv.innerHTML = "⏳ Fetching & Normalizing Data...";
     
     const pane = document.getElementById(activePaneId);
     if (!pane) { alert("Error: No active view selected"); return; }
@@ -1134,13 +1148,18 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
     document.getElementById("sheet-link-container").innerHTML = "";
 
     try {
+        let csvText = "";
+        let sheetTitle = fileName;
+
+        // ===============================================
+        // A. HANDLE GOOGLE SHEETS
+        // ===============================================
         if (type === 'sheet') {
             const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties`;
             const metaResp = await fetch(metaUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!metaResp.ok) throw new Error("Access Denied");
             const metaData = await metaResp.json();
             
-            let sheetTitle = "";
             const targetGid = gid ? parseInt(gid) : 0;
             const foundSheet = metaData.sheets.find(s => s.properties.sheetId === targetGid);
             if (foundSheet) sheetTitle = foundSheet.properties.title;
@@ -1152,82 +1171,87 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             if (!dataJson.values || dataJson.values.length === 0) throw new Error("Sheet empty");
 
-            let finalValues = dataJson.values;
-            
-            // ===============================================
-            // 1. IMPROVED HEADER MERGE & SANITIZATION LOGIC
-            // ===============================================
-            if (finalValues.length >= 2) {
-                const rowDates = finalValues[0];
-                const rowMetrics = finalValues[1];
-                let newHeader = [];
-                let lastDate = "";
-                // Calculate max columns based on the first two rows
-                const maxCols = Math.max(rowDates.length, rowMetrics.length);
+            let rawData = dataJson.values;
 
-                // Create a tracker for duplicate names
-                const headerCounts = {};
+            // --- HEADER MERGING LOGIC ---
+            if (rawData.length >= 2) {
+                const row1 = rawData[0]; // Dates or Categories
+                const row2 = rawData[1]; // Metrics or Names
+                let mergedHeader = [];
+                
+                // Track duplicates to prevent SQL errors
+                let headerCounts = {};
+                
+                // Determine max columns (some rows might be short)
+                const maxCols = Math.max(row1.length, row2.length);
 
                 for (let i = 0; i < maxCols; i++) {
-                    let topVal = (rowDates[i] || "").toString().trim();
-                    let botVal = (rowMetrics[i] || "").toString().trim();
+                    let r1 = (row1[i] || "").toString().trim();
+                    let r2 = (row2[i] || "").toString().trim();
                     
-                    if (topVal) lastDate = topVal;
-                    
-                    // Default to "Column_X" if both are empty
-                    let headerPart = botVal || (topVal ? "" : `Column_${i+1}`);
-                    
-                    let combinedName = "";
-                    // Only prepend date if it's actually different and bottom isn't a static dimension
-                    if (lastDate && topVal !== botVal && !botVal.toLowerCase().includes("market") && !botVal.toLowerCase().includes("store") && !botVal.toLowerCase().includes("code")) {
-                         combinedName = `${lastDate} - ${headerPart}`;
-                    } else {
-                         combinedName = headerPart || topVal || `Column_${i+1}`;
+                    // Logic: If Row 1 exists and is different from Row 2, concat them.
+                    // Otherwise, just use Row 2.
+                    let finalName = r2;
+                    if (r1 && r1 !== r2 && !r2.toLowerCase().includes("market") && !r2.toLowerCase().includes("store")) {
+                        finalName = `${r1} - ${r2}`;
                     }
+                    if (!finalName) finalName = `Column_${i+1}`;
 
-                    // SANITIZE: Remove double quotes and weird characters that break SQL
-                    combinedName = combinedName.replace(/"/g, '').trim();
+                    // Sanitize
+                    finalName = finalName.replace(/["',\n\r]/g, "").trim();
 
-                    // DEDUPLICATE: Handle duplicate headers (e.g., "Sales", "Sales" -> "Sales", "Sales_2")
-                    if (headerCounts[combinedName]) {
-                        headerCounts[combinedName]++;
-                        combinedName = `${combinedName}_${headerCounts[combinedName]}`;
+                    // Deduplicate
+                    if (headerCounts[finalName]) {
+                        headerCounts[finalName]++;
+                        finalName = `${finalName}_${headerCounts[finalName]}`;
                     } else {
-                        headerCounts[combinedName] = 1;
+                        headerCounts[finalName] = 1;
                     }
-
-                    newHeader.push(combinedName);
+                    
+                    mergedHeader.push(finalName);
                 }
-                
-                // Replace the loose headers with our clean, unique string headers
-                finalValues = [newHeader, ...finalValues.slice(2)];
-            } else if (finalValues.length === 1) {
-                // Handle single row sheet (rare but possible)
-                finalValues[0] = finalValues[0].map((h, i) => (h ? h.toString().trim() : `Column_${i+1}`));
+
+                // Construct new dataset: [MergedHeader, Row3, Row4, ...]
+                const bodyRows = rawData.slice(2); 
+                rawData = [mergedHeader, ...bodyRows];
             }
 
-            const csvText = arrayToCSV(finalValues);
-            const csvFileName = `temp_${tableName}.csv`;
+            // Convert sanitized array to safe CSV string
+            csvText = arrayToCSV(rawData);
             
-            await db.registerFileText(csvFileName, csvText);
-            
-            // ===============================================
-            // 2. ROBUST DUCKDB LOADING (Fixes Mixed Types)
-            // ===============================================
-            // sample_size=-1 forces DuckDB to read the WHOLE file to determine types, 
-            // preventing crashes when numbers appear in text columns later in the file.
-            await conn.query(`
-                CREATE OR REPLACE TABLE ${tableName} AS 
-                SELECT * FROM read_csv('${csvFileName}', 
-                    header=true, 
-                    auto_detect=true, 
-                    sample_size=-1, 
-                    ignore_errors=true
-                )
-            `);
-            
-            pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
+            // Register as virtual file
+            const tempFileName = `temp_${tableName}.csv`;
+            await db.registerFileText(tempFileName, csvText);
 
+            // TRY 1: Intelligent Type Detection (Scan whole file)
+            try {
+                await conn.query(`
+                    CREATE OR REPLACE TABLE ${tableName} AS 
+                    SELECT * FROM read_csv('${tempFileName}', 
+                        header=true, 
+                        auto_detect=true, 
+                        sample_size=-1,     -- Scan ENTIRE file for types
+                        ignore_errors=true, -- Turn parse errors into NULL
+                        null_padding=true   -- Handle jagged rows
+                    )
+                `);
+            } catch (err) {
+                console.warn("Type detection failed, falling back to all_varchar", err);
+                // TRY 2: Fallback (Treat everything as String to prevent crash)
+                await conn.query(`
+                    CREATE OR REPLACE TABLE ${tableName} AS 
+                    SELECT * FROM read_csv('${tempFileName}', 
+                        header=true, 
+                        all_varchar=true,   -- Force string type
+                        ignore_errors=true,
+                        null_padding=true
+                    )
+                `);
+            }
+
+            pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
+            
+            // Add "Open Sheet" button
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
             document.getElementById("sheet-link-container").innerHTML = `
                 <div style="display:flex; gap:10px; margin-top:10px;">
@@ -1240,9 +1264,12 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                         🤖 AI Summary
                     </button>
                 </div>`;
-
-        } else {
-            // Handle Parquet/CSV/Excel files from Drive
+        } 
+        
+        // ===============================================
+        // B. HANDLE PARQUET / CSV / EXCEL
+        // ===============================================
+        else {
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -1254,8 +1281,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 // Added sample_size=-1 here as well for CSVs
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, sample_size=-1, ignore_errors=true)`);
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, sample_size=-1, ignore_errors=true, null_padding=true)`);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
@@ -1267,9 +1293,12 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
         statusDiv.innerHTML = "";
 
     } catch (e) {
-        console.error(e);
+        console.error("Load Error:", e);
         statusDiv.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
-        contentArea.innerHTML = `<p style="color:red">Failed to load data.<br>Technical details: ${e.message}</p>`;
+        contentArea.innerHTML = `<div style="color:red; text-align:center; padding:20px;">
+            <h3>❌ Failed to Load</h3>
+            <p>${e.message}</p>
+        </div>`;
     }
 }
 
