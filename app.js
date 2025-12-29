@@ -188,7 +188,6 @@ function setActivePane(id) {
 }
 
 function resetUI() {
-    // Hide all Dashboard Controls
     document.getElementById("sales-ui").classList.add("hidden");
     document.getElementById("member-ui").classList.add("hidden");
     document.getElementById("tracker-ui").classList.add("hidden");
@@ -200,15 +199,13 @@ function resetUI() {
     document.getElementById("approvals-ui").classList.add("hidden"); 
     document.getElementById("business-ui").classList.add("hidden"); 
     
-    // Reset Data View Containers
-    document.getElementById("view-container").classList.remove("hidden"); // Default Grid
-    document.getElementById("pivot-wrapper").classList.add("hidden");     // Hide Pivot
-    document.getElementById("filter-box").classList.remove("hidden");     // Show SQL Filters
+    document.getElementById("view-container").classList.remove("hidden");
+    document.getElementById("pivot-wrapper").classList.add("hidden");
+    document.getElementById("filter-box").classList.remove("hidden");
     
     document.getElementById("sheet-link-container").innerHTML = "";
 }
 
-// --- FEEDBACK ---
 function openFeedbackModal() { document.getElementById("feedback-modal").classList.remove("hidden"); }
 function closeFeedbackModal() { document.getElementById("feedback-modal").classList.add("hidden"); }
 
@@ -360,6 +357,7 @@ function openTrackerCategory(groupName) {
     }
 }
 
+// ... (Walkin, Hourly, Ticket, Daily logic remains same - omitted for brevity but functionality preserved) ...
 async function loadWalkinDashboard() {
     resetUI();
     document.getElementById("walkin-ui").classList.remove("hidden");
@@ -1056,7 +1054,7 @@ async function processAndRenderPivot(uint8Array, fileName) {
         if (fileName.endsWith(".parquet")) {
             await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
         } else {
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', ignore_errors=true)`);
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, ignore_errors=true)`);
         }
     } catch(e) {
         console.error("DuckDB Loading Error:", e);
@@ -1156,27 +1154,29 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
 
             let finalValues = dataJson.values;
             
-            // CONSTRUCT MERGED HEADER LOGIC
+            // CONSTRUCT MERGED HEADER LOGIC (Improved)
             if (finalValues.length >= 2) {
                 const rowDates = finalValues[0];
                 const rowMetrics = finalValues[1];
                 let newHeader = [];
                 let lastDate = "";
+                const maxCols = Math.max(rowDates.length, rowMetrics.length);
 
-                for (let i = 0; i < rowMetrics.length; i++) {
-                    let dateVal = rowDates[i] || "";
-                    let metricVal = rowMetrics[i] || `col${i}`;
+                for (let i = 0; i < maxCols; i++) {
+                    let topVal = (rowDates[i] || "").toString().trim();
+                    let botVal = (rowMetrics[i] || "").toString().trim();
                     
-                    if (dateVal !== "") lastDate = dateVal;
+                    if (topVal) lastDate = topVal;
                     
-                    // Logic to combine headers if both exist
-                    if (lastDate && lastDate !== metricVal) {
-                        newHeader.push(`${lastDate} - ${metricVal}`);
+                    let headerPart = botVal || `Col_${i+1}`;
+                    
+                    // Only prepend date if it's actually different and bottom isn't a static dimension like "Market"
+                    if (lastDate && topVal !== botVal && !botVal.toLowerCase().includes("market") && !botVal.toLowerCase().includes("store")) {
+                         newHeader.push(`${lastDate} - ${headerPart}`);
                     } else {
-                        newHeader.push(metricVal);
+                        newHeader.push(headerPart);
                     }
                 }
-                // Replace the first two rows with the single merged header row
                 finalValues = [newHeader, ...finalValues.slice(2)];
             }
 
@@ -1185,8 +1185,8 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             await db.registerFileText(csvFileName, csvText);
             
-            // --- CRITICAL FIX: header=true force DuckDB to use the first row as headers ---
-            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${csvFileName}', header=true, ignore_errors=true)`);
+            // CRITICAL FIX: Use read_csv with explicit header=true
+            await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${csvFileName}', header=true, auto_detect=true, ignore_errors=true)`);
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
@@ -1215,7 +1215,7 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             if (fileName.endsWith('.parquet')) {
                  await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`);
             } else {
-                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv_auto('${fileName}', header=true, ignore_errors=true)`);
+                 await conn.query(`CREATE OR REPLACE TABLE ${tableName} AS SELECT * FROM read_csv('${fileName}', header=true, auto_detect=true, ignore_errors=true)`);
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
