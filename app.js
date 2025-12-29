@@ -11,6 +11,7 @@ let activePaneId = "pane-0";
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
 let currentArrowData = [];
+let currentChartInstance = null;
 
 // Excel & Pivot Globals
 let currentExcelWorkbook = null;
@@ -64,7 +65,7 @@ window.redirectMailSearch = redirectMailSearch;
 window.loadBusinessDashboard = loadBusinessDashboard;
 window.toggleMapLayer = toggleMapLayer;
 window.logout = logout;
-
+window.toggleVisualization = toggleVisualization;
 // ==========================================
 // 3. INITIALIZE DUCKDB
 // ==========================================
@@ -1194,9 +1195,12 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             
             pane.querySelector(".pane-label").innerText = `${sheetTitle}`;
 
+            // --- UI INJECTION START ---
             const editUrl = `https://docs.google.com/spreadsheets/d/${fileId}/edit#gid=${targetGid}`;
+            
+            // 1. Setup the Buttons (Added Graph Toggle)
             document.getElementById("sheet-link-container").innerHTML = `
-                <div style="display:flex; gap:10px; margin-top:10px;">
+                <div style="display:flex; gap:10px; margin-top:10px; align-items:center;">
                     <a href="${editUrl}" target="_blank" style="text-decoration:none;">
                         <button style="background:#28a745; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
                             ✏️ Open Sheet
@@ -1205,10 +1209,29 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
                     <button onclick="window.summarizeData()" style="background:#6f42c1; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">
                         🤖 AI Summary
                     </button>
+                    <button id="viz-toggle-btn" onclick="window.toggleVisualization()" style="background:#607d8b; color:white; padding:8px 12px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-left:auto;">
+                        📈 Show Graph
+                    </button>
                 </div>`;
 
+            // 2. Setup the View Containers (Table + Graph)
+            // We clear contentArea and add two wrappers: one for Table, one for Chart
+            contentArea.innerHTML = `
+                <div class="data-table-wrapper" style="height:100%; overflow:auto;"></div>
+                <div class="chart-wrapper hidden" style="height:100%; width:100%; position:relative; padding:10px;">
+                    <canvas id="viz-canvas"></canvas>
+                </div>
+            `;
+            
+            // 3. Reset Global Chart Instance
+            if (typeof currentChartInstance !== 'undefined' && currentChartInstance) {
+                currentChartInstance.destroy();
+                currentChartInstance = null;
+            }
+            // --- UI INJECTION END ---
+
         } else {
-            // Parquet/CSV File Logic
+            // Parquet/CSV File Logic (Unchanged for now, but uses same wrappers if needed)
             const downloadUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
             const response = await fetch(downloadUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
             if (!response.ok) throw new Error("Download failed");
@@ -1224,11 +1247,19 @@ async function loadFileIntoDuckDB(fileId, fileName, type, gid) {
             }
             
             pane.querySelector(".pane-label").innerText = fileName;
+            
+            // Standard container structure for Parquet too, for consistency
+             contentArea.innerHTML = `
+                <div class="data-table-wrapper" style="height:100%; overflow:auto;"></div>
+                <div class="chart-wrapper hidden" style="height:100%; width:100%; position:relative; padding:10px;">
+                    <canvas id="viz-canvas"></canvas>
+                </div>
+            `;
         }
 
         statusDiv.innerHTML = "✅ Data Loaded!";
         await setupFilterDropdown(tableName);
-        await applyTableFilter(); 
+        await applyTableFilter(); // This will now render into .data-table-wrapper
         statusDiv.innerHTML = "";
 
     } catch (e) {
@@ -1367,10 +1398,15 @@ async function applyTableFilter() {
 function renderTableFromArrow(arrowResult) {
     const pane = document.getElementById(activePaneId);
     if(!pane) return;
-    const container = pane.querySelector(".content-area");
+    
+    // --- UPDATED SELECTOR ---
+    // Try to find the specific table wrapper first (used in Sheet/Parquet views)
+    // If not found, fall back to the main content area (legacy support)
+    let container = pane.querySelector(".data-table-wrapper");
+    if (!container) container = pane.querySelector(".content-area");
     
     const rows = arrowResult.toArray().map(r => r.toJSON());
-    currentArrowData = rows; 
+    currentArrowData = rows; // CRITICAL: Updates global data for Chart.js
 
     if (rows.length === 0) {
         container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>No matches found.</p>";
@@ -1551,4 +1587,120 @@ function toggleMapLayer(layerKey) {
             mapInstance.removeLayer(layer);
         }
     }
+}
+
+
+function toggleVisualization() {
+    const pane = document.getElementById(activePaneId);
+    const contentArea = pane.querySelector(".content-area");
+    const tableContainer = contentArea.querySelector(".data-table-wrapper");
+    const chartContainer = contentArea.querySelector(".chart-wrapper");
+    const toggleBtn = document.getElementById("viz-toggle-btn");
+
+    if (!chartContainer || !tableContainer) return;
+
+    // Check current state by looking for the 'hidden' class
+    const isGraphMode = tableContainer.classList.contains("hidden");
+
+    if (isGraphMode) {
+        // Switch to Table Mode
+        tableContainer.classList.remove("hidden");
+        chartContainer.classList.add("hidden");
+        toggleBtn.innerText = "📈 Show Graph";
+        toggleBtn.style.background = "#607d8b"; // Blue-grey
+    } else {
+        // Switch to Graph Mode
+        tableContainer.classList.add("hidden");
+        chartContainer.classList.remove("hidden");
+        toggleBtn.innerText = "📋 Show Table";
+        toggleBtn.style.background = "#e91e63"; // Pink
+        
+        // Render chart if not already done
+        if (!currentChartInstance) {
+            renderVisualization(chartContainer.querySelector("canvas"));
+        }
+    }
+}
+
+
+function renderVisualization(canvasCtx) {
+    if (!currentArrowData || currentArrowData.length === 0) {
+        alert("No data to visualize!");
+        return;
+    }
+
+    // 1. Identify Columns
+    const keys = Object.keys(currentArrowData[0]);
+    let labelKey = keys[0]; // Default to first column for X-axis labels
+    let dataKeys = [];
+
+    // Simple heuristic: Try to find the first String column for labels, and all Number columns for data
+    keys.forEach(key => {
+        const val = currentArrowData[0][key];
+        if (typeof val === 'number') {
+            dataKeys.push(key);
+        } else if (!dataKeys.length && typeof val === 'string') {
+            labelKey = key;
+        }
+    });
+
+    if (dataKeys.length === 0) {
+        // Fallback: If everything looks like a string but might be a number (common in CSVs)
+        // Check the second column
+        if (keys.length > 1) dataKeys.push(keys[1]);
+    }
+
+    // 2. Prepare Data for Chart.js
+    const labels = currentArrowData.map(row => row[labelKey]);
+    const datasets = dataKeys.map((key, index) => {
+        // Generate a random color for each dataset
+        const color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+        return {
+            label: key,
+            data: currentArrowData.map(row => {
+                // Handle messy data (remove commas, currency symbols)
+                let val = row[key];
+                if (typeof val === 'string') {
+                    val = parseFloat(val.replace(/,/g, '').replace(/[^\d.-]/g, ''));
+                }
+                return val || 0;
+            }),
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 1,
+            tension: 0.3 // Makes lines slightly curved
+        };
+    });
+
+    // 3. Destroy old chart if exists
+    if (currentChartInstance) {
+        currentChartInstance.destroy();
+    }
+
+    // 4. Create New Chart
+    // If we have many datasets (columns), use a Line chart. If just 1 or 2, use Bar.
+    const chartType = datasets.length > 3 ? 'line' : 'bar';
+
+    currentChartInstance = new Chart(canvasCtx, {
+        type: chartType,
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                title: { display: true, text: `Analysis by ${labelKey}` },
+                tooltip: { enabled: true }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
 }
