@@ -92,6 +92,13 @@ async function initDuckDB() {
 // ==========================================
 
 let sessionTimerInterval = null;
+let activeSessionSeconds = 0;
+let currentSessionRow = null; // Stores the exact Excel Row # (e.g., 15)
+let sessionInteractionCount = 0; // Counts clicks & keystrokes
+
+// 1. Start Tracking Interactions Immediately
+document.addEventListener('click', () => { sessionInteractionCount++; });
+document.addEventListener('keydown', () => { sessionInteractionCount++; });
 
 async function unlockAndLogin() {
     const accessKey = document.getElementById("access-key").value;
@@ -101,12 +108,8 @@ async function unlockAndLogin() {
     const btn = document.getElementById("login-btn");
     const errorMsg = document.getElementById("error-msg");
 
-    // 1. Basic Input Validation
     if(!accessKey) { showLoginError("⚠️ Missing Team Access Key"); return; }
-    
-    // Note: We allow empty username/pass to proceed to "Guest Mode" logic if you want, 
-    // but typically we ask them to fill it to try validation.
-    if(!username || !password) { showLoginError("⚠️ Enter Username & Password to verify."); return; }
+    if(!username || !password) { showLoginError("⚠️ Enter Username & Password."); return; }
 
     btn.innerText = "🔄 Verifying...";
     btn.disabled = true;
@@ -115,38 +118,40 @@ async function unlockAndLogin() {
     try {
         if (typeof CONFIG === 'undefined') throw new Error("Config not loaded.");
 
-        // 2. Decrypt & Connect (Gatekeeper)
+        // 1. Decrypt (Gatekeeper)
         const bytes = CryptoJS.AES.decrypt(CONFIG.ENCRYPTED_CREDS, accessKey);
         const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-
         if (!decryptedString) throw new Error("Incorrect Access Key");
 
         const creds = JSON.parse(decryptedString);
-        accessToken = await generateAccessToken(creds); // We are IN.
+        accessToken = await generateAccessToken(creds);
 
-        // 3. Check Credentials against Backend
+        // 2. Check Backend Credentials
         btn.innerText = "🔍 Checking DB...";
         const isValidUser = await checkBackendCredentials(username, password);
 
-        // 4. Setup UI for Access
+        // 3. Unlock Dashboard
         document.getElementById("auth-overlay").classList.add("hidden");
         document.getElementById("dashboard").classList.remove("hidden");
         localStorage.setItem("portal_user_email", username);
         document.getElementById("user-info").innerText = `● ${username}`;
         initDuckDB();
 
-        // 5. Branch Logic: Valid vs Invalid
+        // 4. Create Initial Log Entry (Get the Row Number)
+        // We reset interaction count on new login
+        sessionInteractionCount = 0; 
+        
         if (isValidUser) {
-            // SCENARIO A: Valid User
-            console.log("✅ Valid User. Starting Session Tracker.");
-            startUsageTimer(); 
-            logLogin(username, "SUCCESS_LOGIN");
+            console.log("✅ Valid User. Creating Session Row...");
+            // Create the row and save the Row ID
+            await createSessionRow(username, "VALID_USER");
+            startSilentUsageTimer(username); 
         } else {
-            // SCENARIO B: Invalid User (Guest Mode)
-            console.warn("⛔ Invalid Credentials. Starting 2-min Countdown.");
+            console.warn("⛔ Guest User.");
+            // Even guests get a row so we can track their clicks/time before kickout
+            await createSessionRow(username, "GUEST_INVALID");
             startGuestCountdown();
-            logLogin(username, "GUEST_ACCESS_INVALID_CREDS");
-            alert(`⚠️ User not found or password incorrect.\n\nYou have been granted GUEST ACCESS for 2 minutes.\nPlease save your work quickly.`);
+            alert(`⚠️ User not found.\n\nGranted GUEST ACCESS for 2 minutes.`);
         }
 
     } catch (e) {
@@ -157,99 +162,125 @@ async function unlockAndLogin() {
     }
 }
 
-// --- HELPER: Verify against Google Sheet ---
+// --- HELPER: Verify Credentials ---
 async function checkBackendCredentials(user, pass) {
-    if (!CONFIG.USER_DB_SHEET_ID) return true; // Dev bypass if no sheet configured
-
+    if (!CONFIG.USER_DB_SHEET_ID) return true; 
     try {
-        // Fetch User DB (Columns A and B)
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.USER_DB_SHEET_ID}/values/Sheet2!A:B`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
-
         if (!data.values) return false;
 
-        // Check for matching row
-        const found = data.values.find(row => 
+        return !!data.values.find(row => 
             row[0] && row[0].toString().toLowerCase() === user.toLowerCase() && 
             row[1] && row[1].toString() === pass
         );
-
-        return !!found;
-    } catch (e) {
-        console.error("DB Check Failed:", e);
-        return false; // Fail safe: Treat as invalid if DB error
-    }
+    } catch (e) { return false; }
 }
 
-// --- SCENARIO A: Usage Timer (Counts UP) ---
-function startUsageTimer() {
+// --- LOGGING STEP 1: CREATE THE ROW ---
+async function createSessionRow(user, status) {
+    if (!CONFIG.LOGIN_LOG_SHEET_ID) return;
+    
+    const startTime = new Date().toLocaleString();
+    // Columns: [Start Time, Username, Status, Duration(min), Interactions, Last Update]
+    const initialData = [[ startTime, user, status, "0", "0", startTime ]];
+
+    try {
+        // CHANGE HERE: 'Sheet1' -> 'Sheet3'
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOGIN_LOG_SHEET_ID}/values/Sheet3!A1:append?valueInputOption=USER_ENTERED`;
+        
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: initialData })
+        });
+        
+        const result = await response.json();
+        
+        // Extract Row Number
+        if (result.updates && result.updates.updatedRange) {
+            const rangeStr = result.updates.updatedRange;
+            const match = rangeStr.match(/[A-Z]+(\d+):/);
+            if (match && match[1]) {
+                currentSessionRow = match[1];
+                console.log(`📝 Session logged at Sheet3 Row ${currentSessionRow}`);
+            }
+        }
+    } catch (e) { console.warn("Create Log failed:", e); }
+}
+
+// --- LOGGING STEP 2: UPDATE THE EXISTING ROW ---
+async function updateSessionRow() {
+    if (!CONFIG.LOGIN_LOG_SHEET_ID || !currentSessionRow) return;
+
+    const currentTime = new Date().toLocaleString();
+    const durationMins = Math.floor(activeSessionSeconds / 60);
+
+    // CHANGE HERE: 'Sheet1' -> 'Sheet3'
+    // Updating Columns D, E, F (Duration, Clicks, Last Update)
+    const range = `Sheet3!D${currentSessionRow}:F${currentSessionRow}`;
+    const values = [[ durationMins, sessionInteractionCount, currentTime ]];
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOGIN_LOG_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
+        await fetch(url, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: values })
+        });
+        console.log(`📡 Log Updated (Sheet3): ${durationMins}m, ${sessionInteractionCount} clicks`);
+    } catch (e) { console.warn("Update Log failed:", e); }
+}
+// --- SCENARIO A: Valid User Timer ---
+function startSilentUsageTimer(username) {
     const ui = document.getElementById("session-timer-ui");
-    const text = document.getElementById("session-text");
-    const icon = document.getElementById("session-icon");
-    
-    ui.classList.remove("hidden");
-    ui.style.borderColor = "#4caf50"; // Green
-    ui.style.color = "#2e7d32";
-    icon.innerText = "⏱️";
-    
-    let seconds = 0;
+    if (ui) ui.classList.add("hidden");
+
+    activeSessionSeconds = 0;
+    if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+
     sessionTimerInterval = setInterval(() => {
-        seconds++;
-        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        text.innerText = `Active: ${m}:${s}`;
+        activeSessionSeconds++;
+        
+        // Update the sheet every 1 minute
+        if (activeSessionSeconds > 0 && activeSessionSeconds % 60 === 0) {
+            updateSessionRow();
+        }
     }, 1000);
 }
 
-// --- SCENARIO B: Guest Countdown (Counts DOWN) ---
+// --- SCENARIO B: Guest Timer ---
 function startGuestCountdown() {
     const ui = document.getElementById("session-timer-ui");
     const text = document.getElementById("session-text");
-    const icon = document.getElementById("session-icon");
     
     ui.classList.remove("hidden");
-    ui.style.borderColor = "#d32f2f"; // Red
-    ui.style.background = "#ffebee";
-    ui.style.color = "#d32f2f";
-    icon.innerText = "⚠️";
-    
     let timeLeft = 120; // 2 Minutes
     
+    if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+
     sessionTimerInterval = setInterval(() => {
         timeLeft--;
+        activeSessionSeconds++; // Also track duration for logging
         
         const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
         const s = (timeLeft % 60).toString().padStart(2, '0');
-        text.innerText = `Expires: ${m}:${s}`;
+        text.innerText = `Guest: ${m}:${s}`;
         
-        // Visual Warning at 30 seconds
-        if(timeLeft < 30) {
-            ui.style.background = "#b71c1c";
-            ui.style.color = "white";
+        // Still update log every minute so we see guest activity
+        if (activeSessionSeconds % 60 === 0) {
+            updateSessionRow();
         }
 
         if (timeLeft <= 0) {
             clearInterval(sessionTimerInterval);
-            alert("⏳ Guest Session Expired.\nLogging out now.");
+            // Final update before kicking them out
+            updateSessionRow();
+            alert("⏳ Guest Session Expired.");
             window.logout();
         }
     }, 1000);
-}
-
-// --- LOGGING ---
-async function logLogin(user, status) {
-    if (!CONFIG.LOGIN_LOG_SHEET_ID) return;
-    const timestamp = new Date().toLocaleString();
-    
-    try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOGIN_LOG_SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`;
-        await fetch(url, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ values: [[ timestamp, user, status ]] })
-        });
-    } catch (e) { console.warn("Log failed:", e); }
 }
 
 function showLoginError(msg) {
