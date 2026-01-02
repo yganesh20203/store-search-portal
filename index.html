@@ -182,23 +182,86 @@
                     </div>
                 </div>
 
-                <div id="ticket-ui" class="hidden">
-                    <hr>
-                    <div style="display:flex; gap:20px;">
-                        <div style="flex:1; padding:15px; background:#fff3e0; border-radius:8px;">
-                            <h3>➕ Assign New Task</h3>
-                            <input type="email" id="tkt-email" placeholder="Assign To (Email)..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
-                            <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
-                            <button onclick="window.createTicket()" style="background:#ff9800; color:white; padding:8px; border:none; border-radius:4px; width:100%; cursor:pointer;">📧 Assign & Notify</button>
-                        </div>
-                        <div style="flex:2;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h3>📋 Open Tickets</h3>
-                                <button onclick="window.loadTicketDashboard()" style="font-size:12px;">🔄 Refresh</button>
-                            </div>
-                            <div id="ticket-list-container" style="max-height:400px; overflow:auto; border:1px solid #eee;">Loading...</div>
-                        </div>
-                    </div>
+               <div id="ticket-ui" class="hidden">
+    <hr>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3>🎫 Advanced Task Manager</h3>
+        <div style="display:flex; gap:10px;">
+            <label class="action-btn" style="cursor:pointer; background:#fff3e0; border-color:#ff9800; color:#e65100;">
+                📂 Bulk Upload CSV
+                <input type="file" id="bulk-task-upload" accept=".csv" style="display:none;" onchange="window.handleBulkTaskUpload(this)">
+            </label>
+            <button onclick="window.loadTicketDashboard()" class="action-btn">🔄 Refresh My Tasks</button>
+        </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px;">
+        
+        <div style="padding:20px; background:#f5f5f5; border-radius:8px; height:fit-content;">
+            <h4 style="margin-top:0;">➕ Quick Assign</h4>
+            
+            <label style="font-size:12px; font-weight:bold;">Assign To (Email):</label>
+            <input type="email" id="tkt-email" placeholder="user@example.com" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
+            
+            <label style="font-size:12px; font-weight:bold;">Priority:</label>
+            <select id="tkt-priority" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
+                <option value="Low">Low</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="High">🔥 High</option>
+            </select>
+
+            <label style="font-size:12px; font-weight:bold;">Task Details:</label>
+            <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+            
+            <label style="font-size:12px; font-weight:bold;">Visibility (Optional):</label>
+            <input type="text" id="tkt-visibility" placeholder="e.g. manager@test.com, team@test.com" style="width:100%; padding:8px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+
+            <button onclick="window.createTicket()" style="background:#1976d2; color:white; padding:10px; border:none; border-radius:4px; width:100%; cursor:pointer; font-weight:bold;">🚀 Assign Task</button>
+        </div>
+
+        <div>
+            <div style="margin-bottom:10px; display:flex; gap:10px;">
+                <select id="task-filter-view" onchange="window.filterTasks()" style="padding:5px; border-radius:4px;">
+                    <option value="my_tasks">📥 Assigned to Me</option>
+                    <option value="assigned_by_me">📤 Assigned by Me</option>
+                    <option value="team">👥 Team (Visibility Group)</option>
+                </select>
+                <input type="text" id="task-search" placeholder="Search tasks..." onkeyup="window.filterTasks()" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
+            </div>
+            <div id="ticket-list-container" style="max-height:500px; overflow:auto; border:1px solid #eee; background:white;">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<div id="task-action-modal" class="modal hidden">
+    <div class="modal-content" style="max-width:400px;">
+        <div class="modal-header">
+            <h3 id="task-action-title">Manage Task</h3>
+            <span class="close-btn" onclick="document.getElementById('task-action-modal').classList.add('hidden')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="action-parent-id">
+            <p id="action-task-desc" style="font-style:italic; color:#666;"></p>
+            
+            <label><b>Action Type:</b></label>
+            <select id="task-action-type" onchange="window.toggleTaskActionUI()" style="width:100%; padding:8px; margin-bottom:10px;">
+                <option value="subtask">➗ Divide / Create Subtask</option>
+                <option value="reassign">➡️ Reassign to Someone Else</option>
+            </select>
+
+            <label><b>Assign To:</b></label>
+            <input type="email" id="action-assign-to" placeholder="New owner email..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc;">
+            
+            <div id="subtask-desc-container">
+                <label><b>Subtask Details:</b></label>
+                <textarea id="action-details" rows="2" style="width:100%; padding:8px; border:1px solid #ccc;"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="window.submitTaskAction()" style="background:#28a745; color:white;">Confirm</button>
+        </div>
+    </div>
+</div>
                 </div>
 
                 <div id="approvals-ui" class="hidden">
