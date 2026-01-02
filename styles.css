@@ -8,7 +8,7 @@ body {
     height: 100vh;
     
     /* BACKGROUND IMAGE (Fixed to cover screen) */
-    background: url('login-bg.jpg') no-repeat center center fixed; 
+    background: url('login-bg.png') no-repeat center center fixed; 
     background-size: cover;
     
     color: #333;
