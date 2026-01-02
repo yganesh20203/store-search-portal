@@ -532,3 +532,50 @@ h3 { margin-top: 0; color: #333; font-size: 1.2rem; }
 }
 .drop-zone .pill .remove { cursor: pointer; color: #c62828; font-weight: bold; margin-left: 5px; }
 .chart-canvas-container { flex: 1; position: relative; border: 1px solid #eee; border-radius: 8px; padding: 10px; }
+
+
+/* 1. Set the Background Image for the whole page */
+body {
+    margin: 0;
+    height: 100vh;
+    /* Update the filename below to match your saved image */
+    background: url('login-bg.jpg') no-repeat center center fixed;
+    background-size: cover; /* This makes it cover the full screen */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 2. Style the Login Container to sit nicely on top */
+#auth-overlay {
+    background: rgba(255, 255, 255, 0.95); /* 95% opaque white */
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3); /* Strong shadow for depth */
+    width: 350px;
+    text-align: center;
+    position: relative; /* Ensure it stays above background */
+    backdrop-filter: blur(5px); /* Optional: Adds a blur effect behind box */
+}
+
+/* 3. Make sure the inputs look professional */
+#auth-overlay input {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box; /* Prevents padding from breaking width */
+}
+
+#auth-overlay h1 {
+    color: #1976d2; /* Flipkart Blue */
+    margin-bottom: 5px;
+}
+
+#auth-overlay p {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
