@@ -8,414 +8,271 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
-
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <style>
-        /* Split Screen Grid */
-        #view-container { display: grid; gap: 15px; min-height: 600px; margin-top: 20px; }
-        .grid-1 { grid-template-columns: 1fr; }
-        .grid-2 { grid-template-columns: 1fr 1fr; }
-        .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-        .grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-
-        .pane {
-            border: 2px solid #e0e0e0; border-radius: 8px; overflow: auto; padding: 10px;
-            background: white; position: relative; min-height: 400px; transition: border-color 0.2s;
-        }
-        .pane.active { border: 3px solid #007bff; box-shadow: 0 0 15px rgba(0, 123, 255, 0.2); }
-        .pane-label {
-            position: absolute; top: 0; right: 0; background: #eee; padding: 2px 8px;
-            font-size: 10px; border-bottom-left-radius: 5px; color: #555; z-index: 100;
-        }
-        .empty-msg { text-align: center; color: #999; margin-top: 50px; }
-
-        /* Buttons */
-        .feedback-btn { 
-            background: #ff9800; color: white; border: none; padding: 5px 12px; 
-            border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px; 
-        }
-        .feedback-btn:hover { background: #f57c00; }
-
-        /* Pivot Table Overrides */
-        .pvtAxisContainer, .pvtVals { background: #f9f9f9; border: 1px solid #ddd; }
-        .pvtRendererArea { padding: 10px; }
-        #pivot-wrapper {
-            background: white;
-            border: 1px solid #ccc;
-            padding: 20px;
-            border-radius: 8px;
-            min-height: 600px;
-            overflow: auto;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        .pvtTable td, .pvtTable th, 
-        .pvtAxisLabel, .pvtRowLabel, .pvtColLabel, 
-        .pvtVal, .pvtTotal, .pvtGrandTotal {
-            color: #000000 !important;
-        }
-
-        /* Map & KYB Styles */
-        #business-map { 
-            height: 500px; /* CRITICAL: Must have explicit height */
-            width: 100%; 
-            border-radius: 8px; 
-            border: 2px solid #ccc; 
-            margin-bottom: 15px; 
-            z-index: 1;
-        }
-        .stat-card { background: #fff; padding: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; border: 1px solid #eee; }
-        .stat-val { font-size: 20px; font-weight: bold; color: #2e7d32; margin-top: 5px; }
-    </style>
 </head>
 <body>
 
     <div id="app-container">
+        
         <div id="auth-overlay">
-    <h1>Internal Data Portal</h1>
-    <p>Sign in to access store data.</p>
-    
-    <div class="login-box" style="display:flex; flex-direction:column; gap:10px; width:320px; margin:0 auto; padding:25px; background:white; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,0.1);">
-        
-        <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">Team Access Key</label>
-        <input type="password" id="access-key" placeholder="Enter Access Key..." style="padding:10px; border:1px solid #ccc; border-radius:4px;">
-        
-        <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
+            <h1>Internal Data Portal</h1>
+            <p>Sign in to access store data.</p>
+            <div class="login-box">
+                <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">Team Access Key</label>
+                <input type="password" id="access-key" placeholder="Enter Access Key...">
+                <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
+                <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">User Credentials</label>
+                <input type="text" id="login-user" placeholder="Username">
+                <input type="password" id="login-pass" placeholder="Password">
+                <button id="login-btn" onclick="window.unlockAndLogin()">Unlock & Login</button>
+                <p id="error-msg"></p>
+            </div>
+        </div>
 
-        <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">User Credentials</label>
-        <input type="text" id="login-user" placeholder="Username" style="padding:10px; border:1px solid #ccc; border-radius:4px;">
-        <input type="password" id="login-pass" placeholder="Password" style="padding:10px; border:1px solid #ccc; border-radius:4px;">
-        
-        <button id="login-btn" onclick="window.unlockAndLogin()" style="margin-top:10px; padding:12px; background:#1976d2; color:white; font-weight:bold; border:none; border-radius:4px; cursor:pointer; transition: background 0.2s;">
-            Unlock & Login
-        </button>
-        
-        <p id="error-msg" style="color: #d32f2f; display: none; font-size: 13px; margin-top:10px; background:#ffebee; padding:8px; border-radius:4px; text-align:center;"></p>
-    </div>
-</div>
-
-<div id="session-timer-ui" class="hidden" style="position:fixed; top:10px; right:120px; background:white; padding:5px 15px; border-radius:20px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.1); display:flex; align-items:center; gap:8px; border:1px solid #ddd; z-index:1000;">
-    <span id="session-icon">⏱️</span>
-    <span id="session-text">00:00</span>
-</div>
+        <div id="session-timer-ui" class="hidden">
+            <span id="session-icon">⏱️</span>
+            <span id="session-text">00:00</span>
+        </div>
 
         <div id="dashboard" class="hidden">
-            <header>
-    <div style="display:flex; align-items:center; gap:15px;">
-        <h2 style="margin:0; color:#1e3c72; font-weight:700; letter-spacing:-0.5px;">🛍️ Store Portal</h2>
-        <span id="user-info" style="font-size:12px; background:#e3f2fd; color:#1565c0; padding:4px 8px; border-radius:12px; font-weight:600;">
-            ● Connected
-        </span>
-    </div>
-
-    <div style="display:flex; gap:12px; align-items:center;">
-        <div class="select-wrapper">
-            <select onchange="window.changeLayout(this.value)">
-                <option value="1">View: Single</option>
-                <option value="2">View: Split (2)</option>
-                <option value="3">View: Split (3)</option>
-                <option value="4">View: Grid (4)</option>
-            </select>
-        </div>
-        
-        <button class="action-btn" onclick="window.openFeedbackModal()">💬 Feedback</button>
-        <button class="logout-btn" onclick="window.logout()">🔒 Logout</button>
-    </div>
-</header>
-            
-            <main>
-                <div class="control-panel">
-                    <button onclick="window.loadSalesDashboard()" class="nav-btn">📊 Sales Reports</button>
-                    <button onclick="window.loadMemberDashboard()" class="nav-btn">👥 Member DB</button>
-                    <button onclick="window.loadTrackerDashboard()" class="nav-btn">📈 Google Sheets</button>
-                    <button onclick="window.loadHourlyDashboard()" class="nav-btn" style="background:#e1bee7;">🕒 Hourly Sales</button>
-                    <button onclick="window.loadTicketDashboard()" class="nav-btn" style="background:#ffcc80;">🎫 Task Tickets</button>
-                    <button onclick="window.loadApprovalsDashboard()" class="nav-btn" style="background:#a5d6a7;">📧 Mail Search</button>
-                    <button onclick="window.loadBusinessDashboard()" class="nav-btn" style="background:#7986cb; color:white;">🇮🇳 Know Your Business</button>
-                    <button onclick="window.loadWalkinDashboard()" class="nav-btn" style="background:#b2dfdb;">🚶 Walkin</button>
-                    <button onclick="window.loadDailyUpdateDashboard()" class="nav-btn" style="background:#ffab91;">📅 Inbox</button>
-                    <button onclick="window.loadWorkDashboard()" class="nav-btn" style="background:#80deea;">🛠️ Work on Reports</button>
-                </div>
+            <div class="dashboard-layout">
                 
-                <div id="sales-ui" class="hidden">
-                    <hr>
-                    <div id="month-list" class="folder-grid">Loading Months...</div>
-                    <div id="store-search-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-                        <h3>Step 2: Load Report</h3>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" id="store-id-input" placeholder="Enter Store ID (e.g. 4702)" style="padding: 8px;">
-                            <button onclick="window.findAndLoadReport()">🚀 Load into Active View</button>
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <h2>🛍️ Store Portal</h2>
+                        <div id="user-info" class="user-badge">● Connected</div>
+                    </div>
+
+                    <nav class="sidebar-nav">
+                        <div class="nav-group">
+                            <span class="group-title">ANALYTICS</span>
+                            <button onclick="window.loadSalesDashboard()" class="nav-item active">📊 Sales Reports</button>
+                            <button onclick="window.loadHourlyDashboard()" class="nav-item">🕒 Hourly Sales</button>
+                            <button onclick="window.loadBusinessDashboard()" class="nav-item">🇮🇳 KYB Map</button>
                         </div>
+
+                        <div class="nav-group">
+                            <span class="group-title">OPERATIONS</span>
+                            <button onclick="window.loadTicketDashboard()" class="nav-item">🎫 Task Manager</button>
+                            <button onclick="window.loadDailyUpdateDashboard()" class="nav-item">📅 My Inbox</button>
+                            <button onclick="window.loadApprovalsDashboard()" class="nav-item">📧 Mail Search</button>
+                        </div>
+
+                        <div class="nav-group">
+                            <span class="group-title">DATA TOOLS</span>
+                            <button onclick="window.loadWorkDashboard()" class="nav-item">🛠️ Work on Reports</button>
+                            <button onclick="window.loadMemberDashboard()" class="nav-item">👥 Member DB</button>
+                            <button onclick="window.loadTrackerDashboard()" class="nav-item">📈 Google Sheets</button>
+                            <button onclick="window.loadWalkinDashboard()" class="nav-item">🚶 Walkin Data</button>
+                        </div>
+                    </nav>
+
+                    <div class="sidebar-footer">
+                        <button class="logout-btn" onclick="window.logout()">🔒 Logout</button>
                     </div>
-                </div>
+                </aside>
 
-                <div id="member-ui" class="hidden">
-                    <hr>
-                    <h3>📂 Select Parquet File</h3>
-                    <div id="member-file-list" class="folder-grid">Loading Files...</div>
-                </div>
-
-                <div id="tracker-ui" class="hidden">
-                    <hr>
-                    <h3>📈 Select Tracker Sheet</h3>
-                    <div id="tracker-file-list" class="folder-grid">Loading Sheets...</div>
-                </div>
-
-                <div id="hourly-ui" class="hidden">
-                    <hr>
-                    <h3>🕒 Step 1: Select Date</h3>
-                    <div id="hourly-date-list" class="folder-grid" style="margin-bottom:15px;">Loading Dates...</div>
-                    <div id="hourly-images-container" class="hidden" style="padding:15px; background:#f3e5f5; border-radius:8px;">
-                        <h3>🕒 Step 2: Select Hour</h3>
-                        <div id="hourly-file-list" class="folder-grid"></div>
-                    </div>
-                </div>
-
-               <div id="ticket-ui" class="hidden">
-    <hr>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-        <h3>🎫 Advanced Task Manager</h3>
-        <div style="display:flex; gap:10px;">
-            <label class="action-btn" style="cursor:pointer; background:#fff3e0; border-color:#ff9800; color:#e65100;">
-                📂 Bulk Upload CSV
-                <input type="file" id="bulk-task-upload" accept=".csv" style="display:none;" onchange="window.handleBulkTaskUpload(this)">
-            </label>
-            <button onclick="window.loadTicketDashboard()" class="action-btn">🔄 Refresh My Tasks</button>
-        </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px;">
-        
-        <div style="padding:20px; background:#f5f5f5; border-radius:8px; height:fit-content;">
-            <h4 style="margin-top:0;">➕ Quick Assign</h4>
-            
-            <label style="font-size:12px; font-weight:bold;">Assign To (Email):</label>
-            <input type="email" id="tkt-email" placeholder="user@example.com" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
-            
-            <label style="font-size:12px; font-weight:bold;">Priority:</label>
-            <select id="tkt-priority" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
-                <option value="Low">Low</option>
-                <option value="Medium" selected>Medium</option>
-                <option value="High">🔥 High</option>
-            </select>
-
-            <label style="font-size:12px; font-weight:bold;">Task Details:</label>
-            <textarea id="tkt-task" rows="3" placeholder="Describe the task..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
-            
-            <label style="font-size:12px; font-weight:bold;">Visibility (Optional):</label>
-            <input type="text" id="tkt-visibility" placeholder="e.g. manager@test.com, team@test.com" style="width:100%; padding:8px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
-
-            <button onclick="window.createTicket()" style="background:#1976d2; color:white; padding:10px; border:none; border-radius:4px; width:100%; cursor:pointer; font-weight:bold;">🚀 Assign Task</button>
-        </div>
-
-        <div>
-            <div style="margin-bottom:10px; display:flex; gap:10px;">
-                <select id="task-filter-view" onchange="window.filterTasks()" style="padding:5px; border-radius:4px;">
-                    <option value="my_tasks">📥 Assigned to Me</option>
-                    <option value="assigned_by_me">📤 Assigned by Me</option>
-                    <option value="team">👥 Team (Visibility Group)</option>
-                </select>
-                <input type="text" id="task-search" placeholder="Search tasks..." onkeyup="window.filterTasks()" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
-            </div>
-            <div id="ticket-list-container" style="max-height:500px; overflow:auto; border:1px solid #eee; background:white;">Loading...</div>
-        </div>
-    </div>
-</div>
-
-<div id="task-action-modal" class="modal hidden">
-    <div class="modal-content" style="max-width:400px;">
-        <div class="modal-header">
-            <h3 id="task-action-title">Manage Task</h3>
-            <span class="close-btn" onclick="document.getElementById('task-action-modal').classList.add('hidden')">&times;</span>
-        </div>
-        <div class="modal-body">
-            <input type="hidden" id="action-parent-id">
-            <p id="action-task-desc" style="font-style:italic; color:#666;"></p>
-            
-            <label><b>Action Type:</b></label>
-            <select id="task-action-type" onchange="window.toggleTaskActionUI()" style="width:100%; padding:8px; margin-bottom:10px;">
-                <option value="subtask">➗ Divide / Create Subtask</option>
-                <option value="reassign">➡️ Reassign to Someone Else</option>
-            </select>
-
-            <label><b>Assign To:</b></label>
-            <input type="email" id="action-assign-to" placeholder="New owner email..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc;">
-            
-            <div id="subtask-desc-container">
-                <label><b>Subtask Details:</b></label>
-                <textarea id="action-details" rows="2" style="width:100%; padding:8px; border:1px solid #ccc;"></textarea>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button onclick="window.submitTaskAction()" style="background:#28a745; color:white;">Confirm</button>
-        </div>
-    </div>
-</div>
-                </div>
-
-                <div id="approvals-ui" class="hidden">
-                    <hr>
-                    <h3>📧 Mail Search Filter</h3>
-                    <p style="color:#666; font-size:13px;">Find approval emails or specific threads quickly.</p>
+                <main class="main-content">
                     
-                    <div style="background:#e8f5e9; padding:20px; border-radius:8px; max-width:600px; border:1px solid #c8e6c9;">
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
-                            <div style="grid-column: span 2;">
-                                <label style="font-weight:bold; font-size:12px;">Target Email (Sender/Recipient):</label>
-                                <input type="email" id="mail-target" placeholder="e.g. manager@example.com" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                    <header class="top-bar">
+                        <h2 id="page-title">Dashboard</h2>
+                        <div class="header-controls">
+                            <div class="select-wrapper">
+                                <select onchange="window.changeLayout(this.value)">
+                                    <option value="1">View: Single</option>
+                                    <option value="2">View: Split (2)</option>
+                                    <option value="3">View: Split (3)</option>
+                                </select>
                             </div>
-                            <div>
-                                <label style="font-weight:bold; font-size:12px;">From Date:</label>
-                                <input type="date" id="mail-from-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
-                            </div>
-                            <div>
-                                <label style="font-weight:bold; font-size:12px;">To Date:</label>
-                                <input type="date" id="mail-to-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
-                            </div>
-                            <div style="grid-column: span 2;">
-                                <label style="font-weight:bold; font-size:12px;">Keywords (Subject/Body):</label>
-                                <input type="text" id="mail-keywords" placeholder="e.g. 'Approved' 'Budget' 'Urgent'" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
-                            </div>
+                            <button class="action-btn" onclick="window.openFeedbackModal()">💬 Feedback</button>
                         </div>
-                        <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px 20px; border:none; border-radius:4px; font-size:14px; font-weight:bold; cursor:pointer; width:100%; display:flex; justify-content:center; align-items:center; gap:10px;">
-                            <span>🚀</span> Search in Gmail
-                        </button>
-                    </div>
-                </div>
+                    </header>
 
-                <div id="business-ui" class="hidden">
-                    <hr>
-                    <h3>🇮🇳 Warehouse & Pincode Performance</h3>
-                    
-                    <div style="margin-bottom:15px; background:#fff; padding:10px; border-radius:4px; border:1px solid #ddd; display:flex; gap:20px; align-items:center;">
-                        <strong>🗺️ Show on Map:</strong>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
-                            <input type="checkbox" id="chk-flipkart" checked onchange="window.toggleMapLayer('flipkart')"> 
-                            <span style="color:#1976D2; font-weight:bold;">●</span> Flipkart Wholesale (Blue)
-                        </label>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
-                            <input type="checkbox" id="chk-metro" checked onchange="window.toggleMapLayer('metro')"> 
-                            <span style="color:#D32F2F; font-weight:bold;">●</span> Metro Stores (Red)
-                        </label>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
-                            <input type="checkbox" id="chk-dmart" checked onchange="window.toggleMapLayer('dmart')"> 
-                            <span style="color:#388E3C; font-weight:bold;">●</span> DMart Stores (Green)
-                        </label>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <div id="business-map"></div>
-                            <p style="font-size:11px; color:#666;">* Markers represent Warehouses. Circles represent high-volume Pincodes.</p>
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div class="stat-card">
-                                <div>Total Customers</div>
-                                <div id="kyb-total-cust" class="stat-val">-</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Total Sales</div>
-                                <div id="kyb-total-sales" class="stat-val">-</div>
-                            </div>
-                            <div class="stat-card">
-                                <div>Avg Delivery %</div>
-                                <div id="kyb-avg-del" class="stat-val">-</div>
-                            </div>
-                            <button onclick="window.loadBusinessDashboard()" style="margin-top:auto; padding:10px; cursor:pointer; background:#e0e0e0; border:none; border-radius:4px;">🔄 Refresh Map Data</button>
-                        </div>
-                    </div>
-                    
-                    <h3>📍 Pincode Wise Metrics</h3>
-                    <div id="pincode-table-container">Loading data...</div>
-                </div>
-
-                <div id="walkin-ui" class="hidden">
-                    <hr>
-                    <h3>🚶 Select Walkin Category</h3>
-                    <div id="walkin-category-list" class="folder-grid" style="margin-bottom:15px;"></div>
-                    <div id="walkin-files-container" class="hidden" style="padding:15px; background:#e0f2f1; border-radius:8px;">
-                        <h3 id="walkin-files-title">Files</h3>
-                        <div id="walkin-file-list" class="folder-grid"></div>
-                    </div>
-                </div>
-
-                <div id="daily-ui" class="hidden">
-                    <hr>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3>📅 My Reports Inbox</h3>
-                        <div style="display:flex; gap:10px;">
-                            <input type="email" id="user-identity-email" placeholder="Verify your email..." style="padding:5px; border:1px solid #ccc; border-radius:4px;">
-                            <button onclick="window.fetchDailyUpdates()" style="background:#ff5722; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Check Inbox</button>
-                        </div>
-                    </div>
-                    <div id="daily-list-container" class="folder-grid">
-                        <p style="color:#666;">Enter your email above to see your assigned reports.</p>
-                    </div>
-                </div>
-
-                <div id="work-ui" class="hidden">
-                    <hr>
-                    <div style="background:#e0f7fa; padding:15px; border-radius:8px; border:1px solid #b2ebf2; margin-bottom: 20px;">
-                        <h3>🛠️ Work on Reports (Pivot Mode)</h3>
-                        <p style="font-size:12px; color:#555;">Select a file to load it into the Pivot Table engine. <b>Parquet files (100MB+) perform best here.</b></p>
+                    <div id="content-wrapper">
                         
-                        <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px dashed #aaa; border-radius: 4px;">
-                            <label for="local-file-upload"><b>📂 Or open a local file:</b></label>
-                            <input type="file" id="local-file-upload" accept=".csv,.parquet,.xlsx" onchange="window.handleLocalFileUpload(this)">
+                        <div id="sales-ui" class="hidden">
+                            <div id="month-list" class="folder-grid">Loading Months...</div>
+                            <div id="store-search-box" class="hidden" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+                                <h3>Step 2: Load Report</h3>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="text" id="store-id-input" placeholder="Enter Store ID (e.g. 4702)" style="padding: 8px;">
+                                    <button onclick="window.findAndLoadReport()">🚀 Load into Active View</button>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div id="work-file-list" class="folder-grid">Loading Files...</div>
-                    </div>
-                </div>
 
-                <div id="filter-box" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 1px solid #90caf9;">
-                    <h3>Data Filters (Applies to Blue Active View)</h3>
-                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <label>Filter:</label>
-                        <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-                            <option value="all">All Columns</option>
-                        </select>
-                        <input type="text" id="filter-input" placeholder="Type to search (Press Enter)..." onchange="window.applyTableFilter()" style="padding: 8px; flex-grow: 1; min-width: 200px;">
-                    </div>
-                    <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
-                        <label>Show Rows:</label>
-                        <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-                            <option value="10">10 Rows</option>
-                            <option value="50">50 Rows</option>
-                            <option value="100" selected>100 Rows</option>
-                            <option value="500">500 Rows</option>
-                            <option value="all">All Rows</option>
-                        </select>
-                    </div>
-                    <div id="sheet-link-container" style="margin-top: 10px;"></div>
-                    <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
-                </div>
-
-                <div id="pivot-wrapper" class="hidden">
-                    <div id="pivot-output"></div>
-                </div>
-
-                <div id="view-container" class="grid-1">
-                    <div id="pane-0" class="pane active" onclick="window.setActivePane('pane-0')">
-                        <span class="pane-label">View 1 (Active)</span>
-                        <div class="content-area">
-                            <div class="empty-msg">Select a file to load here</div>
+                        <div id="member-ui" class="hidden">
+                            <h3>📂 Select Parquet File</h3>
+                            <div id="member-file-list" class="folder-grid">Loading Files...</div>
                         </div>
-                    </div>
-                </div>
 
-            </main>
+                        <div id="tracker-ui" class="hidden">
+                            <h3>📈 Select Tracker Sheet</h3>
+                            <div id="tracker-file-list" class="folder-grid">Loading Sheets...</div>
+                        </div>
+
+                        <div id="hourly-ui" class="hidden">
+                            <h3>🕒 Step 1: Select Date</h3>
+                            <div id="hourly-date-list" class="folder-grid" style="margin-bottom:15px;">Loading Dates...</div>
+                            <div id="hourly-images-container" class="hidden" style="padding:15px; background:#f3e5f5; border-radius:8px;">
+                                <h3>🕒 Step 2: Select Hour</h3>
+                                <div id="hourly-file-list" class="folder-grid"></div>
+                            </div>
+                        </div>
+
+                        <div id="ticket-ui" class="hidden">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                <div>
+                                    <h3 style="margin:0;">🎫 Task & Data Distribution</h3>
+                                    <p style="margin:0; font-size:12px; color:#666;">Assign tasks or distribute data rows securely.</p>
+                                </div>
+                                <div style="display:flex; gap:10px;">
+                                    <label class="action-btn" style="cursor:pointer; background:#e3f2fd; border-color:#2196f3; color:#0d47a1; display:flex; align-items:center; gap:5px;">
+                                        📂 <b>Bulk Distribute (CSV)</b>
+                                        <input type="file" id="bulk-task-upload" accept=".csv" style="display:none;" onchange="window.handleBulkTaskUpload(this)">
+                                    </label>
+                                    <button onclick="window.loadTicketDashboard()" class="action-btn">🔄 Refresh</button>
+                                </div>
+                            </div>
+
+                            <div style="display:grid; grid-template-columns: 300px 1fr; gap:20px;">
+                                <div style="padding:20px; background:#f9f9f9; border:1px solid #ddd; border-radius:8px; height:fit-content;">
+                                    <h4 style="margin-top:0;">➕ Manual Assignment</h4>
+                                    <label style="font-size:12px; font-weight:bold;">Assign To (Email):</label>
+                                    <input type="email" id="tkt-email" placeholder="user@example.com" style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;">
+                                    <label style="font-size:12px; font-weight:bold;">Task / Data:</label>
+                                    <textarea id="tkt-task" rows="4" placeholder="Type instructions or paste data here..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                                    <label style="font-size:12px; font-weight:bold;">Group / Batch Name (Optional):</label>
+                                    <input type="text" id="tkt-batch" placeholder="e.g. Oct Sales Report" style="width:100%; padding:8px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                                    <button onclick="window.createTicket()" style="background:#1976d2; color:white; padding:10px; border:none; border-radius:4px; width:100%; cursor:pointer; font-weight:bold;">🚀 Assign</button>
+                                </div>
+                                <div style="display:flex; flex-direction:column; gap:10px;">
+                                    <div style="display:flex; gap:10px; background:#eee; padding:10px; border-radius:8px;">
+                                        <select id="task-filter-view" onchange="window.filterTasks()" style="padding:6px; border-radius:4px; border:1px solid #ccc;">
+                                            <option value="my_tasks">📥 Inbox: Assigned to Me</option>
+                                            <option value="assigned_by_me">📤 Sent: Assigned by Me</option>
+                                            <option value="all_batches">📚 Browse by Batch</option>
+                                        </select>
+                                        <input type="text" id="task-search" placeholder="Search data..." onkeyup="window.filterTasks()" style="padding:6px; flex-grow:1; border-radius:4px; border:1px solid #ccc;">
+                                    </div>
+                                    <div id="ticket-list-container" style="height:500px; overflow:auto; border:1px solid #ccc; background:white; border-radius:4px;">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="approvals-ui" class="hidden">
+                            <h3>📧 Mail Search Filter</h3>
+                            <div style="background:#e8f5e9; padding:20px; border-radius:8px; max-width:600px; border:1px solid #c8e6c9;">
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                                    <div style="grid-column: span 2;">
+                                        <label style="font-weight:bold; font-size:12px;">Target Email:</label>
+                                        <input type="email" id="mail-target" placeholder="e.g. manager@example.com" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                                    </div>
+                                    <div><label style="font-weight:bold; font-size:12px;">From:</label><input type="date" id="mail-from-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;"></div>
+                                    <div><label style="font-weight:bold; font-size:12px;">To:</label><input type="date" id="mail-to-date" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;"></div>
+                                    <div style="grid-column: span 2;">
+                                        <label style="font-weight:bold; font-size:12px;">Keywords:</label>
+                                        <input type="text" id="mail-keywords" placeholder="e.g. 'Approved' 'Budget'" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                                    </div>
+                                </div>
+                                <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer; width:100%;">🚀 Search in Gmail</button>
+                            </div>
+                        </div>
+
+                        <div id="business-ui" class="hidden">
+                            <h3>🇮🇳 Warehouse & Pincode Performance</h3>
+                            <div style="margin-bottom:15px; background:#fff; padding:10px; border-radius:4px; border:1px solid #ddd; display:flex; gap:20px; align-items:center;">
+                                <strong>🗺️ Layers:</strong>
+                                <label><input type="checkbox" id="chk-flipkart" checked onchange="window.toggleMapLayer('flipkart')"> <span style="color:#1976D2;">●</span> Flipkart</label>
+                                <label><input type="checkbox" id="chk-metro" checked onchange="window.toggleMapLayer('metro')"> <span style="color:#D32F2F;">●</span> Metro</label>
+                                <label><input type="checkbox" id="chk-dmart" checked onchange="window.toggleMapLayer('dmart')"> <span style="color:#388E3C;">●</span> DMart</label>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                <div><div id="business-map"></div></div>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div class="stat-card"><div>Total Customers</div><div id="kyb-total-cust" class="stat-val">-</div></div>
+                                    <div class="stat-card"><div>Total Sales</div><div id="kyb-total-sales" class="stat-val">-</div></div>
+                                    <div class="stat-card"><div>Avg Delivery %</div><div id="kyb-avg-del" class="stat-val">-</div></div>
+                                    <button onclick="window.loadBusinessDashboard()" style="margin-top:auto; padding:10px;">🔄 Refresh Map</button>
+                                </div>
+                            </div>
+                            <h3>📍 Pincode Wise Metrics</h3>
+                            <div id="pincode-table-container">Loading data...</div>
+                        </div>
+
+                        <div id="walkin-ui" class="hidden">
+                            <h3>🚶 Select Walkin Category</h3>
+                            <div id="walkin-category-list" class="folder-grid" style="margin-bottom:15px;"></div>
+                            <div id="walkin-files-container" class="hidden" style="padding:15px; background:#e0f2f1; border-radius:8px;">
+                                <h3 id="walkin-files-title">Files</h3>
+                                <div id="walkin-file-list" class="folder-grid"></div>
+                            </div>
+                        </div>
+
+                        <div id="daily-ui" class="hidden">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                <h3>📅 My Reports Inbox</h3>
+                                <div style="display:flex; gap:10px;">
+                                    <input type="email" id="user-identity-email" placeholder="Verify your email..." style="padding:5px; border:1px solid #ccc; border-radius:4px;">
+                                    <button onclick="window.fetchDailyUpdates()" style="background:#ff5722; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Check Inbox</button>
+                                </div>
+                            </div>
+                            <div id="daily-list-container" class="folder-grid">Enter email above.</div>
+                        </div>
+
+                        <div id="work-ui" class="hidden">
+                            <div style="background:#e0f7fa; padding:15px; border-radius:8px; border:1px solid #b2ebf2; margin-bottom: 20px;">
+                                <h3>🛠️ Work on Reports (Pivot Mode)</h3>
+                                <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px dashed #aaa; border-radius: 4px;">
+                                    <label for="local-file-upload"><b>📂 Or open a local file:</b></label>
+                                    <input type="file" id="local-file-upload" accept=".csv,.parquet,.xlsx" onchange="window.handleLocalFileUpload(this)">
+                                </div>
+                                <div id="work-file-list" class="folder-grid">Loading Files...</div>
+                            </div>
+                        </div>
+
+                        <div id="pivot-wrapper" class="hidden"><div id="pivot-output"></div></div>
+
+                        <div id="view-container" class="grid-1">
+                            <div id="pane-0" class="pane active" onclick="window.setActivePane('pane-0')">
+                                <span class="pane-label">Active View</span>
+                                <div class="content-area"><div class="empty-msg">Select a tool from the sidebar to begin</div></div>
+                            </div>
+                        </div>
+
+                        <div id="filter-box" style="margin-top: 20px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <h3>Data Filters</h3>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <label>Filter:</label>
+                                <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                    <option value="all">All Columns</option>
+                                </select>
+                                <input type="text" id="filter-input" placeholder="Type to search..." onchange="window.applyTableFilter()" style="padding: 8px; flex-grow: 1;">
+                            </div>
+                            <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
+                                <label>Show Rows:</label>
+                                <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px;">
+                                    <option value="10">10</option>
+                                    <option value="50">50</option>
+                                    <option value="100" selected>100</option>
+                                    <option value="500">500</option>
+                                    <option value="all">All</option>
+                                </select>
+                            </div>
+                            <div id="sheet-link-container" style="margin-top: 10px;"></div>
+                            <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
+                        </div>
+
+                    </div> </main>
+            </div>
         </div>
     </div>
 
@@ -430,10 +287,35 @@
     <div id="feedback-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header"><h3>💬 Submit Feedback</h3><span class="close-btn" onclick="window.closeFeedbackModal()">&times;</span></div>
-            <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
-                <textarea id="feedback-text" rows="5" placeholder="Type your feedback here..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+            <div class="modal-body"><textarea id="feedback-text" rows="5" placeholder="Type feedback..." style="width:100%; padding:10px;"></textarea></div>
+            <div class="modal-footer"><button onclick="window.submitFeedback()" style="background:#28a745; color:white;">Submit</button></div>
+        </div>
+    </div>
+
+    <div id="task-action-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:400px;">
+            <div class="modal-header">
+                <h3 id="task-action-title">Manage Task</h3>
+                <span class="close-btn" onclick="document.getElementById('task-action-modal').classList.add('hidden')">&times;</span>
             </div>
-            <div class="modal-footer"><button onclick="window.submitFeedback()" style="background:#28a745; color:white;">Submit Feedback</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="action-parent-id">
+                <p id="action-task-desc" style="font-style:italic; color:#666;"></p>
+                <label><b>Action Type:</b></label>
+                <select id="task-action-type" onchange="window.toggleTaskActionUI()" style="width:100%; padding:8px; margin-bottom:10px;">
+                    <option value="subtask">➗ Divide / Create Subtask</option>
+                    <option value="reassign">➡️ Reassign to Someone Else</option>
+                </select>
+                <label><b>Assign To:</b></label>
+                <input type="email" id="action-assign-to" placeholder="New owner email..." style="width:100%; padding:8px; margin-bottom:10px; border:1px solid #ccc;">
+                <div id="subtask-desc-container">
+                    <label><b>Subtask Details:</b></label>
+                    <textarea id="action-details" rows="2" style="width:100%; padding:8px; border:1px solid #ccc;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="window.submitTaskAction()" style="background:#28a745; color:white;">Confirm</button>
+            </div>
         </div>
     </div>
 
@@ -442,9 +324,9 @@
             <div class="modal-header"><h3>✅ Resolve Ticket</h3><span class="close-btn" onclick="window.closeResolveModal()">&times;</span></div>
             <div class="modal-body">
                 <p id="resolve-tkt-id" style="font-weight:bold;"></p>
-                <textarea id="resolve-notes" rows="4" placeholder="How was this resolved?" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                <textarea id="resolve-notes" rows="4" placeholder="Resolution notes..." style="width:100%; padding:10px;"></textarea>
             </div>
-            <div class="modal-footer"><button onclick="window.confirmResolve()" style="background:#28a745; color:white;">Mark as Resolved</button></div>
+            <div class="modal-footer"><button onclick="window.confirmResolve()" style="background:#28a745; color:white;">Mark Resolved</button></div>
         </div>
     </div>
 
@@ -455,44 +337,40 @@
                 <span class="close-btn" onclick="document.getElementById('convert-modal').classList.add('hidden')">&times;</span>
             </div>
             <div class="modal-body">
-                <p>Select a sheet to convert:</p>
-                <select id="sheet-selector" style="width: 100%; padding: 8px; margin-bottom: 15px; border-radius: 4px;"></select>
-                <p>Select output format:</p>
+                <p>Select a sheet:</p>
+                <select id="sheet-selector" style="width: 100%; padding: 8px; margin-bottom: 15px;"></select>
+                <p>Output format:</p>
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                     <label><input type="radio" name="convert-fmt" value="csv" checked> CSV</label>
                     <label><input type="radio" name="convert-fmt" value="parquet"> Parquet</label>
                 </div>
                 <label><input type="checkbox" id="save-converted" checked> Download file?</label>
             </div>
+            <div class="modal-footer"><button onclick="window.processExcelConversion()" style="background:#007bff; color:white;">Convert & Load</button></div>
+        </div>
+    </div>
+
+    <div id="bulk-wizard-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:600px;">
+            <div class="modal-header">
+                <h3>📂 Bulk Distribution Wizard</h3>
+                <span class="close-btn" onclick="document.getElementById('bulk-wizard-modal').classList.add('hidden')">&times;</span>
+            </div>
+            <div id="wizard-step-1" class="modal-body">
+                <p><b>Step 1:</b> Which column determines the assignment?</p>
+                <p style="font-size:12px; color:#666;">(e.g., Select 'Store_ID' to assign specific stores to specific users)</p>
+                <div id="wizard-column-list" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:15px;"></div>
+            </div>
+            <div id="wizard-step-2" class="modal-body hidden">
+                <p><b>Step 2:</b> Assign a User ID (Email) to each value.</p>
+                <div id="wizard-mapping-list" style="max-height:300px; overflow:auto; border:1px solid #eee; padding:10px;"></div>
+            </div>
             <div class="modal-footer">
-                <button onclick="window.processExcelConversion()" style="background:#007bff; color:white;">Convert & Load</button>
+                <button id="wizard-next-btn" style="background:#1976d2; color:white; display:none;" onclick="window.processBulkMapping()">🚀 Assign Tasks</button>
             </div>
         </div>
     </div>
-    <div id="bulk-wizard-modal" class="modal hidden">
-    <div class="modal-content" style="max-width:600px;">
-        <div class="modal-header">
-            <h3>📂 Bulk Distribution Wizard</h3>
-            <span class="close-btn" onclick="document.getElementById('bulk-wizard-modal').classList.add('hidden')">&times;</span>
-        </div>
-        
-        <div id="wizard-step-1" class="modal-body">
-            <p><b>Step 1:</b> Which column determines the assignment?</p>
-            <p style="font-size:12px; color:#666;">(e.g., Select 'Store_ID' to assign specific stores to specific users)</p>
-            <div id="wizard-column-list" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:15px;"></div>
-        </div>
 
-        <div id="wizard-step-2" class="modal-body hidden">
-            <p><b>Step 2:</b> Assign a User ID (Email) to each value.</p>
-            <div id="wizard-mapping-list" style="max-height:300px; overflow:auto; border:1px solid #eee; padding:10px;"></div>
-        </div>
-
-        <div class="modal-footer">
-            <button id="wizard-next-btn" style="background:#1976d2; color:white; display:none;" onclick="window.processBulkMapping()">🚀 Assign Tasks</button>
-        </div>
-    </div>
-</div>
-    
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
 </body>
