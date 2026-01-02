@@ -178,16 +178,15 @@ async function checkBackendCredentials(user, pass) {
     } catch (e) { return false; }
 }
 
-// --- LOGGING STEP 1: CREATE THE ROW ---
+
+// --- LOGGING STEP 1: CREATE THE ROW (Targeting Sheet3) ---
 async function createSessionRow(user, status) {
     if (!CONFIG.LOGIN_LOG_SHEET_ID) return;
     
     const startTime = new Date().toLocaleString();
-    // Columns: [Start Time, Username, Status, Duration(min), Interactions, Last Update]
     const initialData = [[ startTime, user, status, "0", "0", startTime ]];
 
     try {
-        // CHANGE HERE: 'Sheet1' -> 'Sheet3'
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOGIN_LOG_SHEET_ID}/values/Sheet3!A1:append?valueInputOption=USER_ENTERED`;
         
         const response = await fetch(url, {
@@ -198,7 +197,14 @@ async function createSessionRow(user, status) {
         
         const result = await response.json();
         
-        // Extract Row Number
+        // ERROR HANDLING
+        if (result.error) {
+            console.error("❌ Google Sheets API Error:", result.error);
+            alert(`Logging Failed: ${result.error.message}\n\nCheck console for details.`);
+            return;
+        }
+        
+        // Success: Extract Row Number
         if (result.updates && result.updates.updatedRange) {
             const rangeStr = result.updates.updatedRange;
             const match = rangeStr.match(/[A-Z]+(\d+):/);
@@ -207,29 +213,35 @@ async function createSessionRow(user, status) {
                 console.log(`📝 Session logged at Sheet3 Row ${currentSessionRow}`);
             }
         }
-    } catch (e) { console.warn("Create Log failed:", e); }
+    } catch (e) { 
+        console.error("Network Error during logging:", e); 
+    }
 }
 
-// --- LOGGING STEP 2: UPDATE THE EXISTING ROW ---
+// --- LOGGING STEP 2: UPDATE THE ROW (Targeting Sheet3) ---
 async function updateSessionRow() {
     if (!CONFIG.LOGIN_LOG_SHEET_ID || !currentSessionRow) return;
 
     const currentTime = new Date().toLocaleString();
     const durationMins = Math.floor(activeSessionSeconds / 60);
 
-    // CHANGE HERE: 'Sheet1' -> 'Sheet3'
-    // Updating Columns D, E, F (Duration, Clicks, Last Update)
     const range = `Sheet3!D${currentSessionRow}:F${currentSessionRow}`;
     const values = [[ durationMins, sessionInteractionCount, currentTime ]];
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOGIN_LOG_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
-        await fetch(url, {
+        const response = await fetch(url, {
             method: "PUT",
             headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
             body: JSON.stringify({ values: values })
         });
-        console.log(`📡 Log Updated (Sheet3): ${durationMins}m, ${sessionInteractionCount} clicks`);
+
+        const result = await response.json();
+        if (result.error) {
+            console.error("❌ Update Log Error:", result.error);
+        } else {
+            console.log(`📡 Log Updated (Sheet3): ${durationMins}m`);
+        }
     } catch (e) { console.warn("Update Log failed:", e); }
 }
 // --- SCENARIO A: Valid User Timer ---
