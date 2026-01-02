@@ -404,6 +404,7 @@ async function submitFeedback() {
 
 async function loadSalesDashboard() {
     resetUI();
+    highlightSidebar("Sales Reports");
     document.getElementById("sales-ui").classList.remove("hidden");
     const listContainer = document.getElementById("month-list");
     listContainer.innerHTML = "Loading...";
@@ -441,6 +442,7 @@ function selectMonth(folderId, btnElement) {
 
 async function loadMemberDashboard() {
     resetUI();
+    highlightSidebar("Member DB");
     document.getElementById("member-ui").classList.remove("hidden");
     const listContainer = document.getElementById("member-file-list");
     listContainer.innerHTML = "Loading...";
@@ -472,6 +474,7 @@ async function loadMemberDashboard() {
 
 async function loadTrackerDashboard() {
     resetUI();
+    highlightSidebar("Google Sheets");
     document.getElementById("tracker-ui").classList.remove("hidden");
     const listContainer = document.getElementById("tracker-file-list");
     listContainer.innerHTML = "";
@@ -520,6 +523,7 @@ function openTrackerCategory(groupName) {
 
 async function loadWalkinDashboard() {
     resetUI();
+    highlightSidebar("Walkin Data");
     document.getElementById("walkin-ui").classList.remove("hidden");
     const catList = document.getElementById("walkin-category-list");
     const fileContainer = document.getElementById("walkin-files-container");
@@ -638,6 +642,7 @@ async function loadWalkinCategory(title, folderId, backMode = null) {
 
 async function loadHourlyDashboard() {
     resetUI();
+    highlightSidebar("Hourly Sales");
     document.getElementById("hourly-ui").classList.remove("hidden");
     const dateList = document.getElementById("hourly-date-list");
     const imageList = document.getElementById("hourly-file-list");
@@ -751,6 +756,7 @@ async function renderImage(fileId, timeLabel) {
 
 async function loadTicketDashboard() {
     resetUI();
+    highlightSidebar("Task Manager");
     document.getElementById("ticket-ui").classList.remove("hidden");
     const container = document.getElementById("ticket-list-container");
     container.innerHTML = "⏳ Fetching & Securing Data...";
@@ -1154,6 +1160,7 @@ async function confirmResolve() {
 
 function loadApprovalsDashboard() {
     resetUI();
+    highlightSidebar("Mail Search");
     document.getElementById("approvals-ui").classList.remove("hidden");
 }
 
@@ -1191,6 +1198,7 @@ function redirectMailSearch() {
 
 async function loadDailyUpdateDashboard() {
     resetUI();
+    highlightSidebar("My Inbox");
     document.getElementById("daily-ui").classList.remove("hidden");
     
     const savedEmail = localStorage.getItem("portal_user_email");
@@ -1276,6 +1284,7 @@ async function fetchDailyUpdates() {
 
 async function loadWorkDashboard() {
     resetUI();
+    highlightSidebar("Work on Reports");
     document.getElementById("work-ui").classList.remove("hidden");
     const list = document.getElementById("work-file-list");
     list.innerHTML = "⏳ Scanning Drive...";
@@ -1853,6 +1862,7 @@ window.onclick = function(event) {
 
 async function loadBusinessDashboard() {
     resetUI();
+    highlightSidebar("KYB Map");
     document.getElementById("business-ui").classList.remove("hidden");
     
     if (!mapInstance) {
@@ -2320,17 +2330,21 @@ function logout() {
     window.location.reload(); // Reloads page to lock it again
 }
 
-function highlightSidebar(btnText) {
-    // Remove active class from all
-    document.querySelectorAll('.nav-item').forEach(btn => {
-        btn.classList.remove('active');
-        // Add active class if text matches
-        if(btn.innerText.includes(btnText)) {
-            btn.classList.add('active');
-        }
-    });
+// --- SIDEBAR HIGHLIGHT HELPER ---
+function highlightSidebar(menuName) {
+    // 1. Remove 'active' class from all sidebar buttons
+    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
     
-    // Update Top Title
-    const title = document.getElementById("page-title");
-    if(title) title.innerText = btnText;
+    // 2. Find the button with the matching text and make it active
+    const buttons = document.querySelectorAll('.nav-item');
+    for (const btn of buttons) {
+        if (btn.innerText.includes(menuName)) {
+            btn.classList.add('active');
+            break; // Stop looking after finding the match
+        }
+    }
+
+    // 3. Update the Top Header Title
+    const pageTitle = document.getElementById("page-title");
+    if (pageTitle) pageTitle.innerText = menuName;
 }
