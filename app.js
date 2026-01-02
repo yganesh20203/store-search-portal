@@ -1967,3 +1967,40 @@ window.resetChartBuilder = function() {
     
     console.log("Graph builder reset.");
 };
+
+
+async function generateAccessToken(creds) {
+    const header = { alg: "RS256", typ: "JWT" };
+    const now = Math.floor(Date.now() / 1000);
+    const claim = {
+        iss: creds.client_email,
+        scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
+        aud: "https://oauth2.googleapis.com/token",
+        exp: now + 3600,
+        iat: now
+    };
+
+    const sHeader = JSON.stringify(header);
+    const sClaim = JSON.stringify(claim);
+    // Signs the JWT using the private key
+    const sJWS = KJUR.jws.JWS.sign(null, sHeader, sClaim, creds.private_key);
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${sJWS}`
+    });
+    const data = await response.json();
+    return data.access_token;
+}
+function logout() {
+    if(!confirm("Are you sure you want to logout?")) return;
+    
+    // Clear any active timers
+    if (typeof sessionTimerInterval !== 'undefined' && sessionTimerInterval) {
+        clearInterval(sessionTimerInterval);
+    }
+    
+    localStorage.removeItem("portal_user_email");
+    window.location.reload(); // Reloads page to lock it again
+}
