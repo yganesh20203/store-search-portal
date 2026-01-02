@@ -18,7 +18,9 @@ let allTasksCache = [];
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
 let currentPivotTableName = ""; 
-
+let bulkCsvData = [];
+let bulkCsvHeaders = [];  
+let selectedGroupCol = "";
 // Map Global
 let mapInstance = null;
 let mapLayers = {
@@ -894,46 +896,153 @@ async function handleBulkTaskUpload(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const currentUser = localStorage.getItem("portal_user_email");
     const reader = new FileReader();
-    
-    reader.onload = async function(e) {
+    reader.onload = function(e) {
         const text = e.target.result;
-        // Simple CSV Parser (Assumes: Email, Task, Priority, Visibility)
-        const lines = text.split("\n").slice(1); // Skip header
-        const newRows = [];
+        const rows = text.split("\n").map(r => r.trim()).filter(r => r);
+        
+        if (rows.length < 2) { alert("CSV is empty"); return; }
 
-        lines.forEach(line => {
-            const cols = line.split(",");
-            if (cols.length >= 2) {
-                const tktId = "TKT-" + Math.floor(Math.random() * 100000);
-                const date = new Date().toLocaleDateString();
-                // Map columns: cols[0]=Email, cols[1]=Task, cols[2]=Priority
-                newRows.push([
-                    tktId, 
-                    "", // Parent ID empty
-                    date, 
-                    currentUser, 
-                    cols[0]?.trim(), // To
-                    cols[1]?.trim(), // Task
-                    cols[2]?.trim() || "Medium", // Priority
-                    "OPEN",
-                    cols[3]?.trim() || "" // Visibility
-                ]);
-            }
-        });
+        // Store Headers & Data Globally
+        bulkCsvHeaders = rows[0].split(",").map(h => h.trim());
+        bulkCsvData = rows.slice(1).map(r => r.split(","));
 
-        if (newRows.length > 0) {
-            if(confirm(`Ready to bulk assign ${newRows.length} tasks?`)) {
-                await appendRowsToSheet(newRows);
-                alert("✅ Bulk Upload Complete!");
-                loadTicketDashboard();
-            }
-        } else {
-            alert("CSV format invalid. Ensure columns: Email, Task, Priority");
-        }
+        // Open Wizard - Step 1
+        showColumnSelection();
     };
     reader.readAsText(file);
+    input.value = ""; // Reset input
+}
+
+// 2. SHOW COLUMN OPTIONS (Step 1)
+function showColumnSelection() {
+    const modal = document.getElementById("bulk-wizard-modal");
+    const step1 = document.getElementById("wizard-step-1");
+    const step2 = document.getElementById("wizard-step-2");
+    const container = document.getElementById("wizard-column-list");
+    const btn = document.getElementById("wizard-next-btn");
+
+    modal.classList.remove("hidden");
+    step1.classList.remove("hidden");
+    step2.classList.add("hidden");
+    btn.style.display = "none";
+    container.innerHTML = "";
+
+    bulkCsvHeaders.forEach((col, index) => {
+        const btn = document.createElement("button");
+        btn.innerText = col;
+        btn.style.padding = "10px";
+        btn.style.border = "1px solid #ccc";
+        btn.style.borderRadius = "4px";
+        btn.style.cursor = "pointer";
+        btn.style.background = "#f0f0f0";
+        
+        btn.onclick = () => {
+            selectedGroupCol = index; // Store column INDEX, not name
+            showUserMapping(index);
+        };
+        container.appendChild(btn);
+    });
+}
+
+// 3. SHOW MAPPING INPUTS (Step 2)
+function showUserMapping(colIndex) {
+    const step1 = document.getElementById("wizard-step-1");
+    const step2 = document.getElementById("wizard-step-2");
+    const container = document.getElementById("wizard-mapping-list");
+    const btn = document.getElementById("wizard-next-btn");
+
+    step1.classList.add("hidden");
+    step2.classList.remove("hidden");
+    btn.style.display = "block";
+    container.innerHTML = "";
+
+    // Find unique values in the selected column
+    const uniqueValues = [...new Set(bulkCsvData.map(row => row[colIndex]?.trim()))].filter(v => v);
+
+    if(uniqueValues.length === 0) {
+        container.innerHTML = "<p>No unique values found in this column.</p>";
+        return;
+    }
+
+    uniqueValues.forEach(val => {
+        const div = document.createElement("div");
+        div.style.display = "flex";
+        div.style.alignItems = "center";
+        div.style.marginBottom = "10px";
+        div.style.gap = "10px";
+
+        div.innerHTML = `
+            <div style="width:150px; font-weight:bold; overflow:hidden; text-overflow:ellipsis;">${val}</div>
+            <span>➡️</span>
+            <input type="email" class="mapping-input" data-key="${val}" placeholder="Assign to User ID..." 
+                   style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px;">
+        `;
+        container.appendChild(div);
+    });
+}
+
+// 4. PROCESS FINAL ASSIGNMENT (Execute)
+async function processBulkMapping() {
+    const inputs = document.querySelectorAll(".mapping-input");
+    const map = {}; // Stores { "Store A": "user@test.com" }
+    
+    // Build the map
+    inputs.forEach(input => {
+        const key = input.getAttribute("data-key");
+        const email = input.value.trim();
+        if (email) map[key] = email;
+    });
+
+    if (Object.keys(map).length === 0) {
+        alert("Please assign at least one user.");
+        return;
+    }
+
+    const batchName = prompt("Name this Batch (e.g. 'Oct Sales'):", "Upload_" + Date.now());
+    const currentUser = localStorage.getItem("portal_user_email");
+    const newRows = [];
+
+    // Loop through ALL rows in CSV
+    bulkCsvData.forEach(row => {
+        const groupValue = row[selectedGroupCol]?.trim();
+        const assignedUser = map[groupValue]; // Check if we mapped this value
+
+        if (assignedUser) {
+            // Build Task Description from ALL columns
+            let rowDesc = "";
+            bulkCsvHeaders.forEach((h, i) => {
+                if (row[i]) rowDesc += `${h}: ${row[i]} | `;
+            });
+
+            const tktId = "DAT-" + Math.floor(Math.random() * 1000000);
+            
+            // Push to Google Sheet
+            // ID | Parent | Date | By | To | Task | Priority | Status | Visibility | Batch
+            newRows.push([
+                tktId, 
+                "", 
+                new Date().toLocaleDateString(), 
+                currentUser, 
+                assignedUser, // <--- The mapped user!
+                rowDesc, 
+                "Medium", 
+                "OPEN", 
+                "", 
+                batchName
+            ]);
+        }
+    });
+
+    if (newRows.length > 0) {
+        document.getElementById("wizard-next-btn").innerText = "⏳ Uploading...";
+        await appendRowsToSheet(newRows);
+        alert(`✅ Success! ${newRows.length} tasks assigned based on your mapping.`);
+        document.getElementById("bulk-wizard-modal").classList.add("hidden");
+        loadTicketDashboard();
+    } else {
+        alert("No rows matched your assigned users.");
+    }
 }
 
 // --- SUBTASKS / REASSIGN LOGIC ---
