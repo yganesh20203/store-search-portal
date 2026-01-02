@@ -338,3 +338,126 @@ header {
 .drop-zone .pill { background: #e1bee7; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 12px; margin-top: 5px; display: flex; align-items: center; }
 .drop-zone .pill .remove { cursor: pointer; color: #c62828; margin-left: 5px; }
 .chart-canvas-container { flex: 1; position: relative; border: 1px solid #eee; border-radius: 8px; padding: 10px; }
+
+/* =========================================
+   NEW DASHBOARD LAYOUT (Sidebar)
+   ========================================= */
+
+/* 1. The Layout Grid */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr; /* Fixed Sidebar + Flexible Content */
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 2. Sidebar Styling */
+.sidebar {
+    background: #1e293b; /* Dark Slate Blue - Professional */
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    border-right: 1px solid #334155;
+}
+
+.sidebar-header h2 {
+    font-size: 1.2rem;
+    margin: 0 0 10px 0;
+    color: #fff;
+    font-weight: 700;
+}
+
+.user-badge {
+    font-size: 11px;
+    background: #334155;
+    padding: 4px 8px;
+    border-radius: 12px;
+    color: #94a3b8;
+    display: inline-block;
+}
+
+/* Navigation Groups */
+.nav-group { margin-bottom: 25px; }
+
+.group-title {
+    font-size: 10px;
+    font-weight: bold;
+    color: #64748b; /* Muted text */
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* Menu Items */
+.nav-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    padding: 10px 12px;
+    margin-bottom: 5px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.nav-item:hover {
+    background: #334155;
+    color: white;
+    transform: translateX(3px);
+}
+
+.nav-item.active {
+    background: #3b82f6; /* Bright Blue */
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Sidebar Footer */
+.sidebar-footer { margin-top: auto; }
+
+/* 3. Main Content Area */
+.main-content {
+    background: #f8fafc; /* Very light grey */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.top-bar {
+    background: white;
+    padding: 15px 30px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+}
+
+#page-title { margin: 0; color: #1e293b; font-size: 1.2rem; }
+
+#content-wrapper {
+    padding: 20px 30px;
+    overflow-y: auto; /* Only this part scrolls */
+    flex-grow: 1;
+}
+
+/* 4. Tweaks for existing elements */
+#filter-box {
+    background: white;
+    padding: 15px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+/* Hide the old control panel if it exists */
+.control-panel { display: none !important; }
