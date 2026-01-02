@@ -2319,3 +2319,18 @@ function logout() {
     localStorage.removeItem("portal_user_email");
     window.location.reload(); // Reloads page to lock it again
 }
+
+function highlightSidebar(btnText) {
+    // Remove active class from all
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.classList.remove('active');
+        // Add active class if text matches
+        if(btn.innerText.includes(btnText)) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Update Top Title
+    const title = document.getElementById("page-title");
+    if(title) title.innerText = btnText;
+}
