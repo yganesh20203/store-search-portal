@@ -88,72 +88,175 @@ async function initDuckDB() {
 }
 
 // ==========================================
-// 4. AUTHENTICATION & LOGOUT
+// 4. AUTHENTICATION & SESSION LOGIC
 // ==========================================
+
+let sessionTimerInterval = null;
+
 async function unlockAndLogin() {
-    const userPass = document.getElementById("access-key").value;
-    const btn = document.querySelector("#auth-overlay button");
+    const accessKey = document.getElementById("access-key").value;
+    const username = document.getElementById("login-user").value.trim();
+    const password = document.getElementById("login-pass").value.trim();
+    
+    const btn = document.getElementById("login-btn");
     const errorMsg = document.getElementById("error-msg");
 
-    if(!userPass) return;
-    btn.innerText = "Unlocking...";
+    // 1. Basic Input Validation
+    if(!accessKey) { showLoginError("⚠️ Missing Team Access Key"); return; }
+    
+    // Note: We allow empty username/pass to proceed to "Guest Mode" logic if you want, 
+    // but typically we ask them to fill it to try validation.
+    if(!username || !password) { showLoginError("⚠️ Enter Username & Password to verify."); return; }
+
+    btn.innerText = "🔄 Verifying...";
+    btn.disabled = true;
+    errorMsg.style.display = "none";
 
     try {
         if (typeof CONFIG === 'undefined') throw new Error("Config not loaded.");
 
-        const bytes = CryptoJS.AES.decrypt(CONFIG.ENCRYPTED_CREDS, userPass);
+        // 2. Decrypt & Connect (Gatekeeper)
+        const bytes = CryptoJS.AES.decrypt(CONFIG.ENCRYPTED_CREDS, accessKey);
         const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
 
         if (!decryptedString) throw new Error("Incorrect Access Key");
 
         const creds = JSON.parse(decryptedString);
-        accessToken = await generateAccessToken(creds);
-        
+        accessToken = await generateAccessToken(creds); // We are IN.
+
+        // 3. Check Credentials against Backend
+        btn.innerText = "🔍 Checking DB...";
+        const isValidUser = await checkBackendCredentials(username, password);
+
+        // 4. Setup UI for Access
         document.getElementById("auth-overlay").classList.add("hidden");
         document.getElementById("dashboard").classList.remove("hidden");
-        
+        localStorage.setItem("portal_user_email", username);
+        document.getElementById("user-info").innerText = `● ${username}`;
         initDuckDB();
+
+        // 5. Branch Logic: Valid vs Invalid
+        if (isValidUser) {
+            // SCENARIO A: Valid User
+            console.log("✅ Valid User. Starting Session Tracker.");
+            startUsageTimer(); 
+            logLogin(username, "SUCCESS_LOGIN");
+        } else {
+            // SCENARIO B: Invalid User (Guest Mode)
+            console.warn("⛔ Invalid Credentials. Starting 2-min Countdown.");
+            startGuestCountdown();
+            logLogin(username, "GUEST_ACCESS_INVALID_CREDS");
+            alert(`⚠️ User not found or password incorrect.\n\nYou have been granted GUEST ACCESS for 2 minutes.\nPlease save your work quickly.`);
+        }
 
     } catch (e) {
         console.error(e);
-        if(errorMsg) {
-            errorMsg.innerText = "Error: " + e.message;
-            errorMsg.style.display = "block";
-        }
-        btn.innerText = "Unlock & Connect";
+        showLoginError("❌ " + e.message);
+        btn.innerText = "Unlock & Login";
+        btn.disabled = false;
     }
 }
 
-async function generateAccessToken(creds) {
-    const header = { alg: "RS256", typ: "JWT" };
-    const now = Math.floor(Date.now() / 1000);
-    const claim = {
-        iss: creds.client_email,
-        scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
-        aud: "https://oauth2.googleapis.com/token",
-        exp: now + 3600,
-        iat: now
-    };
+// --- HELPER: Verify against Google Sheet ---
+async function checkBackendCredentials(user, pass) {
+    if (!CONFIG.USER_DB_SHEET_ID) return true; // Dev bypass if no sheet configured
 
-    const sHeader = JSON.stringify(header);
-    const sClaim = JSON.stringify(claim);
-    const sJWS = KJUR.jws.JWS.sign(null, sHeader, sClaim, creds.private_key);
+    try {
+        // Fetch User DB (Columns A and B)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.USER_DB_SHEET_ID}/values/Sheet2!A:B`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
 
-    const response = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${sJWS}`
-    });
-    const data = await response.json();
-    return data.access_token;
+        if (!data.values) return false;
+
+        // Check for matching row
+        const found = data.values.find(row => 
+            row[0] && row[0].toString().toLowerCase() === user.toLowerCase() && 
+            row[1] && row[1].toString() === pass
+        );
+
+        return !!found;
+    } catch (e) {
+        console.error("DB Check Failed:", e);
+        return false; // Fail safe: Treat as invalid if DB error
+    }
 }
 
-function logout() {
-    if(!confirm("Are you sure you want to logout?")) return;
-    localStorage.removeItem("portal_user_email");
-    window.location.reload();
+// --- SCENARIO A: Usage Timer (Counts UP) ---
+function startUsageTimer() {
+    const ui = document.getElementById("session-timer-ui");
+    const text = document.getElementById("session-text");
+    const icon = document.getElementById("session-icon");
+    
+    ui.classList.remove("hidden");
+    ui.style.borderColor = "#4caf50"; // Green
+    ui.style.color = "#2e7d32";
+    icon.innerText = "⏱️";
+    
+    let seconds = 0;
+    sessionTimerInterval = setInterval(() => {
+        seconds++;
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        text.innerText = `Active: ${m}:${s}`;
+    }, 1000);
 }
 
+// --- SCENARIO B: Guest Countdown (Counts DOWN) ---
+function startGuestCountdown() {
+    const ui = document.getElementById("session-timer-ui");
+    const text = document.getElementById("session-text");
+    const icon = document.getElementById("session-icon");
+    
+    ui.classList.remove("hidden");
+    ui.style.borderColor = "#d32f2f"; // Red
+    ui.style.background = "#ffebee";
+    ui.style.color = "#d32f2f";
+    icon.innerText = "⚠️";
+    
+    let timeLeft = 120; // 2 Minutes
+    
+    sessionTimerInterval = setInterval(() => {
+        timeLeft--;
+        
+        const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+        const s = (timeLeft % 60).toString().padStart(2, '0');
+        text.innerText = `Expires: ${m}:${s}`;
+        
+        // Visual Warning at 30 seconds
+        if(timeLeft < 30) {
+            ui.style.background = "#b71c1c";
+            ui.style.color = "white";
+        }
+
+        if (timeLeft <= 0) {
+            clearInterval(sessionTimerInterval);
+            alert("⏳ Guest Session Expired.\nLogging out now.");
+            window.logout();
+        }
+    }, 1000);
+}
+
+// --- LOGGING ---
+async function logLogin(user, status) {
+    if (!CONFIG.LOGIN_LOG_SHEET_ID) return;
+    const timestamp = new Date().toLocaleString();
+    
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOGIN_LOG_SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`;
+        await fetch(url, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [[ timestamp, user, status ]] })
+        });
+    } catch (e) { console.warn("Log failed:", e); }
+}
+
+function showLoginError(msg) {
+    const el = document.getElementById("error-msg");
+    el.innerText = msg;
+    el.style.display = "block";
+}
 // ==========================================
 // 5. UI HELPERS & FEEDBACK
 // ==========================================
