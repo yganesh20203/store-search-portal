@@ -469,7 +469,30 @@
             </div>
         </div>
     </div>
+    <div id="bulk-wizard-modal" class="modal hidden">
+    <div class="modal-content" style="max-width:600px;">
+        <div class="modal-header">
+            <h3>📂 Bulk Distribution Wizard</h3>
+            <span class="close-btn" onclick="document.getElementById('bulk-wizard-modal').classList.add('hidden')">&times;</span>
+        </div>
+        
+        <div id="wizard-step-1" class="modal-body">
+            <p><b>Step 1:</b> Which column determines the assignment?</p>
+            <p style="font-size:12px; color:#666;">(e.g., Select 'Store_ID' to assign specific stores to specific users)</p>
+            <div id="wizard-column-list" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:15px;"></div>
+        </div>
 
+        <div id="wizard-step-2" class="modal-body hidden">
+            <p><b>Step 2:</b> Assign a User ID (Email) to each value.</p>
+            <div id="wizard-mapping-list" style="max-height:300px; overflow:auto; border:1px solid #eee; padding:10px;"></div>
+        </div>
+
+        <div class="modal-footer">
+            <button id="wizard-next-btn" style="background:#1976d2; color:white; display:none;" onclick="window.processBulkMapping()">🚀 Assign Tasks</button>
+        </div>
+    </div>
+</div>
+    
     <script src="config.js"></script>
     <script type="module" src="app.js"></script>
 </body>
