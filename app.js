@@ -996,45 +996,7 @@ async function appendRowsToSheet(values) {
     });
 }
 
-async function createTicket() {
-    const email = document.getElementById("tkt-email").value;
-    const task = document.getElementById("tkt-task").value;
-    
-    if(!email || !task) { alert("Please fill in email and task."); return; }
 
-    const btn = document.querySelector("#ticket-ui button"); 
-    const originalText = btn.innerText;
-    btn.innerText = "⏳ Saving...";
-    btn.disabled = true;
-
-    try {
-        const ticketId = "TKT-" + Math.floor(10000 + Math.random() * 90000);
-        const date = new Date().toLocaleDateString();
-        
-        const values = [[ ticketId, date, "Admin", email, task, "OPEN", "" ]];
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`;
-        
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ values: values })
-        });
-
-        if (response.ok) {
-            alert(`✅ Ticket ${ticketId} Created!`);
-            document.getElementById("tkt-task").value = "";
-            loadTicketDashboard(); 
-        } else {
-            throw new Error("DB Save Failed");
-        }
-
-    } catch (e) {
-        alert("Error: " + e.message);
-    } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
-    }
-}
 
 let currentResolveId = "";
 let currentResolveRowIndex = 0;
