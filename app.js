@@ -13,7 +13,7 @@ let walkinHistoryStack = [];
 let currentArrowData = [];
 let currentChartInstance = null;
 let chartState = { x: null, y: [] };
-
+let allTasksCache = [];
 // Excel & Pivot Globals
 let currentExcelWorkbook = null;
 let currentExcelFileName = "";
@@ -67,6 +67,13 @@ window.loadBusinessDashboard = loadBusinessDashboard;
 window.toggleMapLayer = toggleMapLayer;
 window.logout = logout;
 window.toggleVisualization = toggleVisualization;
+window.handleBulkTaskUpload = handleBulkTaskUpload;
+window.filterTasks = filterTasks;
+window.openTaskActionModal = openTaskActionModal;
+window.submitTaskAction = submitTaskAction;
+window.toggleTaskActionUI = toggleTaskActionUI;
+
+
 // ==========================================
 // 3. INITIALIZE DUCKDB
 // ==========================================
@@ -744,55 +751,249 @@ async function loadTicketDashboard() {
     resetUI();
     document.getElementById("ticket-ui").classList.remove("hidden");
     const container = document.getElementById("ticket-list-container");
-    container.innerHTML = "⏳ Fetching tickets...";
+    container.innerHTML = "⏳ Fetching & Securing Data...";
+
+    const currentUser = localStorage.getItem("portal_user_email");
+    if (!currentUser) { container.innerHTML = "Please login first."; return; }
 
     try {
-        if (!CONFIG.TICKET_SHEET_ID) { container.innerHTML = "<p>Ticketing not configured.</p>"; return; }
+        if (!CONFIG.TICKET_SHEET_ID) { container.innerHTML = "<p>Config Missing</p>"; return; }
         
+        // Fetch ALL data, then filter in memory (Client-Side RLS)
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
         if (!data.values || data.values.length < 2) {
-            container.innerHTML = "<p>No tickets found.</p>";
+            container.innerHTML = "<p>No tasks found.</p>";
             return;
         }
 
-        let html = `<table class="data-table">
-            <thead><tr><th>ID</th><th>Date</th><th>Assigned To</th><th>Task</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody>`;
+        // Parse Headers (Row 0) to map indices dynamically
+        const headers = data.values[0].map(h => h.toLowerCase());
+        // Expected: id, parent_id, date, assigned_by, assigned_to, task, priority, status, visibility
+        
+        // Map raw array to objects for easier handling
+        allTasksCache = data.values.slice(1).map((row, index) => {
+            return {
+                rowIndex: index + 2, // Sheet Row Number (1-based + header)
+                id: row[0],
+                parentId: row[1],
+                date: row[2],
+                by: row[3]?.toLowerCase(),
+                to: row[4]?.toLowerCase(),
+                task: row[5],
+                priority: row[6],
+                status: row[7],
+                visibility: row[8]?.toLowerCase() || ""
+            };
+        });
 
-        for (let i = data.values.length - 1; i >= 1; i--) {
-            const row = data.values[i];
-            const tktId = row[0];
-            const tktDate = row[1];
-            const tktTo = row[3];
-            const tktTask = row[4];
-            const tktStatus = row[5];
-
-            const isResolved = tktStatus === "RESOLVED";
-            const rowColor = isResolved ? "#e8f5e9" : "#fff";
-            const rowIndex = i + 1; 
-            
-            const btnHtml = isResolved 
-                ? `<span style="color:green; font-weight:bold;">✔ Done</span>` 
-                : `<button onclick="window.openResolveModal('${tktId}', ${rowIndex})" style="font-size:10px; padding:4px; cursor:pointer;">✅ Resolve</button>`;
-
-            html += `<tr style="background:${rowColor}">
-                <td>${tktId}</td>
-                <td>${tktDate}</td>
-                <td>${tktTo}</td>
-                <td>${tktTask}</td>
-                <td style="font-weight:bold;">${tktStatus}</td>
-                <td>${btnHtml}</td>
-            </tr>`;
-        }
-        html += `</tbody></table>`;
-        container.innerHTML = html;
+        // Initial Filter: Show "My Tasks" by default
+        filterTasks();
 
     } catch (e) {
-        container.innerHTML = "Error loading tickets: " + e.message;
+        container.innerHTML = "Error: " + e.message;
     }
+}
+
+function filterTasks() {
+    const container = document.getElementById("ticket-list-container");
+    const filterType = document.getElementById("task-filter-view").value;
+    const searchText = document.getElementById("task-search").value.toLowerCase();
+    const currentUser = localStorage.getItem("portal_user_email").toLowerCase();
+
+    let filtered = [];
+
+    // --- ROW LEVEL SECURITY LOGIC ---
+    if (filterType === 'my_tasks') {
+        filtered = allTasksCache.filter(t => t.to === currentUser);
+    } else if (filterType === 'assigned_by_me') {
+        filtered = allTasksCache.filter(t => t.by === currentUser);
+    } else if (filterType === 'team') {
+        // Show if user is in the 'Visibility' column OR is involved
+        filtered = allTasksCache.filter(t => 
+            t.visibility.includes(currentUser) || t.to === currentUser || t.by === currentUser
+        );
+    }
+
+    // --- SEARCH FILTER ---
+    if (searchText) {
+        filtered = filtered.filter(t => 
+            t.task.toLowerCase().includes(searchText) || 
+            t.id.toLowerCase().includes(searchText)
+        );
+    }
+
+    // --- RENDER ---
+    if (filtered.length === 0) {
+        container.innerHTML = "<p style='padding:20px; text-align:center;'>No tasks found for this view.</p>";
+        return;
+    }
+
+    let html = `<table class="data-table">
+        <thead><tr>
+            <th>ID</th><th>Priority</th><th>Task</th><th>Assigned To</th><th>Status</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+    filtered.forEach(t => {
+        // Indent subtasks visually
+        const isSubtask = t.parentId && t.parentId.length > 2;
+        const indentStyle = isSubtask ? "border-left: 4px solid #1976d2; background:#f9fbff;" : "";
+        const icon = isSubtask ? "↳ " : "";
+        
+        // Priority Color
+        let priColor = t.priority === "High" ? "#ffebee" : (t.priority === "Medium" ? "#fff3e0" : "#e8f5e9");
+        if(t.status === "RESOLVED") priColor = "#f0f0f0"; // Grey out done tasks
+
+        html += `<tr style="${indentStyle} background:${priColor}">
+            <td><small>${t.id}</small></td>
+            <td style="font-weight:bold; font-size:11px;">${t.priority}</td>
+            <td>
+                ${icon} ${t.task}
+                ${t.parentId ? `<br><small style='color:#888'>Parent: ${t.parentId}</small>` : ''}
+            </td>
+            <td>${t.to}</td>
+            <td>${t.status}</td>
+            <td>
+                ${t.status !== 'RESOLVED' ? `
+                    <button onclick="window.openTaskActionModal('${t.id}', '${t.task.replace(/'/g, "")}')" style="cursor:pointer; padding:4px; font-size:10px;">⚙️ Manage</button>
+                    <button onclick="window.openResolveModal('${t.id}', ${t.rowIndex - 1})" style="cursor:pointer; padding:4px; font-size:10px; color:green;">✅ Done</button>
+                ` : '✔'}
+            </td>
+        </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+
+// --- CREATE SINGLE TASK ---
+async function createTicket() {
+    const email = document.getElementById("tkt-email").value.trim();
+    const task = document.getElementById("tkt-task").value;
+    const priority = document.getElementById("tkt-priority").value;
+    const visibility = document.getElementById("tkt-visibility").value;
+    const currentUser = localStorage.getItem("portal_user_email");
+
+    if(!email || !task) { alert("Please fill email and task."); return; }
+
+    const tktId = "TKT-" + Math.floor(Math.random() * 100000);
+    const date = new Date().toLocaleDateString();
+
+    // Sheet Row Structure: ID | Parent | Date | By | To | Task | Priority | Status | Visibility
+    const row = [[ tktId, "", date, currentUser, email, task, priority, "OPEN", visibility ]];
+
+    await appendRowsToSheet(row);
+    alert("✅ Task Assigned!");
+    loadTicketDashboard();
+}
+
+// --- BULK UPLOAD CSV ---
+async function handleBulkTaskUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const currentUser = localStorage.getItem("portal_user_email");
+    const reader = new FileReader();
+    
+    reader.onload = async function(e) {
+        const text = e.target.result;
+        // Simple CSV Parser (Assumes: Email, Task, Priority, Visibility)
+        const lines = text.split("\n").slice(1); // Skip header
+        const newRows = [];
+
+        lines.forEach(line => {
+            const cols = line.split(",");
+            if (cols.length >= 2) {
+                const tktId = "TKT-" + Math.floor(Math.random() * 100000);
+                const date = new Date().toLocaleDateString();
+                // Map columns: cols[0]=Email, cols[1]=Task, cols[2]=Priority
+                newRows.push([
+                    tktId, 
+                    "", // Parent ID empty
+                    date, 
+                    currentUser, 
+                    cols[0]?.trim(), // To
+                    cols[1]?.trim(), // Task
+                    cols[2]?.trim() || "Medium", // Priority
+                    "OPEN",
+                    cols[3]?.trim() || "" // Visibility
+                ]);
+            }
+        });
+
+        if (newRows.length > 0) {
+            if(confirm(`Ready to bulk assign ${newRows.length} tasks?`)) {
+                await appendRowsToSheet(newRows);
+                alert("✅ Bulk Upload Complete!");
+                loadTicketDashboard();
+            }
+        } else {
+            alert("CSV format invalid. Ensure columns: Email, Task, Priority");
+        }
+    };
+    reader.readAsText(file);
+}
+
+// --- SUBTASKS / REASSIGN LOGIC ---
+function openTaskActionModal(id, desc) {
+    document.getElementById("action-parent-id").value = id;
+    document.getElementById("action-task-desc").innerText = "Selected: " + desc;
+    document.getElementById("task-action-modal").classList.remove("hidden");
+    toggleTaskActionUI();
+}
+
+function toggleTaskActionUI() {
+    const type = document.getElementById("task-action-type").value;
+    const subContainer = document.getElementById("subtask-desc-container");
+    // If dividing, we need a new description. If reassigning, we assume same task description.
+    subContainer.style.display = (type === "subtask") ? "block" : "none";
+}
+
+async function submitTaskAction() {
+    const type = document.getElementById("task-action-type").value;
+    const parentId = document.getElementById("action-parent-id").value;
+    const newOwner = document.getElementById("action-assign-to").value;
+    const currentUser = localStorage.getItem("portal_user_email");
+    const date = new Date().toLocaleDateString();
+
+    if (!newOwner) { alert("Enter an email"); return; }
+
+    if (type === "subtask") {
+        // Create NEW ROW with Parent ID linked
+        const newDesc = document.getElementById("action-details").value;
+        const subId = parentId + "-SUB-" + Math.floor(Math.random()*100);
+        
+        const row = [[ subId, parentId, date, currentUser, newOwner, newDesc, "Medium", "OPEN", "" ]];
+        await appendRowsToSheet(row);
+        alert("✅ Subtask Created!");
+
+    } else if (type === "reassign") {
+        // Create NEW ROW but mark as transferred (or you could edit the old row, but appending is safer for logs)
+        // We create a new ticket that references the old one as parent for tracking
+        const transferId = "TRF-" + Math.floor(Math.random()*1000);
+        const taskDesc = "Reassigned: " + document.getElementById("action-task-desc").innerText;
+        
+        const row = [[ transferId, parentId, date, currentUser, newOwner, taskDesc, "High", "OPEN", "" ]];
+        await appendRowsToSheet(row);
+        alert("✅ Task Reassigned!");
+    }
+    
+    document.getElementById("task-action-modal").classList.add("hidden");
+    loadTicketDashboard();
+}
+
+// --- HELPER: WRITE TO SHEET ---
+async function appendRowsToSheet(values) {
+    if (!CONFIG.TICKET_SHEET_ID) return;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`;
+    
+    await fetch(url, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: values })
+    });
 }
 
 async function createTicket() {
