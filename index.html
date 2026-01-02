@@ -241,34 +241,30 @@
 
                         <div id="pivot-wrapper" class="hidden"><div id="pivot-output"></div></div>
 
+                        <div id="filter-box" style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <label style="font-weight:bold; color:#444;">🔍 Data Filters:</label>
+                                <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                    <option value="all">All Columns</option>
+                                </select>
+                                <input type="text" id="filter-input" placeholder="Type to search..." onchange="window.applyTableFilter()" style="padding: 8px; flex-grow: 1; border-radius:4px; border:1px solid #ccc;">
+                                <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                                    <option value="10">10 Rows</option>
+                                    <option value="50">50 Rows</option>
+                                    <option value="100" selected>100 Rows</option>
+                                    <option value="500">500 Rows</option>
+                                    <option value="all">All Rows</option>
+                                </select>
+                            </div>
+                            <div id="sheet-link-container" style="margin-top: 10px;"></div>
+                            <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
+                        </div>
+
                         <div id="view-container" class="grid-1">
                             <div id="pane-0" class="pane active" onclick="window.setActivePane('pane-0')">
                                 <span class="pane-label">Active View</span>
                                 <div class="content-area"><div class="empty-msg">Select a tool from the sidebar to begin</div></div>
                             </div>
-                        </div>
-
-                        <div id="filter-box" style="margin-top: 20px; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                            <h3>Data Filters</h3>
-                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                <label>Filter:</label>
-                                <select id="column-select" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-                                    <option value="all">All Columns</option>
-                                </select>
-                                <input type="text" id="filter-input" placeholder="Type to search..." onchange="window.applyTableFilter()" style="padding: 8px; flex-grow: 1;">
-                            </div>
-                            <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center;">
-                                <label>Show Rows:</label>
-                                <select id="row-limit-select" onchange="window.applyTableFilter()" style="padding: 8px;">
-                                    <option value="10">10</option>
-                                    <option value="50">50</option>
-                                    <option value="100" selected>100</option>
-                                    <option value="500">500</option>
-                                    <option value="all">All</option>
-                                </select>
-                            </div>
-                            <div id="sheet-link-container" style="margin-top: 10px;"></div>
-                            <div id="loading-status" style="margin-top:10px; font-weight:bold; color: #007bff;"></div>
                         </div>
 
                     </div> </main>
