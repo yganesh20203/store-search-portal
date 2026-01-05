@@ -2954,3 +2954,79 @@ function resetStatsToZero() {
     document.getElementById("tv-stat-completed").innerText = "0";
     document.getElementById("tv-stat-percent").innerText = "0%";
 }
+
+
+// ==========================================
+// 📸 CAMERA HELPER: SAVE PHOTO TO MEMORY
+// ==========================================
+window.uploadCapturedPhoto = function() {
+    const canvas = document.getElementById("camera-canvas");
+    
+    if (!canvas) {
+        alert("Error: Camera canvas not found.");
+        return;
+    }
+
+    // Convert the canvas image to a Blob (file-like object)
+    canvas.toBlob((blob) => {
+        if (!blob) {
+            alert("Failed to capture image.");
+            return;
+        }
+
+        // 1. Store the blob in the global variable defined at the top of app.js
+        pendingPhotoBlob = blob; 
+
+        // 2. Update the TrueView UI to show success
+        const statusText = document.getElementById("tv-photo-status");
+        if (statusText) {
+            statusText.innerHTML = "✅ <b>Photo Captured & Ready.</b>";
+            statusText.style.color = "green";
+        }
+
+        // 3. Close the Camera Modal
+        window.closeCameraModal();
+        
+        console.log("📸 Photo stored in memory (Size: " + blob.size + " bytes)");
+
+    }, 'image/jpeg', 0.7); // 0.7 = 70% Quality (Reduces upload size)
+};
+
+// ==========================================
+// ☁️ DRIVE HELPER: UPLOAD BLOB
+// ==========================================
+async function uploadBlobToDrive(blob, fileName) {
+    // Determine target folder (Use TrueView folder if available, else generic)
+    const folderId = CONFIG.TRUEVIEW_FOLDER_ID || CONFIG.WORK_REPORTS_FOLDER_ID;
+
+    if (!folderId) {
+        throw new Error("No Target Folder ID configured in config.js");
+    }
+
+    const metadata = {
+        name: fileName,
+        mimeType: 'image/jpeg',
+        parents: [folderId]
+    };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+
+    const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink';
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { "Authorization": `Bearer ${accessToken}` },
+        body: form
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error("Upload Failed: " + (err.error?.message || response.statusText));
+    }
+
+    const data = await response.json();
+    console.log("☁️ Upload Success:", data.webViewLink);
+    return data.webViewLink;
+}
