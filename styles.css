@@ -492,3 +492,37 @@ header {
 
 /* Hide Old Control Panel */
 .control-panel { display: none !important; }
+
+
+/* TrueView Specific Styles */
+.tv-tab {
+    padding: 10px 20px;
+    border: none;
+    background: #e0e0e0;
+    color: #555;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+.tv-tab.active {
+    background: #1e3c72;
+    color: white;
+    box-shadow: 0 4px 10px rgba(30, 60, 114, 0.3);
+}
+.tv-task-card {
+    background: white;
+    border: 1px solid #eee;
+    border-left: 4px solid #ff9800; /* Orange for Pending */
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.tv-task-card.completed {
+    border-left-color: #4caf50; /* Green for Done */
+    opacity: 0.8;
+}
