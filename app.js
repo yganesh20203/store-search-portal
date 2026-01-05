@@ -2642,3 +2642,123 @@ window.handleTvImpexUpload = function(input) {
     };
     reader.readAsText(file);
 };
+
+// ==========================================
+// 📸 CORE CAMERA FUNCTIONS (Required for TrueView)
+// ==========================================
+
+let videoStream = null;
+
+// 1. OPEN CAMERA (Forces Back Camera on Mobile)
+window.openCameraModal = async function() {
+    // Check if the modal exists before trying to open it
+    const modal = document.getElementById("camera-modal");
+    if (!modal) {
+        // If the generic camera modal is missing, we might be in TrueView mode.
+        // TrueView uses the same logic, but we need to ensure the HTML exists.
+        // For TrueView, we actually trigger the camera inside the specific modal 
+        // OR we use the generic modal we added earlier.
+        // Let's assume you added the <div id="camera-modal"> from a previous step.
+        console.error("Error: <div id='camera-modal'> is missing from index.html");
+        return;
+    }
+
+    const video = document.getElementById("camera-stream");
+    const status = document.getElementById("camera-status");
+    
+    modal.classList.remove("hidden");
+    window.resetCamera(); // Ensure UI is fresh
+
+    try {
+        // Request Camera (facingMode: 'environment' forces back camera)
+        videoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+            audio: false 
+        });
+        
+        video.srcObject = videoStream;
+        if(status) status.innerText = "Point at warehouse item.";
+        
+    } catch (err) {
+        console.error("Camera Error:", err);
+        if(status) status.innerHTML = `<span style="color:red">❌ Camera Access Denied. Check permissions.</span>`;
+        alert("Camera permission is required for verification.");
+    }
+};
+
+// 2. CLOSE CAMERA
+window.closeCameraModal = function() {
+    const modal = document.getElementById("camera-modal");
+    if(modal) modal.classList.add("hidden");
+    
+    // Stop the camera hardware light
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+    }
+};
+
+// 3. CAPTURE & STAMP
+window.capturePhoto = function() {
+    const video = document.getElementById("camera-stream");
+    const canvas = document.getElementById("camera-canvas");
+    const context = canvas.getContext("2d");
+
+    // Match canvas size to video resolution
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // A. Draw the Video Frame
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // B. Create Timestamp Data
+    const now = new Date();
+    const dateStr = now.toLocaleDateString() + " " + now.toLocaleTimeString();
+    const user = localStorage.getItem("portal_user_email") || "Unknown User";
+    const locText = `User: ${user} | Time: ${dateStr}`;
+
+    // C. Draw Black Background Bar for Text (Bottom)
+    context.fillStyle = "rgba(0, 0, 0, 0.6)";
+    context.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+    // D. Draw White Timestamp Text
+    context.fillStyle = "white";
+    context.font = "bold 24px sans-serif";
+    context.fillText(locText, 20, canvas.height - 18);
+
+    // Toggle UI
+    video.classList.add("hidden");
+    canvas.classList.remove("hidden");
+    
+    // Show/Hide buttons if they exist
+    const btnCapture = document.getElementById("btn-capture");
+    const btnRetake = document.getElementById("btn-retake");
+    const btnUpload = document.getElementById("btn-upload-photo");
+    
+    if(btnCapture) btnCapture.classList.add("hidden");
+    if(btnRetake) btnRetake.classList.remove("hidden");
+    if(btnUpload) btnUpload.classList.remove("hidden");
+    
+    const status = document.getElementById("camera-status");
+    if(status) status.innerText = "Timestamp applied automatically.";
+};
+
+// 4. RETAKE
+window.resetCamera = function() {
+    const video = document.getElementById("camera-stream");
+    const canvas = document.getElementById("camera-canvas");
+    
+    if(video) video.classList.remove("hidden");
+    if(canvas) canvas.classList.add("hidden");
+    
+    const btnCapture = document.getElementById("btn-capture");
+    const btnRetake = document.getElementById("btn-retake");
+    const btnUpload = document.getElementById("btn-upload-photo");
+
+    if(btnCapture) btnCapture.classList.remove("hidden");
+    if(btnRetake) btnRetake.classList.add("hidden");
+    if(btnUpload) btnUpload.classList.add("hidden");
+    
+    const status = document.getElementById("camera-status");
+    if(status) status.innerText = "Point at warehouse item.";
+};
