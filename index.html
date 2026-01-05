@@ -30,19 +30,25 @@
             <h1>Internal Data Portal</h1>
             <p>Sign in to access store data.</p>
             <div class="login-box">
-                <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">Team Access Key</label>
-                <input type="password" id="access-key" placeholder="Enter Access Key...">
-                
-                <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
+    <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">Team Access Key</label>
+    <div style="position: relative; width: 100%;">
+        <input type="password" id="access-key" placeholder="Enter Access Key..." style="width: 100%; padding-right: 35px;">
+        <span onclick="togglePassword('access-key', this)" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px;">👁️</span>
+    </div>
+    
+    <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
 
-                <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">User Credentials</label>
-                <input type="text" id="login-user" placeholder="Username">
-                <input type="password" id="login-pass" placeholder="Password">
-                
-                <button id="login-btn" onclick="window.unlockAndLogin()">Unlock & Login</button>
-                <p id="error-msg"></p>
-            </div>
-        </div>
+    <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">User Credentials</label>
+    <input type="text" id="login-user" placeholder="Username" style="width: 100%;">
+    
+    <div style="position: relative; width: 100%; margin-top: 10px;">
+        <input type="password" id="login-pass" placeholder="Password" style="width: 100%; padding-right: 35px;">
+        <span onclick="togglePassword('login-pass', this)" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px;">👁️</span>
+    </div>
+    
+    <button id="login-btn" onclick="window.unlockAndLogin()" style="margin-top: 15px;">Unlock & Login</button>
+    <p id="error-msg"></p>
+</div>
 
         <div id="session-timer-ui" class="hidden" style="position:fixed; top:10px; right:120px; background:white; padding:5px 15px; border-radius:20px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.1); display:flex; align-items:center; gap:8px; border:1px solid #ddd; z-index:1000;">
             <span id="session-icon">⏱️</span>
