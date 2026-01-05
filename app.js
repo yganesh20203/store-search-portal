@@ -2519,66 +2519,70 @@ window.handleTvImpexUpload = function(input) {
     input.value = ""; // Reset input
 };
 
-// 6. LOAD TASKS (Multi-DB aware)
-// 6. LOAD TASKS (Strict Pending Logic)
+// 6. LOAD TASKS (Fixed User Matching)
 async function loadTvTasks() {
     const container = document.getElementById("tv-task-list");
     container.innerHTML = "⏳ Fetching pending tasks...";
     
-    // Get config and user
     const config = TV_CONFIG_MAP[activeTvCategory];
-    const currentUser = localStorage.getItem("portal_user_email")?.toLowerCase();
+    // Get logged-in user and extract just the username (e.g., "y.ganesh" from "y.ganesh@flipkart.com")
+    const rawUser = localStorage.getItem("portal_user_email")?.toLowerCase() || "";
+    const currentUsername = rawUser.split('@')[0].trim(); 
 
     if (!config) { container.innerHTML = "Config Error."; return; }
-    if (!currentUser) { container.innerHTML = "Please log in first."; return; }
+    if (!currentUsername) { container.innerHTML = "Please log in first."; return; }
 
     try {
-        // Fetch Data from the specific sheet
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
         if (!data.values || data.values.length < 2) {
-            container.innerHTML = "No tasks found in system.";
+            container.innerHTML = `<div style="text-align:center; padding:20px; color:#888;">No tasks found in the sheet.</div>`;
             return;
         }
 
-        // --- PARSE & FILTER LOGIC ---
         let myPendingTasks = [];
 
         if (activeTvCategory === "Offer Board") {
-            // Offer Board Columns:
+            // MAPPING: Offer Board
+            // Row Structure based on your sheet:
             // 0:ID, 1:StoreNo, 2:Name, 3:Start, 4:End, 5:Approver, ... 13:CompletedDate(N)
             
-            myPendingTasks = data.values.slice(1).map((r, i) => ({
-                rowIndex: i + 2,
-                id: r[0],
-                storeNo: r[1],
-                storeName: r[2],
-                endDate: r[4],
-                assignee: r[5]?.toLowerCase().trim(), // Approver LoginId
-                posters: r[8],
-                completedDate: r[13] // Column N (Index 13)
-            }))
+            myPendingTasks = data.values.slice(1).map((r, i) => {
+                const sheetEmail = (r[5] || "").toLowerCase().trim();
+                const sheetUsername = sheetEmail.split('@')[0]; // Extract "y.ganesh"
+
+                return {
+                    rowIndex: i + 2,
+                    id: r[0],
+                    storeNo: r[1],
+                    storeName: r[2],
+                    endDate: r[4],
+                    assignee: sheetEmail, 
+                    assigneeUsername: sheetUsername, // Store for comparison
+                    posters: r[8],
+                    completedDate: r[13] // Column N
+                };
+            })
             .filter(t => {
-                // FILTER 1: Must be assigned to me
-                const isAssigned = t.assignee === currentUser;
+                // FILTER 1: Match Username (ignores @flipkart.com difference)
+                const isAssigned = t.assigneeUsername === currentUsername;
                 
-                // FILTER 2: Completed Date must be empty (undefined, null, or "")
+                // FILTER 2: Completed Date must be empty
                 const isPending = !t.completedDate || t.completedDate.trim() === "";
 
                 return isAssigned && isPending;
             });
 
-            // Update Cache for submission usage
             tvDataCache = myPendingTasks; 
         } 
-        // ... (Other categories logic remains standard) ...
+        // ... (Keep other categories standard logic if needed) ...
 
-        // --- RENDER UI ---
         if (myPendingTasks.length === 0) {
             container.innerHTML = `<div style="text-align:center; padding:20px; color:#888;">
-                ✅ You have no pending audits!
+                ✅ You have no pending audits! <br>
+                <span style="font-size:10px; color:#ccc;">(Logged in as: ${currentUsername})</span>
             </div>`;
             return;
         }
