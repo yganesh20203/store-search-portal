@@ -21,20 +21,17 @@ body {
    2. LOGIN SCREEN (Solid & Opaque)
    ========================================= */
 #auth-overlay {
-    position: fixed; /* Locks to screen */
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    
-    /* SOLID BACKGROUND - Prevents anything from showing through */
     background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 10000; /* Stays on top of everything */
+    z-index: 10000;
     color: white;
 }
 
@@ -47,44 +44,91 @@ body {
 }
 
 #auth-overlay p {
-    color: #e3f2fd; /* Light blue text */
+    color: #e3f2fd;
     margin-bottom: 30px;
     font-size: 1rem;
 }
 
 .login-box {
-    background: #ffffff; /* Solid White Box */
+    background: #ffffff;
     padding: 40px;
     border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2); /* Soft shadow */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
-    gap: 15px;
     width: 320px;
-    text-align: center;
+    text-align: left; /* Changed to left align labels */
+    box-sizing: border-box; /* Critical Fix */
 }
 
-/* Inputs inside the Login Box */
+/* Input Groups */
+.input-group {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.login-box label {
+    display: block;
+    font-size: 12px;
+    font-weight: bold;
+    color: #555;
+    margin-bottom: 5px;
+}
+
+/* Input Wrapper for relative positioning of icon */
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+/* Inputs */
 .login-box input {
+    width: 100%;
     padding: 12px;
+    padding-right: 40px; /* Space for eye icon */
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 14px;
     outline: none;
     background: #f9f9f9;
     color: #333;
+    box-sizing: border-box; /* Fixes the overflow/misalignment */
+    height: 45px;
 }
+
 .login-box input:focus {
     border-color: #1e3c72;
     background: #fff;
 }
 
+/* Eye Icon Styling */
+.eye-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 16px;
+    color: #777;
+    z-index: 2;
+    user-select: none;
+}
+
+/* Divider */
+.divider {
+    width: 100%;
+    border: 0;
+    border-top: 1px solid #eee;
+    margin: 15px 0;
+}
+
 /* Login Button */
 #login-btn {
+    width: 100%;
     padding: 12px;
     border: none;
     border-radius: 6px;
-    background: #ff9800; /* Flipkart Orange */
+    background: #ff9800;
     color: white;
     font-size: 16px;
     font-weight: bold;
@@ -106,8 +150,9 @@ body {
     font-size: 13px;
     display: none;
     border: 1px solid #ffcdd2;
+    margin-top: 15px;
+    text-align: center;
 }
-
 /* =========================================
    3. DASHBOARD CONTAINER
    ========================================= */
