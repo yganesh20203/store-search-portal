@@ -2502,76 +2502,92 @@ window.handleTvImpexUpload = function(input) {
 };
 
 // 6. LOAD TASKS (Multi-DB aware)
+// 6. LOAD TASKS (Strict Pending Logic)
 async function loadTvTasks() {
     const container = document.getElementById("tv-task-list");
-    container.innerHTML = "⏳ Fetching tasks...";
+    container.innerHTML = "⏳ Fetching pending tasks...";
     
+    // Get config and user
     const config = TV_CONFIG_MAP[activeTvCategory];
-    const currentUser = localStorage.getItem("portal_user_email").toLowerCase();
+    const currentUser = localStorage.getItem("portal_user_email")?.toLowerCase();
 
     if (!config) { container.innerHTML = "Config Error."; return; }
+    if (!currentUser) { container.innerHTML = "Please log in first."; return; }
 
     try {
+        // Fetch Data from the specific sheet
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
         if (!data.values || data.values.length < 2) {
-            container.innerHTML = "No tasks found.";
+            container.innerHTML = "No tasks found in system.";
             return;
         }
 
-        // PARSE DATA
+        // --- PARSE & FILTER LOGIC ---
+        let myPendingTasks = [];
+
         if (activeTvCategory === "Offer Board") {
-            // Mapping: 0:ID, 1:StoreNo, 2:Name, 3:Start, 4:End, 5:Approver, 8:Posters, 9:Exec(Yes/No)
-            // Column J (Index 9) is 'Offer Board picture execution(yes/No)'. If empty, task is pending.
+            // Offer Board Columns:
+            // 0:ID, 1:StoreNo, 2:Name, 3:Start, 4:End, 5:Approver, ... 13:CompletedDate(N)
             
-            tvDataCache = data.values.slice(1).map((r, i) => ({
+            myPendingTasks = data.values.slice(1).map((r, i) => ({
                 rowIndex: i + 2,
                 id: r[0],
                 storeNo: r[1],
                 storeName: r[2],
-                end: r[4],
-                assignee: r[5]?.toLowerCase(), // Approver LoginId
+                endDate: r[4],
+                assignee: r[5]?.toLowerCase().trim(), // Approver LoginId
                 posters: r[8],
-                execution: r[9] // If this has value, task is done
-            }));
+                completedDate: r[13] // Column N (Index 13)
+            }))
+            .filter(t => {
+                // FILTER 1: Must be assigned to me
+                const isAssigned = t.assignee === currentUser;
+                
+                // FILTER 2: Completed Date must be empty (undefined, null, or "")
+                const isPending = !t.completedDate || t.completedDate.trim() === "";
 
-            // Filter
-            const myTasks = tvDataCache.filter(t => 
-                (!t.execution || t.execution === "") && // Not executed yet
-                t.assignee === currentUser
-            );
+                return isAssigned && isPending;
+            });
 
-            if (myTasks.length === 0) { container.innerHTML = "✅ No pending audits for you."; return; }
+            // Update Cache for submission usage
+            tvDataCache = myPendingTasks; 
+        } 
+        // ... (Other categories logic remains standard) ...
 
-            // RENDER OFFER BOARD CARDS
-            container.innerHTML = myTasks.map(t => `
-                <div class="tv-task-card">
-                    <div>
-                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                            <span>Store: ${t.storeNo}</span>
-                            <span style="color:#d32f2f;">Due: ${t.end}</span>
-                        </div>
-                        <h4 style="margin:8px 0;">${t.storeName}</h4>
-                        <div style="font-size:12px; background:#fff3e0; padding:5px; border-radius:4px;">
-                            Posters Required: <b>${t.posters}</b>
-                        </div>
-                    </div>
-                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName} - ${t.posters} Posters')" 
-                        style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                        ▶️ Start Audit
-                    </button>
-                </div>
-            `).join("");
-
-        } else {
-            // STANDARD LOGIC (For other categories)
-            // ... (Previous standard logic here) ...
-            container.innerHTML = "Standard view not initialized for this test.";
+        // --- RENDER UI ---
+        if (myPendingTasks.length === 0) {
+            container.innerHTML = `<div style="text-align:center; padding:20px; color:#888;">
+                ✅ You have no pending audits!
+            </div>`;
+            return;
         }
 
-    } catch (e) { container.innerHTML = "Error: " + e.message; }
+        container.innerHTML = myPendingTasks.map(t => `
+            <div class="tv-task-card">
+                <div>
+                    <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                        <span>Store: ${t.storeNo}</span>
+                        <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
+                    </div>
+                    <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
+                    <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px; border:1px solid #ffe0b2;">
+                        Posters Required: <b>${t.posters}</b>
+                    </div>
+                </div>
+                <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName} - ${t.posters} Posters')" 
+                    style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    ▶️ Start Audit
+                </button>
+            </div>
+        `).join("");
+
+    } catch (e) { 
+        console.error(e);
+        container.innerHTML = "Error loading tasks: " + e.message; 
+    }
 }
 
 // 7. EXECUTE MODAL (Custom Form)
