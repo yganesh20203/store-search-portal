@@ -3040,90 +3040,66 @@ window.generateTvReport = async function() {
     const statusEl = document.getElementById("tv-download-status");
     const btn = document.getElementById("btn-download-report");
 
-    // 1. Validation
     if (!fromInput || !toInput) {
         alert("⚠️ Please select both From and To dates.");
         return;
     }
 
-    const config = TV_CONFIG_MAP[activeTvCategory];
-    if (!config) { alert("Config Error"); return; }
+    // --- CRITICAL FIX: HARDCODE THE CORRECT TAB NAME HERE ---
+    const targetSheetId = "1oE7xB9egfdRumclW-l5BzLXJZm5feddA0x3USe3pBUc"; // Your specific ID
+    const targetTabName = "Sheet1"; // Your specific Tab Name
+    // --------------------------------------------------------
 
-    // UI Loading State
     btn.disabled = true;
-    btn.innerText = "⏳ Fetching Data...";
+    btn.innerText = "⏳ Connecting...";
     statusEl.innerText = "";
 
     try {
-        // 2. Fetch Data
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
+        // Use the hardcoded values instead of 'config'
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${targetSheetId}/values/${encodeURIComponent(targetTabName)}`;
+        
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        if (!data.values || data.values.length < 2) {
-            throw new Error("No data found in sheet.");
-        }
+        if (data.error) throw new Error(data.error.message);
+        if (!data.values || data.values.length < 2) throw new Error("No data found.");
 
-        const headers = data.values[0];
         const rows = data.values.slice(1);
         
-        // Parse Inputs (YYYY-MM-DD from input type="date")
-        const fromDate = new Date(fromInput);
-        const toDate = new Date(toInput);
-        // Set times to ensure inclusive comparison
-        fromDate.setHours(0,0,0,0); 
-        toDate.setHours(23,59,59,999);
+        // Date Logic
+        const fromDate = new Date(fromInput); fromDate.setHours(0,0,0,0);
+        const toDate = new Date(toInput); toDate.setHours(23,59,59,999);
 
-        // 3. Filter Rows based on Start Date (Column Index 3 based on your screenshot)
         const filteredData = rows.filter(r => {
-            const dateStr = r[3]; // "1/5/2025" (d/m/yyyy)
+            const dateStr = r[3]; // Column D
             if (!dateStr) return false;
-
-            // Custom Parser for dd/mm/yyyy
             const parts = dateStr.split('/');
-            if (parts.length !== 3) return false;
-            
-            // Note: Month is 0-indexed in JS Date (0=Jan, 4=May)
-            const rowDate = new Date(parts[2], parts[1] - 1, parts[0]); 
-            
+            if (parts.length < 3) return false;
+            const rowDate = new Date(parts[2], parts[1] - 1, parts[0]);
             return rowDate >= fromDate && rowDate <= toDate;
         });
 
-        if (filteredData.length === 0) {
-            throw new Error(`No records found between ${fromInput} and ${toInput}`);
-        }
+        if (filteredData.length === 0) throw new Error(`No records between ${fromInput} and ${toInput}`);
 
-        // 4. Generate CSV Content
-        // We select specific columns relevant for the report
-        // ID(0), StoreNo(1), Name(2), Start(3), End(4), Status(9), Reason(10), Photo(11), User(12), Time(13)
-        
+        // CSV Generation (Same as before)
         let csvContent = "data:text/csv;charset=utf-8,";
-        
-        // Custom Header for the Report
-        const reportHeaders = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Execution Status", "Reason/Remarks", "Photo Link", "Completed By", "Completion Time"];
+        const reportHeaders = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Approver", "Esc L1", "Esc L2", "Posters", "Status", "Reason", "Photo", "By", "Time"];
         csvContent += reportHeaders.join(",") + "\r\n";
 
         filteredData.forEach(row => {
+            const safe = (val) => `"${(val || "").toString().replace(/"/g, '""')}"`;
             const cleanRow = [
-                row[0],  // ID
-                row[1],  // Store No
-                `"${(row[2] || "").replace(/"/g, '""')}"`, // Name (Escape commas)
-                row[3],  // Start
-                row[4],  // End
-                row[9]  || "Pending", // Status (Col J)
-                `"${(row[10] || "").replace(/"/g, '""')}"`, // Reason (Col K)
-                row[11] || "", // Photo (Col L)
-                row[12] || "", // User (Col M)
-                row[13] || ""  // Time (Col N)
+                safe(row[0]), safe(row[1]), safe(row[2]), safe(row[3]), safe(row[4]),
+                safe(row[5]), safe(row[6]), safe(row[7]), safe(row[8]), safe(row[9]),
+                safe(row[10]), safe(row[11]), safe(row[12]), safe(row[13])
             ];
             csvContent += cleanRow.join(",") + "\r\n";
         });
 
-        // 5. Trigger Download
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `${activeTvCategory}_Report_${fromInput}_to_${toInput}.csv`);
+        link.setAttribute("download", `OfferBoard_Export.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -3133,7 +3109,6 @@ window.generateTvReport = async function() {
     } catch (e) {
         console.error(e);
         statusEl.innerHTML = `<span style="color:red">❌ Error: ${e.message}</span>`;
-        alert("Error: " + e.message);
     } finally {
         btn.disabled = false;
         btn.innerText = "⬇️ Generate & Download CSV";
