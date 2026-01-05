@@ -21,6 +21,9 @@ let currentPivotTableName = "";
 let bulkCsvData = [];
 let bulkCsvHeaders = [];  
 let selectedGroupCol = "";
+let activeTvCategory = "";
+let tvDataCache = [];
+let pendingPhotoBlob = null;
 // Map Global
 let mapInstance = null;
 let mapLayers = {
@@ -2348,3 +2351,294 @@ function highlightSidebar(menuName) {
     const pageTitle = document.getElementById("page-title");
     if (pageTitle) pageTitle.innerText = menuName;
 }
+
+
+// ==========================================
+// 👁️ TRUEVIEW AUDIT LOGIC
+// ==========================================
+
+
+// 1. INITIALIZE DASHBOARD
+window.loadTrueViewDashboard = function() {
+    resetUI();
+    highlightSidebar("TrueView Audit");
+    document.getElementById("trueview-ui").classList.remove("hidden");
+    document.getElementById("tv-category-menu").classList.remove("hidden");
+    document.getElementById("tv-action-container").classList.add("hidden");
+};
+
+// 2. OPEN CATEGORY
+window.openTrueViewCategory = function(category) {
+    activeTvCategory = category;
+    document.getElementById("tv-category-menu").classList.add("hidden");
+    document.getElementById("tv-action-container").classList.remove("hidden");
+    document.getElementById("tv-current-category").innerText = "📂 " + category;
+    
+    // Default to 'My Tasks' view
+    window.switchTvTab('tasks');
+};
+
+// 3. TAB SWITCHER
+window.switchTvTab = function(tabName) {
+    // UI Toggles
+    document.querySelectorAll(".tv-tab").forEach(b => b.classList.remove("active"));
+    document.getElementById(`tab-btn-${tabName}`).classList.add("active");
+    
+    document.getElementById("tv-view-tasks").classList.add("hidden");
+    document.getElementById("tv-view-upload").classList.add("hidden");
+    document.getElementById("tv-view-dashboard").classList.add("hidden");
+    
+    document.getElementById(`tv-view-${tabName}`).classList.remove("hidden");
+
+    if (tabName === 'tasks') loadTvTasks();
+    if (tabName === 'dashboard') loadTvStats();
+};
+
+// 4. LOAD TASKS (Worker View)
+async function loadTvTasks() {
+    const container = document.getElementById("tv-task-list");
+    container.innerHTML = "⏳ Fetching tasks...";
+    const currentUser = localStorage.getItem("portal_user_email");
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TRUEVIEW_SHEET_ID}/values/TrueView_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "No tasks found.";
+            return;
+        }
+
+        // Cache Data (Headers: ID | Date | Category | Store | Assignee | Q_Type | Details | Status | Response | Photo | By | DoneDate)
+        tvDataCache = data.values.slice(1).map((r, i) => ({
+            rowIndex: i + 2, id: r[0], date: r[1], category: r[2], store: r[3],
+            assignee: r[4]?.toLowerCase(), type: r[5], details: r[6], status: r[7],
+            response: r[8], photo: r[9]
+        }));
+
+        // Filter: Match Category AND (Assigned To Me OR Admin)
+        const myTasks = tvDataCache.filter(t => 
+            t.category === activeTvCategory && 
+            t.status !== 'COMPLETED' &&
+            t.assignee === currentUser.toLowerCase()
+        );
+
+        if (myTasks.length === 0) {
+            container.innerHTML = `<div style="text-align:center; grid-column:1/-1; padding:20px; color:#888;">
+                ✅ All caught up! No pending tasks for ${activeTvCategory}.
+            </div>`;
+            return;
+        }
+
+        // Render Cards
+        container.innerHTML = myTasks.map(t => `
+            <div class="tv-task-card">
+                <div>
+                    <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                        <span>📅 ${t.date}</span>
+                        <span style="font-weight:bold;">${t.store}</span>
+                    </div>
+                    <h4 style="margin:10px 0; color:#333;">${t.details}</h4>
+                    <span style="background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; font-size:10px;">${t.type || 'General'}</span>
+                </div>
+                <button onclick="window.openTvExecuteModal('${t.id}', '${t.details}')" 
+                    style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    ▶️ Start Audit
+                </button>
+            </div>
+        `).join("");
+
+    } catch (e) {
+        container.innerHTML = "Error: " + e.message;
+    }
+}
+
+// 5. EXECUTE TASK (Open Modal)
+window.openTvExecuteModal = function(id, desc) {
+    document.getElementById("tv-execute-modal").classList.remove("hidden");
+    document.getElementById("tv-exec-id").value = id;
+    document.getElementById("tv-exec-desc").innerText = desc;
+    document.getElementById("tv-exec-response").value = "";
+    document.getElementById("tv-photo-status").innerHTML = "❌ No photo taken yet.";
+    document.getElementById("tv-photo-status").style.color = "#d32f2f";
+    pendingPhotoBlob = null; // Reset photo
+};
+
+// 6. UPLOAD HANDLER (Integrates with Camera)
+// Override the generic 'uploadCapturedPhoto' to handle TrueView context specifically
+window.uploadCapturedPhoto = function() {
+    const canvas = document.getElementById("camera-canvas");
+    const btn = document.getElementById("btn-upload-photo");
+    
+    // Instead of uploading to Drive immediately, we store the BLOB locally 
+    // and only upload when they click "Submit Audit" to keep it atomic.
+    canvas.toBlob(blob => {
+        pendingPhotoBlob = blob; // Save to global variable
+        window.closeCameraModal();
+        
+        // Update UI in the Execution Modal
+        const statusDiv = document.getElementById("tv-photo-status");
+        statusDiv.innerHTML = "✅ Photo Captured & Timestamped!";
+        statusDiv.style.color = "green";
+    }, 'image/jpeg', 0.8);
+};
+
+// 7. SUBMIT TASK (Write to Sheet + Upload Photo)
+window.submitTvTask = async function() {
+    const taskId = document.getElementById("tv-exec-id").value;
+    const responseVal = document.getElementById("tv-exec-response").value;
+    const btn = document.querySelector("#tv-execute-modal .modal-footer button");
+
+    if (!responseVal) { alert("Please select an observation/answer."); return; }
+    if (!pendingPhotoBlob) { alert("📸 Real-time photo is MANDATORY."); return; }
+
+    btn.innerText = "⏳ Uploading Evidence...";
+    btn.disabled = true;
+
+    try {
+        // A. Upload Photo to Drive
+        const fileName = `TV_${taskId}_${Date.now()}.jpg`;
+        const photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName);
+
+        // B. Update Google Sheet
+        const task = tvDataCache.find(t => t.id === taskId);
+        if (!task) throw new Error("Task not found in cache");
+
+        const row = task.rowIndex;
+        const user = localStorage.getItem("portal_user_email");
+        const date = new Date().toLocaleString();
+
+        // Update Columns: Status (H), Response (I), Photo (J), By (K), Date (L)
+        const range = `TrueView_Data!H${row}:L${row}`;
+        const values = [[ "COMPLETED", responseVal, photoLink, user, date ]];
+
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TRUEVIEW_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: values })
+        });
+
+        alert("✅ Audit Submitted Successfully!");
+        document.getElementById("tv-execute-modal").classList.add("hidden");
+        loadTvTasks(); // Refresh list
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = "✅ Submit Audit";
+        btn.disabled = false;
+    }
+};
+
+// Helper: Reusable Drive Upload
+async function uploadBlobToDrive(blob, name) {
+    const metadata = { name: name, mimeType: 'image/jpeg', parents: [CONFIG.WAREHOUSE_PHOTOS_FOLDER_ID] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+
+    const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+        method: 'POST',
+        headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+        body: form
+    });
+    const data = await resp.json();
+    return data.webViewLink; // Returns the View URL
+}
+
+// 8. DASHBOARD STATS
+async function loadTvStats() {
+    const container = document.getElementById("tv-stats-table");
+    
+    // Calculate Stats from Cache (Filtered by Category)
+    const tasks = tvDataCache.filter(t => t.category === activeTvCategory);
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.status === 'COMPLETED').length;
+    const pending = total - completed;
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    document.getElementById("tv-stat-total").innerText = total;
+    document.getElementById("tv-stat-pending").innerText = pending;
+    document.getElementById("tv-stat-completed").innerText = completed;
+    document.getElementById("tv-stat-percent").innerText = percent + "%";
+
+    // Store-wise Table
+    const storeStats = {};
+    tasks.forEach(t => {
+        if (!storeStats[t.store]) storeStats[t.store] = { T: 0, C: 0 };
+        storeStats[t.store].T++;
+        if (t.status === 'COMPLETED') storeStats[t.store].C++;
+    });
+
+    let html = `<table class="data-table"><thead><tr><th>Store ID</th><th>Total</th><th>Done</th><th>Pending</th><th>Progress</th></tr></thead><tbody>`;
+    Object.keys(storeStats).forEach(s => {
+        const d = storeStats[s];
+        const p = Math.round((d.C / d.T) * 100);
+        const barColor = p === 100 ? 'green' : (p > 50 ? 'orange' : 'red');
+        html += `<tr>
+            <td>${s}</td>
+            <td>${d.T}</td>
+            <td>${d.C}</td>
+            <td>${d.T - d.C}</td>
+            <td><div style="width:100px; background:#eee; height:8px; border-radius:4px;"><div style="width:${p}%; background:${barColor}; height:100%; border-radius:4px;"></div></div></td>
+        </tr>`;
+    });
+    html += `</tbody></table>`;
+    container.innerHTML = html;
+}
+
+// 9. DOWNLOAD TEMPLATE
+window.downloadTvTemplate = function() {
+    const headers = ["Store_ID", "Assigned_To_Email", "Question_Type", "Task_Details"];
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "TrueView_Impex_Template.csv");
+    document.body.appendChild(link);
+    link.click();
+};
+
+// 10. UPLOAD IMPEX (Manager)
+window.handleTvImpexUpload = function(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const rows = e.target.result.split("\n").slice(1); // Skip header
+        const newRows = [];
+        const date = new Date().toLocaleDateString();
+        const currentUser = localStorage.getItem("portal_user_email");
+
+        rows.forEach(rowStr => {
+            const cols = rowStr.split(",");
+            if (cols.length >= 4) {
+                const id = "TV-" + Math.floor(Math.random() * 1000000);
+                // ID | Date | Category | Store | Assignee | Type | Details | Status | Resp | Photo | By | DoneDate
+                newRows.push([
+                    id, date, activeTvCategory, 
+                    cols[0].trim(), // Store
+                    cols[1].trim(), // Assignee
+                    cols[2].trim(), // Type
+                    cols[3].trim(), // Details
+                    "OPEN", "", "", "", ""
+                ]);
+            }
+        });
+
+        if (newRows.length > 0) {
+            if(confirm(`Create ${newRows.length} tasks for ${activeTvCategory}?`)) {
+                await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TRUEVIEW_SHEET_ID}/values/TrueView_Data!A1:append?valueInputOption=USER_ENTERED`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ values: newRows })
+                });
+                alert("✅ Impex Uploaded Successfully!");
+                window.switchTvTab('dashboard');
+            }
+        }
+    };
+    reader.readAsText(file);
+};
