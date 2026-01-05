@@ -232,6 +232,8 @@
                                     <button onclick="window.switchTvTab('tasks')" class="tv-tab active" id="tab-btn-tasks">📋 My Tasks</button>
                                     <button onclick="window.switchTvTab('upload')" class="tv-tab" id="tab-btn-upload">📤 Upload Impex</button>
                                     <button onclick="window.switchTvTab('dashboard')" class="tv-tab" id="tab-btn-dashboard">📊 Dashboard</button>
+                                    <button onclick="window.switchTvTab('download')" class="tv-tab" id="tab-btn-download">⬇️ Download Report</button>
+                                    
                                 </div>
 
                                 <div id="tv-view-tasks">
@@ -249,7 +251,7 @@
                                         </label>
                                     </div>
                                 </div>
-
+                                
                                 <div id="tv-view-dashboard" class="hidden">
                                     <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-bottom:20px;">
                                         <div class="stat-card"><div>Total Tasks</div><div id="tv-stat-total" class="stat-val">0</div></div>
@@ -260,6 +262,30 @@
                                     <h4>📌 Store-wise Performance</h4>
                                     <div id="tv-stats-table" style="overflow:auto; max-height:400px; background:white; border:1px solid #eee;"></div>
                                 </div>
+                                <div id="tv-view-download" class="hidden">
+        <div style="background:#e8eaf6; padding:20px; border-radius:8px; border:1px solid #c5cae9; max-width:500px;">
+            <h3>📅 Export Offer Board Report</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">Filter data based on <b>Start Date</b>.</p>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div>
+                    <label style="font-weight:bold; font-size:12px;">From Date:</label>
+                    <input type="date" id="tv-rep-from" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div>
+                    <label style="font-weight:bold; font-size:12px;">To Date:</label>
+                    <input type="date" id="tv-rep-to" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+            </div>
+
+            <button id="btn-download-report" onclick="window.generateTvReport()" style="width:100%; background:#3f51b5; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">
+                ⬇️ Generate & Download CSV
+            </button>
+            <p id="tv-download-status" style="margin-top:10px; font-size:12px; text-align:center;"></p>
+        </div>
+    </div>
+
+    </div>
                             </div>
                         </div>
 
