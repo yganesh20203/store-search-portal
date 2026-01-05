@@ -2519,13 +2519,12 @@ window.handleTvImpexUpload = function(input) {
     input.value = ""; // Reset input
 };
 
-// 6. LOAD TASKS (Fixed User Matching)
+// 6. LOAD TASKS (With Escalation Logic)
 async function loadTvTasks() {
     const container = document.getElementById("tv-task-list");
-    container.innerHTML = "⏳ Fetching pending tasks...";
+    container.innerHTML = "⏳ Fetching tasks...";
     
     const config = TV_CONFIG_MAP[activeTvCategory];
-    // Get logged-in user and extract just the username (e.g., "y.ganesh" from "y.ganesh@flipkart.com")
     const rawUser = localStorage.getItem("portal_user_email")?.toLowerCase() || "";
     const currentUsername = rawUser.split('@')[0].trim(); 
 
@@ -2538,78 +2537,80 @@ async function loadTvTasks() {
         const data = await response.json();
 
         if (!data.values || data.values.length < 2) {
-            container.innerHTML = `<div style="text-align:center; padding:20px; color:#888;">No tasks found in the sheet.</div>`;
+            container.innerHTML = "No tasks found.";
             return;
         }
 
         let myPendingTasks = [];
 
         if (activeTvCategory === "Offer Board") {
-            // MAPPING: Offer Board
-            // Row Structure based on your sheet:
-            // 0:ID, 1:StoreNo, 2:Name, 3:Start, 4:End, 5:Approver, ... 13:CompletedDate(N)
-            
-            myPendingTasks = data.values.slice(1).map((r, i) => {
-                const sheetEmail = (r[5] || "").toLowerCase().trim();
-                const sheetUsername = sheetEmail.split('@')[0]; // Extract "y.ganesh"
+            const today = new Date();
+            today.setHours(0,0,0,0); // Normalize today to midnight
 
+            myPendingTasks = data.values.slice(1).map((r, i) => {
+                const assigneeEmail = (r[5] || "").toLowerCase().trim();
+                const escL1Email = (r[6] || "").toLowerCase().trim(); // Column G (Index 6) is Esc L1
+                
                 return {
                     rowIndex: i + 2,
                     id: r[0],
                     storeNo: r[1],
                     storeName: r[2],
-                    endDate: r[4],
-                    assignee: sheetEmail, 
-                    assigneeUsername: sheetUsername, // Store for comparison
+                    endDateStr: r[4], // Keep string for display
+                    endDateObj: new Date(r[4]), // Parse object for comparison
+                    assigneeUsername: assigneeEmail.split('@')[0],
+                    escL1Username: escL1Email.split('@')[0],
                     posters: r[8],
-                    completedDate: r[13] // Column N
+                    completedDate: r[13]
                 };
             })
             .filter(t => {
-                // FILTER 1: Match Username (ignores @flipkart.com difference)
-                const isAssigned = t.assigneeUsername === currentUsername;
-                
-                // FILTER 2: Completed Date must be empty
                 const isPending = !t.completedDate || t.completedDate.trim() === "";
+                if (!isPending) return false;
 
-                return isAssigned && isPending;
+                // 1. Show if I am the Assignee
+                if (t.assigneeUsername === currentUsername) return true;
+
+                // 2. Show if I am Esc L1 AND Task is Overdue
+                if (t.escL1Username === currentUsername && t.endDateObj < today) {
+                    t.isEscalated = true; // Mark for UI styling
+                    return true;
+                }
+
+                return false;
             });
-
-            tvDataCache = myPendingTasks; 
-        } 
-        // ... (Keep other categories standard logic if needed) ...
+            
+            // Save to cache for submission
+            tvDataCache = myPendingTasks;
+        }
 
         if (myPendingTasks.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding:20px; color:#888;">
-                ✅ You have no pending audits! <br>
-                <span style="font-size:10px; color:#ccc;">(Logged in as: ${currentUsername})</span>
-            </div>`;
+            container.innerHTML = "✅ No pending audits!";
             return;
         }
 
         container.innerHTML = myPendingTasks.map(t => `
-            <div class="tv-task-card">
+            <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
                 <div>
                     <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
                         <span>Store: ${t.storeNo}</span>
-                        <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
+                        <span style="color:${t.isEscalated ? '#d32f2f' : '#e65100'}; font-weight:bold;">
+                            ${t.isEscalated ? '🔥 OVERDUE: ' + t.endDateStr : 'Due: ' + t.endDateStr}
+                        </span>
                     </div>
                     <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
-                    <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px; border:1px solid #ffe0b2;">
+                    <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px;">
                         Posters Required: <b>${t.posters}</b>
                     </div>
                 </div>
                 <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName} - ${t.posters} Posters')" 
-                    style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                    ▶️ Start Audit
+                    style="margin-top:15px; width:100%; background:${t.isEscalated ? '#d32f2f' : '#ff9800'}; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    ${t.isEscalated ? '⚠️ Resolve Escalation' : '▶️ Start Audit'}
                 </button>
             </div>
         `).join("");
 
-    } catch (e) { 
-        console.error(e);
-        container.innerHTML = "Error loading tasks: " + e.message; 
-    }
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
 
 // 7. EXECUTE MODAL (Custom Form)
