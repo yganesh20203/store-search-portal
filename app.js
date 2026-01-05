@@ -3030,3 +3030,112 @@ async function uploadBlobToDrive(blob, fileName) {
     console.log("☁️ Upload Success:", data.webViewLink);
     return data.webViewLink;
 }
+
+// ==========================================
+// ⬇️ DOWNLOAD REPORT LOGIC
+// ==========================================
+window.generateTvReport = async function() {
+    const fromInput = document.getElementById("tv-rep-from").value;
+    const toInput = document.getElementById("tv-rep-to").value;
+    const statusEl = document.getElementById("tv-download-status");
+    const btn = document.getElementById("btn-download-report");
+
+    // 1. Validation
+    if (!fromInput || !toInput) {
+        alert("⚠️ Please select both From and To dates.");
+        return;
+    }
+
+    const config = TV_CONFIG_MAP[activeTvCategory];
+    if (!config) { alert("Config Error"); return; }
+
+    // UI Loading State
+    btn.disabled = true;
+    btn.innerText = "⏳ Fetching Data...";
+    statusEl.innerText = "";
+
+    try {
+        // 2. Fetch Data
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            throw new Error("No data found in sheet.");
+        }
+
+        const headers = data.values[0];
+        const rows = data.values.slice(1);
+        
+        // Parse Inputs (YYYY-MM-DD from input type="date")
+        const fromDate = new Date(fromInput);
+        const toDate = new Date(toInput);
+        // Set times to ensure inclusive comparison
+        fromDate.setHours(0,0,0,0); 
+        toDate.setHours(23,59,59,999);
+
+        // 3. Filter Rows based on Start Date (Column Index 3 based on your screenshot)
+        const filteredData = rows.filter(r => {
+            const dateStr = r[3]; // "1/5/2025" (d/m/yyyy)
+            if (!dateStr) return false;
+
+            // Custom Parser for dd/mm/yyyy
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return false;
+            
+            // Note: Month is 0-indexed in JS Date (0=Jan, 4=May)
+            const rowDate = new Date(parts[2], parts[1] - 1, parts[0]); 
+            
+            return rowDate >= fromDate && rowDate <= toDate;
+        });
+
+        if (filteredData.length === 0) {
+            throw new Error(`No records found between ${fromInput} and ${toInput}`);
+        }
+
+        // 4. Generate CSV Content
+        // We select specific columns relevant for the report
+        // ID(0), StoreNo(1), Name(2), Start(3), End(4), Status(9), Reason(10), Photo(11), User(12), Time(13)
+        
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Custom Header for the Report
+        const reportHeaders = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Execution Status", "Reason/Remarks", "Photo Link", "Completed By", "Completion Time"];
+        csvContent += reportHeaders.join(",") + "\r\n";
+
+        filteredData.forEach(row => {
+            const cleanRow = [
+                row[0],  // ID
+                row[1],  // Store No
+                `"${(row[2] || "").replace(/"/g, '""')}"`, // Name (Escape commas)
+                row[3],  // Start
+                row[4],  // End
+                row[9]  || "Pending", // Status (Col J)
+                `"${(row[10] || "").replace(/"/g, '""')}"`, // Reason (Col K)
+                row[11] || "", // Photo (Col L)
+                row[12] || "", // User (Col M)
+                row[13] || ""  // Time (Col N)
+            ];
+            csvContent += cleanRow.join(",") + "\r\n";
+        });
+
+        // 5. Trigger Download
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `${activeTvCategory}_Report_${fromInput}_to_${toInput}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        statusEl.innerHTML = `<span style="color:green">✅ Downloaded ${filteredData.length} records!</span>`;
+
+    } catch (e) {
+        console.error(e);
+        statusEl.innerHTML = `<span style="color:red">❌ Error: ${e.message}</span>`;
+        alert("Error: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "⬇️ Generate & Download CSV";
+    }
+};
