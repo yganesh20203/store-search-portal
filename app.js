@@ -2810,3 +2810,131 @@ window.resetCamera = function() {
     const status = document.getElementById("camera-status");
     if(status) status.innerText = "Point at warehouse item.";
 };
+
+
+// 8. DASHBOARD STATS (Fixed for Offer Board)
+async function loadTvStats() {
+    const container = document.getElementById("tv-stats-table");
+    container.innerHTML = "⏳ Calculating stats...";
+
+    const config = TV_CONFIG_MAP[activeTvCategory];
+    if (!config) return;
+
+    // 1. Always fetch fresh data for accurate stats
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            resetStatsToZero();
+            container.innerHTML = "No data available.";
+            return;
+        }
+
+        const rows = data.values.slice(1);
+        let total = 0;
+        let completed = 0;
+        const storeStats = {};
+
+        // 2. LOGIC SWITCH BASED ON CATEGORY
+        if (activeTvCategory === "Offer Board") {
+            // --- OFFER BOARD LOGIC ---
+            // Col 1: Store No, Col 2: Store Name, Col 13: Completed Date (Index 13)
+            
+            total = rows.length;
+            
+            rows.forEach(r => {
+                const storeName = r[2] || "Unknown Store"; // Column C
+                const completedDate = r[13]; // Column N (Completed Date)
+                
+                // Determine Status
+                const isDone = (completedDate && completedDate.trim() !== "");
+                if (isDone) completed++;
+
+                // Aggregate Store Stats
+                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
+                storeStats[storeName].T++;
+                if (isDone) storeStats[storeName].C++;
+            });
+
+        } else {
+            // --- STANDARD LOGIC (For other categories) ---
+            // Col 2: Category, Col 3: Store, Col 7: Status
+            
+            // Filter rows belonging to this category (if mixed sheet) OR take all (if separate sheet)
+            // Since we split sheets, we usually take all, but standard sheets might still share "Sheet1" in some setups.
+            // Let's assume separate sheets based on your latest config.
+            const relevantRows = rows; 
+
+            total = relevantRows.length;
+
+            relevantRows.forEach(r => {
+                const storeName = r[3] || "Unknown"; // Standard Store ID/Name
+                const status = r[7]; // Standard Status Col
+
+                const isDone = (status === 'COMPLETED');
+                if (isDone) completed++;
+
+                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
+                storeStats[storeName].T++;
+                if (isDone) storeStats[storeName].C++;
+            });
+        }
+
+        // 3. UPDATE UI CARDS
+        const pending = total - completed;
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        document.getElementById("tv-stat-total").innerText = total;
+        document.getElementById("tv-stat-pending").innerText = pending;
+        document.getElementById("tv-stat-completed").innerText = completed;
+        document.getElementById("tv-stat-percent").innerText = percent + "%";
+
+        // 4. UPDATE TABLE
+        let html = `<table class="data-table">
+            <thead>
+                <tr>
+                    <th style="text-align:left;">Store Name</th>
+                    <th>Total</th>
+                    <th>Done</th>
+                    <th>Pending</th>
+                    <th>Progress</th>
+                </tr>
+            </thead>
+            <tbody>`;
+            
+        Object.keys(storeStats).forEach(s => {
+            const d = storeStats[s];
+            const p = Math.round((d.C / d.T) * 100);
+            const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
+            
+            html += `<tr>
+                <td style="text-align:left; font-weight:500;">${s}</td>
+                <td>${d.T}</td>
+                <td>${d.C}</td>
+                <td>${d.T - d.C}</td>
+                <td style="width:100px;">
+                    <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
+                        <div style="width:${p}%; background:${barColor}; height:100%;"></div>
+                    </div>
+                    <div style="font-size:10px; text-align:right; margin-top:2px;">${p}%</div>
+                </td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = "Error loading stats.";
+    }
+}
+
+function resetStatsToZero() {
+    document.getElementById("tv-stat-total").innerText = "0";
+    document.getElementById("tv-stat-pending").innerText = "0";
+    document.getElementById("tv-stat-completed").innerText = "0";
+    document.getElementById("tv-stat-percent").innerText = "0%";
+}
