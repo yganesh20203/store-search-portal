@@ -20,13 +20,19 @@ body {
 /* =========================================
    2. LOGIN SCREEN (Solid & Opaque)
    ========================================= */
+/* =========================================
+   2. LOGIN SCREEN (Solid & Opaque)
+   ========================================= */
 #auth-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    
+    /* SOLID BACKGROUND */
     background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -49,51 +55,53 @@ body {
     font-size: 1rem;
 }
 
+/* LOGIN BOX CONTAINER */
 .login-box {
     background: #ffffff;
-    padding: 40px;
+    padding: 30px; /* Reduced slightly for better proportion */
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    display: flex;
-    flex-direction: column;
     width: 320px;
-    text-align: left; /* Changed to left align labels */
-    box-sizing: border-box; /* Critical Fix */
+    text-align: left; /* Aligns labels to the left */
+    box-sizing: border-box; /* IMPORTANT: Keeps width stable */
 }
 
-/* Input Groups */
-.input-group {
-    width: 100%;
-    margin-bottom: 15px;
-}
-
+/* LABEL STYLING */
 .login-box label {
     display: block;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 700;
     color: #555;
+    margin-bottom: 6px;
+    margin-top: 15px; /* Adds space between fields */
+}
+/* Remove top margin for the very first label */
+.login-box label:first-child { margin-top: 0; }
+
+/* INPUT GROUP WRAPPERS */
+.input-group {
+    width: 100%;
     margin-bottom: 5px;
 }
 
-/* Input Wrapper for relative positioning of icon */
 .password-wrapper {
-    position: relative;
+    position: relative; /* Necessary to hold the absolute eye icon */
     width: 100%;
 }
 
-/* Inputs */
+/* INPUT FIELDS */
 .login-box input {
     width: 100%;
     padding: 12px;
-    padding-right: 40px; /* Space for eye icon */
+    padding-right: 40px; /* Make room for the eye icon */
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 14px;
     outline: none;
     background: #f9f9f9;
     color: #333;
-    box-sizing: border-box; /* Fixes the overflow/misalignment */
-    height: 45px;
+    box-sizing: border-box; /* Prevents input from overflowing */
+    height: 45px; /* Fixed height for consistency */
 }
 
 .login-box input:focus {
@@ -101,28 +109,28 @@ body {
     background: #fff;
 }
 
-/* Eye Icon Styling */
+/* EYE ICON */
 .eye-icon {
     position: absolute;
     right: 12px;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%); /* Perfectly centers vertically */
     cursor: pointer;
     font-size: 16px;
     color: #777;
     z-index: 2;
-    user-select: none;
+    user-select: none; /* Prevents highlighting the icon */
 }
 
-/* Divider */
+/* DIVIDER LINE */
 .divider {
     width: 100%;
     border: 0;
     border-top: 1px solid #eee;
-    margin: 15px 0;
+    margin: 20px 0;
 }
 
-/* Login Button */
+/* LOGIN BUTTON */
 #login-btn {
     width: 100%;
     padding: 12px;
@@ -134,7 +142,7 @@ body {
     font-weight: bold;
     cursor: pointer;
     transition: transform 0.2s, background 0.2s;
-    margin-top: 10px;
+    margin-top: 20px;
 }
 
 #login-btn:hover {
@@ -152,8 +160,7 @@ body {
     border: 1px solid #ffcdd2;
     margin-top: 15px;
     text-align: center;
-}
-/* =========================================
+}/* =========================================
    3. DASHBOARD CONTAINER
    ========================================= */
 #dashboard {
