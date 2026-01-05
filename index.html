@@ -8,12 +8,16 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.24/jsrsasign-all-min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -28,16 +32,19 @@
             <div class="login-box">
                 <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">Team Access Key</label>
                 <input type="password" id="access-key" placeholder="Enter Access Key...">
+                
                 <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
+
                 <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">User Credentials</label>
                 <input type="text" id="login-user" placeholder="Username">
                 <input type="password" id="login-pass" placeholder="Password">
+                
                 <button id="login-btn" onclick="window.unlockAndLogin()">Unlock & Login</button>
                 <p id="error-msg"></p>
             </div>
         </div>
 
-        <div id="session-timer-ui" class="hidden">
+        <div id="session-timer-ui" class="hidden" style="position:fixed; top:10px; right:120px; background:white; padding:5px 15px; border-radius:20px; font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.1); display:flex; align-items:center; gap:8px; border:1px solid #ddd; z-index:1000;">
             <span id="session-icon">⏱️</span>
             <span id="session-text">00:00</span>
         </div>
@@ -64,7 +71,7 @@
                             <button onclick="window.loadTicketDashboard()" class="nav-item">🎫 Task Manager</button>
                             <button onclick="window.loadDailyUpdateDashboard()" class="nav-item">📅 My Inbox</button>
                             <button onclick="window.loadApprovalsDashboard()" class="nav-item">📧 Mail Search</button>
-                            <button onclick="window.openCameraModal()" class="nav-item">👁️ TrueView Audit</button>
+                            <button onclick="window.loadTrueViewDashboard()" class="nav-item">👁️ TrueView Audit</button>
                         </div>
 
                         <div class="nav-group">
@@ -187,100 +194,60 @@
                                 <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer; width:100%;">🚀 Search in Gmail</button>
                             </div>
                         </div>
+
                         <div id="trueview-ui" class="hidden">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <div>
-            <h3 style="margin:0;">👁️ TrueView Audit</h3>
-            <p style="margin:0; font-size:12px; color:#666;">Real-time verification & compliance.</p>
-        </div>
-        <button onclick="window.loadTrueViewDashboard()" class="action-btn" style="background:#e3f2fd;">🏠 Main Menu</button>
-    </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                <div>
+                                    <h3 style="margin:0;">👁️ TrueView Audit</h3>
+                                    <p style="margin:0; font-size:12px; color:#666;">Real-time verification & compliance.</p>
+                                </div>
+                                <button onclick="window.loadTrueViewDashboard()" class="action-btn" style="background:#e3f2fd;">🏠 Main Menu</button>
+                            </div>
 
-    <div id="tv-category-menu" class="folder-grid">
-        <button onclick="window.openTrueViewCategory('Store Inventory')" class="folder-btn" style="border-bottom: 4px solid #ff9800;">
-            📦 Store Inventory
-        </button>
-        <button onclick="window.openTrueViewCategory('Offer Board')" class="folder-btn" style="border-bottom: 4px solid #2196f3;">
-            🏷️ Offer Board
-        </button>
-        <button onclick="window.openTrueViewCategory('OFR Audit')" class="folder-btn" style="border-bottom: 4px solid #4caf50;">
-            ✅ OFR Audit
-        </button>
-        <button onclick="window.openTrueViewCategory('Hygiene Check')" class="folder-btn" style="border-bottom: 4px solid #9c27b0;">
-            🧹 Hygiene Check
-        </button>
-    </div>
+                            <div id="tv-category-menu" class="folder-grid">
+                                <button onclick="window.openTrueViewCategory('Store Inventory')" class="folder-btn" style="border-bottom: 4px solid #ff9800;">📦 Store Inventory</button>
+                                <button onclick="window.openTrueViewCategory('Offer Board')" class="folder-btn" style="border-bottom: 4px solid #2196f3;">🏷️ Offer Board</button>
+                                <button onclick="window.openTrueViewCategory('OFR Audit')" class="folder-btn" style="border-bottom: 4px solid #4caf50;">✅ OFR Audit</button>
+                                <button onclick="window.openTrueViewCategory('Hygiene Check')" class="folder-btn" style="border-bottom: 4px solid #9c27b0;">🧹 Hygiene Check</button>
+                            </div>
 
-    <div id="tv-action-container" class="hidden">
-        <h3 id="tv-current-category" style="color:#1e3c72; border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:20px;">Category Name</h3>
-        
-        <div style="display:flex; gap:10px; margin-bottom:20px;">
-            <button onclick="window.switchTvTab('tasks')" class="tv-tab active" id="tab-btn-tasks">📋 My Tasks</button>
-            <button onclick="window.switchTvTab('upload')" class="tv-tab" id="tab-btn-upload">📤 Upload Impex</button>
-            <button onclick="window.switchTvTab('dashboard')" class="tv-tab" id="tab-btn-dashboard">📊 Dashboard</button>
-        </div>
+                            <div id="tv-action-container" class="hidden">
+                                <h3 id="tv-current-category" style="color:#1e3c72; border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:20px;">Category Name</h3>
+                                
+                                <div style="display:flex; gap:10px; margin-bottom:20px;">
+                                    <button onclick="window.switchTvTab('tasks')" class="tv-tab active" id="tab-btn-tasks">📋 My Tasks</button>
+                                    <button onclick="window.switchTvTab('upload')" class="tv-tab" id="tab-btn-upload">📤 Upload Impex</button>
+                                    <button onclick="window.switchTvTab('dashboard')" class="tv-tab" id="tab-btn-dashboard">📊 Dashboard</button>
+                                </div>
 
-        <div id="tv-view-tasks">
-            <div id="tv-task-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">
-                Loading Tasks...
-            </div>
-        </div>
+                                <div id="tv-view-tasks">
+                                    <div id="tv-task-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">Loading Tasks...</div>
+                                </div>
 
-        <div id="tv-view-upload" class="hidden" style="background:#f9f9f9; padding:20px; border-radius:8px; border:1px solid #ddd;">
-            <h4>📤 Bulk Task Creation</h4>
-            <p style="font-size:12px; color:#666;">Download the template, fill it with Store IDs and Assignees, then upload.</p>
-            
-            <div style="display:flex; gap:15px; margin-top:15px;">
-                <button onclick="window.downloadTvTemplate()" style="background:#607d8b; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer;">⬇️ Download Template</button>
-                <label style="background:#1e3c72; color:white; padding:8px 15px; border-radius:4px; cursor:pointer;">
-                    📂 Upload Impex CSV
-                    <input type="file" accept=".csv" style="display:none;" onchange="window.handleTvImpexUpload(this)">
-                </label>
-            </div>
-        </div>
+                                <div id="tv-view-upload" class="hidden" style="background:#f9f9f9; padding:20px; border-radius:8px; border:1px solid #ddd;">
+                                    <h4>📤 Bulk Task Creation</h4>
+                                    <p style="font-size:12px; color:#666;">Download the template, fill it with Store IDs and Assignees, then upload.</p>
+                                    <div style="display:flex; gap:15px; margin-top:15px;">
+                                        <button onclick="window.downloadTvTemplate()" style="background:#607d8b; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer;">⬇️ Download Template</button>
+                                        <label style="background:#1e3c72; color:white; padding:8px 15px; border-radius:4px; cursor:pointer;">
+                                            📂 Upload Impex CSV
+                                            <input type="file" accept=".csv" style="display:none;" onchange="window.handleTvImpexUpload(this)">
+                                        </label>
+                                    </div>
+                                </div>
 
-        <div id="tv-view-dashboard" class="hidden">
-            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-bottom:20px;">
-                <div class="stat-card"><div>Total Tasks</div><div id="tv-stat-total" class="stat-val">0</div></div>
-                <div class="stat-card"><div>Pending</div><div id="tv-stat-pending" class="stat-val" style="color:#f57c00;">0</div></div>
-                <div class="stat-card"><div>Completed</div><div id="tv-stat-completed" class="stat-val" style="color:#2e7d32;">0</div></div>
-                <div class="stat-card"><div>Completion %</div><div id="tv-stat-percent" class="stat-val" style="color:#1976d2;">0%</div></div>
-            </div>
-            <h4>📌 Store-wise Performance</h4>
-            <div id="tv-stats-table" style="overflow:auto; max-height:400px; background:white; border:1px solid #eee;"></div>
-        </div>
-    </div>
-</div>
-
-<div id="tv-execute-modal" class="modal hidden">
-    <div class="modal-content" style="max-width:500px;">
-        <div class="modal-header">
-            <h3>📝 Complete Audit Task</h3>
-            <span class="close-btn" onclick="document.getElementById('tv-execute-modal').classList.add('hidden')">&times;</span>
-        </div>
-        <div class="modal-body">
-            <input type="hidden" id="tv-exec-id">
-            <p id="tv-exec-desc" style="font-weight:bold; color:#333; margin-bottom:15px; background:#f0f4c3; padding:10px; border-radius:4px;"></p>
-            
-            <label style="font-size:12px; font-weight:bold;">Observation / Answer:</label>
-            <select id="tv-exec-response" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
-                <option value="">-- Select Status --</option>
-                <option value="Compliant">✅ Compliant / Available</option>
-                <option value="Non-Compliant">❌ Non-Compliant / Missing</option>
-                <option value="Needs Action">⚠️ Needs Attention</option>
-            </select>
-
-            <label style="font-size:12px; font-weight:bold;">Visual Proof (Live Capture Only):</label>
-            <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#d32f2f;">No photo taken yet.</div>
-            <button onclick="window.openCameraModal()" style="width:100%; padding:12px; background:#1e3c72; color:white; border:none; border-radius:4px; cursor:pointer; display:flex; justify-content:center; gap:8px;">
-                📸 Open TrueView Camera
-            </button>
-        </div>
-        <div class="modal-footer">
-            <button onclick="window.submitTvTask()" style="background:#2e7d32; color:white;">✅ Submit Audit</button>
-        </div>
-    </div>
-</div>
+                                <div id="tv-view-dashboard" class="hidden">
+                                    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-bottom:20px;">
+                                        <div class="stat-card"><div>Total Tasks</div><div id="tv-stat-total" class="stat-val">0</div></div>
+                                        <div class="stat-card"><div>Pending</div><div id="tv-stat-pending" class="stat-val" style="color:#f57c00;">0</div></div>
+                                        <div class="stat-card"><div>Completed</div><div id="tv-stat-completed" class="stat-val" style="color:#2e7d32;">0</div></div>
+                                        <div class="stat-card"><div>Completion %</div><div id="tv-stat-percent" class="stat-val" style="color:#1976d2;">0%</div></div>
+                                    </div>
+                                    <h4>📌 Store-wise Performance</h4>
+                                    <div id="tv-stats-table" style="overflow:auto; max-height:400px; background:white; border:1px solid #eee;"></div>
+                                </div>
+                            </div>
+                        </div>
 
                         <div id="business-ui" class="hidden">
                             <h3>🇮🇳 Warehouse & Pincode Performance</h3>
@@ -458,6 +425,60 @@
             </div>
             <div class="modal-footer">
                 <button id="wizard-next-btn" style="background:#1976d2; color:white; display:none;" onclick="window.processBulkMapping()">🚀 Assign Tasks</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tv-execute-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:500px;">
+            <div class="modal-header">
+                <h3>📝 Complete Audit Task</h3>
+                <span class="close-btn" onclick="document.getElementById('tv-execute-modal').classList.add('hidden')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="tv-exec-id">
+                <p id="tv-exec-desc" style="font-weight:bold; color:#333; margin-bottom:15px; background:#f0f4c3; padding:10px; border-radius:4px;"></p>
+                
+                <label style="font-size:12px; font-weight:bold;">Observation / Answer:</label>
+                <select id="tv-exec-response" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                    <option value="">-- Select Status --</option>
+                    <option value="Compliant">✅ Compliant / Available</option>
+                    <option value="Non-Compliant">❌ Non-Compliant / Missing</option>
+                    <option value="Needs Action">⚠️ Needs Attention</option>
+                </select>
+
+                <label style="font-size:12px; font-weight:bold;">Visual Proof (Live Capture Only):</label>
+                <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#d32f2f;">No photo taken yet.</div>
+                <button onclick="window.openCameraModal()" style="width:100%; padding:12px; background:#1e3c72; color:white; border:none; border-radius:4px; cursor:pointer; display:flex; justify-content:center; gap:8px;">
+                    📸 Open TrueView Camera
+                </button>
+            </div>
+            <div class="modal-footer">
+                <button onclick="window.submitTvTask()" style="background:#2e7d32; color:white;">✅ Submit Audit</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="camera-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; text-align:center;">
+            <div class="modal-header">
+                <h3>📸 Verification Camera</h3>
+                <span class="close-btn" onclick="window.closeCameraModal()">&times;</span>
+            </div>
+            
+            <div class="modal-body" style="padding:10px;">
+                <div id="camera-view-container" style="position: relative; width: 100%; height: 350px; background: black; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+                    <video id="camera-stream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+                    <canvas id="camera-canvas" class="hidden" style="width: 100%; height: 100%; object-fit: cover;"></canvas>
+                </div>
+
+                <div style="display: flex; justify-content: center; gap: 15px;">
+                    <button id="btn-capture" onclick="window.capturePhoto()" style="background: #ff9800; color: white; padding: 12px 25px; border: none; border-radius: 50px; font-weight: bold; font-size: 14px;">🔘 Click Photo</button>
+                    <button id="btn-retake" class="hidden" onclick="window.resetCamera()" style="background: #607d8b; color: white; padding: 10px 20px; border: none; border-radius: 6px;">🔄 Retake</button>
+                    <button id="btn-upload-photo" class="hidden" onclick="window.uploadCapturedPhoto()" style="background: #2e7d32; color: white; padding: 10px 20px; border: none; border-radius: 6px;">🚀 Use Photo</button>
+                </div>
+                
+                <p id="camera-status" style="margin-top:15px; font-size:12px; color:#666;">Opening Camera...</p>
             </div>
         </div>
     </div>
