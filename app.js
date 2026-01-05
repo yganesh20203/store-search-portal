@@ -2397,22 +2397,33 @@ window.openTrueViewCategory = function(category) {
     window.switchTvTab('tasks');
 };
 
-// 3. TAB SWITCHER
+// ==========================================
+// FIX FOR TRUEVIEW TAB SWITCHER
+// ==========================================
+
 window.switchTvTab = function(tabName) {
+    // 1. Highlight the Active Tab Button
     document.querySelectorAll(".tv-tab").forEach(b => b.classList.remove("active"));
-    document.getElementById(`tab-btn-${tabName}`).classList.add("active");
+    const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+    if (activeBtn) activeBtn.classList.add("active");
     
-    // Hide all views
+    // 2. Hide all View Containers
     ["tasks", "upload", "dashboard", "download"].forEach(v => {
         const el = document.getElementById(`tv-view-${v}`);
         if(el) el.classList.add("hidden");
     });
     
-    // Show active view
-    document.getElementById(`tv-view-${tabName}`).classList.remove("hidden");
+    // 3. Show the Selected View
+    const targetView = document.getElementById(`tv-view-${tabName}`);
+    if (targetView) targetView.classList.remove("hidden");
 
-    if (tabName === 'tasks') loadTvTasks();
-    // Dashboard & Download can be added similarly
+    // 4. TRIGGER DATA LOADING BASED ON TAB (The Fix)
+    if (tabName === 'tasks') {
+        loadTvTasks(); // Loads your specific pending tasks
+    } 
+    else if (tabName === 'dashboard') {
+        loadTvStats(); // <--- THIS WAS MISSING
+    }
 };
 
 // 4. DOWNLOAD TEMPLATE (Dynamic Headers)
