@@ -2438,67 +2438,85 @@ window.downloadTvTemplate = function() {
     link.click();
 };
 
-// 5. UPLOAD IMPEX (With Password)
+// 5. UPLOAD IMPEX (Create Tasks)
 window.handleTvImpexUpload = function(input) {
     const file = input.files[0];
     if (!file) return;
 
-    // A. PASSWORD PROTECTION
+    // 1. Password Check
     const pass = prompt("🔒 Enter Admin Password to Upload Impex:");
-    if (pass !== "admin123") { // <--- CHANGE PASSWORD HERE
+    if (pass !== "admin123") {
         alert("❌ Incorrect Password!");
         input.value = ""; 
         return;
     }
 
+    // 2. Get Config for Current Category
+    const config = TV_CONFIG_MAP[activeTvCategory];
+    if (!config) { 
+        alert("❌ Configuration Error: No sheet mapped for " + activeTvCategory); 
+        return; 
+    }
+
     const reader = new FileReader();
     reader.onload = async function(e) {
-        const rows = e.target.result.split("\n").slice(1);
+        const rows = e.target.result.split("\n").slice(1); // Skip header
         const newRows = [];
-        const config = TV_CONFIG_MAP[activeTvCategory];
 
-        if (!config) { alert("Configuration missing for this category"); return; }
-
+        // 3. Parse CSV Rows
         rows.forEach(rowStr => {
-            // Handle commas inside quotes? Simple split for now.
             const cols = rowStr.split(",").map(c => c.trim());
-            if (cols.length < 2) return;
+            if (cols.length < 2) return; // Skip empty lines
 
             const id = "TV-" + Math.floor(Math.random() * 1000000);
 
             if (activeTvCategory === "Offer Board") {
-                // Input has 8 columns. We map to Sheet (Col A is ID).
-                // Sheet: ID(A), StoreNo(B), Name(C), Start(D), End(E), Approver(F), L1(G), L2(H), Posters(I)
-                // We leave J, K, L, M, N empty for execution data.
+                // Offer Board Schema (8 Input Cols -> Sheet)
                 if(cols.length >= 8) {
                     newRows.push([
                         id, 
-                        cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7],
-                        "", "", "", "", "" // J-N Empty
+                        cols[0], // Store No
+                        cols[1], // Store Name
+                        cols[2], // Start Date
+                        cols[3], // End Date
+                        cols[4], // Approver LoginId
+                        cols[5], // Esc L1
+                        cols[6], // Esc L2
+                        cols[7], // Posters
+                        "", "", "", "", "" // J-N Empty (Execution Data)
                     ]);
                 }
             } else {
-                // Standard Logic
+                // Standard Schema (4 Input Cols -> Sheet)
                 const date = new Date().toLocaleDateString();
-                newRows.push([id, date, activeTvCategory, cols[0], cols[1], cols[2], cols[3], "OPEN"]);
+                newRows.push([
+                    id, date, activeTvCategory, 
+                    cols[0], cols[1], cols[2], cols[3], 
+                    "OPEN", "", "", "", ""
+                ]);
             }
         });
 
+        // 4. Upload to the CORRECT Sheet ID
         if (newRows.length > 0) {
-            if(confirm(`Upload ${newRows.length} tasks to ${activeTvCategory}?`)) {
+            if(confirm(`Create ${newRows.length} tasks in ${activeTvCategory} Database?`)) {
+                
+                // DYNAMIC URL: Uses config.sheetId (OFFER_BOARD_SHEET_ID or TRUEVIEW_SHEET_ID)
                 const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A1:append?valueInputOption=USER_ENTERED`;
+                
                 await fetch(url, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ values: newRows })
                 });
-                alert("✅ Upload Successful!");
-                window.switchTvTab('dashboard'); // or tasks
+
+                alert(`✅ Successfully created ${newRows.length} tasks!`);
+                window.switchTvTab('dashboard');
             }
         }
     };
     reader.readAsText(file);
-    input.value = "";
+    input.value = ""; // Reset input
 };
 
 // 6. LOAD TASKS (Multi-DB aware)
