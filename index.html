@@ -187,6 +187,100 @@
                                 <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer; width:100%;">🚀 Search in Gmail</button>
                             </div>
                         </div>
+                        <div id="trueview-ui" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <div>
+            <h3 style="margin:0;">👁️ TrueView Audit</h3>
+            <p style="margin:0; font-size:12px; color:#666;">Real-time verification & compliance.</p>
+        </div>
+        <button onclick="window.loadTrueViewDashboard()" class="action-btn" style="background:#e3f2fd;">🏠 Main Menu</button>
+    </div>
+
+    <div id="tv-category-menu" class="folder-grid">
+        <button onclick="window.openTrueViewCategory('Store Inventory')" class="folder-btn" style="border-bottom: 4px solid #ff9800;">
+            📦 Store Inventory
+        </button>
+        <button onclick="window.openTrueViewCategory('Offer Board')" class="folder-btn" style="border-bottom: 4px solid #2196f3;">
+            🏷️ Offer Board
+        </button>
+        <button onclick="window.openTrueViewCategory('OFR Audit')" class="folder-btn" style="border-bottom: 4px solid #4caf50;">
+            ✅ OFR Audit
+        </button>
+        <button onclick="window.openTrueViewCategory('Hygiene Check')" class="folder-btn" style="border-bottom: 4px solid #9c27b0;">
+            🧹 Hygiene Check
+        </button>
+    </div>
+
+    <div id="tv-action-container" class="hidden">
+        <h3 id="tv-current-category" style="color:#1e3c72; border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:20px;">Category Name</h3>
+        
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button onclick="window.switchTvTab('tasks')" class="tv-tab active" id="tab-btn-tasks">📋 My Tasks</button>
+            <button onclick="window.switchTvTab('upload')" class="tv-tab" id="tab-btn-upload">📤 Upload Impex</button>
+            <button onclick="window.switchTvTab('dashboard')" class="tv-tab" id="tab-btn-dashboard">📊 Dashboard</button>
+        </div>
+
+        <div id="tv-view-tasks">
+            <div id="tv-task-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">
+                Loading Tasks...
+            </div>
+        </div>
+
+        <div id="tv-view-upload" class="hidden" style="background:#f9f9f9; padding:20px; border-radius:8px; border:1px solid #ddd;">
+            <h4>📤 Bulk Task Creation</h4>
+            <p style="font-size:12px; color:#666;">Download the template, fill it with Store IDs and Assignees, then upload.</p>
+            
+            <div style="display:flex; gap:15px; margin-top:15px;">
+                <button onclick="window.downloadTvTemplate()" style="background:#607d8b; color:white; padding:8px 15px; border:none; border-radius:4px; cursor:pointer;">⬇️ Download Template</button>
+                <label style="background:#1e3c72; color:white; padding:8px 15px; border-radius:4px; cursor:pointer;">
+                    📂 Upload Impex CSV
+                    <input type="file" accept=".csv" style="display:none;" onchange="window.handleTvImpexUpload(this)">
+                </label>
+            </div>
+        </div>
+
+        <div id="tv-view-dashboard" class="hidden">
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-bottom:20px;">
+                <div class="stat-card"><div>Total Tasks</div><div id="tv-stat-total" class="stat-val">0</div></div>
+                <div class="stat-card"><div>Pending</div><div id="tv-stat-pending" class="stat-val" style="color:#f57c00;">0</div></div>
+                <div class="stat-card"><div>Completed</div><div id="tv-stat-completed" class="stat-val" style="color:#2e7d32;">0</div></div>
+                <div class="stat-card"><div>Completion %</div><div id="tv-stat-percent" class="stat-val" style="color:#1976d2;">0%</div></div>
+            </div>
+            <h4>📌 Store-wise Performance</h4>
+            <div id="tv-stats-table" style="overflow:auto; max-height:400px; background:white; border:1px solid #eee;"></div>
+        </div>
+    </div>
+</div>
+
+<div id="tv-execute-modal" class="modal hidden">
+    <div class="modal-content" style="max-width:500px;">
+        <div class="modal-header">
+            <h3>📝 Complete Audit Task</h3>
+            <span class="close-btn" onclick="document.getElementById('tv-execute-modal').classList.add('hidden')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="tv-exec-id">
+            <p id="tv-exec-desc" style="font-weight:bold; color:#333; margin-bottom:15px; background:#f0f4c3; padding:10px; border-radius:4px;"></p>
+            
+            <label style="font-size:12px; font-weight:bold;">Observation / Answer:</label>
+            <select id="tv-exec-response" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                <option value="">-- Select Status --</option>
+                <option value="Compliant">✅ Compliant / Available</option>
+                <option value="Non-Compliant">❌ Non-Compliant / Missing</option>
+                <option value="Needs Action">⚠️ Needs Attention</option>
+            </select>
+
+            <label style="font-size:12px; font-weight:bold;">Visual Proof (Live Capture Only):</label>
+            <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#d32f2f;">No photo taken yet.</div>
+            <button onclick="window.openCameraModal()" style="width:100%; padding:12px; background:#1e3c72; color:white; border:none; border-radius:4px; cursor:pointer; display:flex; justify-content:center; gap:8px;">
+                📸 Open TrueView Camera
+            </button>
+        </div>
+        <div class="modal-footer">
+            <button onclick="window.submitTvTask()" style="background:#2e7d32; color:white;">✅ Submit Audit</button>
+        </div>
+    </div>
+</div>
 
                         <div id="business-ui" class="hidden">
                             <h3>🇮🇳 Warehouse & Pincode Performance</h3>
