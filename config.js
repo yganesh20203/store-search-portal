@@ -5,6 +5,7 @@ const CONFIG = {
 
     SALES_FOLDER_ID: "1jguubICcAtMijiaNETV7B35G2YZlyM5O", 
     MEMBERS_FOLDER_ID: "1ViTdGxZu-mAMiUOyBCliV8uMNy30clNt",
+    WAREHOUSE_PHOTOS_FOLDER_ID: "1KSHVziTdt36os-VTh-D77MKuJcpufEps",
 
     WALKIN_FOLDERS: {
         "Walkin-sales": "1TU9jhb2jZ-MRKPijG-5I3AyTPvyOqnUE4yrF-W6CbkU",
@@ -23,6 +24,7 @@ const CONFIG = {
     WORK_REPORTS_FOLDER_ID: "1ViTdGxZu-mAMiUOyBCliV8uMNy30clNt",
     USER_DB_SHEET_ID: "1pWgjKGWBypp8vldYLhNXCWHOfQO5qS8sV1yayzFAw0U",
     LOGIN_LOG_SHEET_ID: "1pWgjKGWBypp8vldYLhNXCWHOfQO5qS8sV1yayzFAw0U",
+    TRUEVIEW_SHEET_ID: "1eMbTrcfv668N5XWqV2-C5VtQZa8LXFDHFImD3p5jNg4",
 
     // 4. Tracker Groups
     TRACKER_GROUPS: {
