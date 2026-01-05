@@ -2813,43 +2813,47 @@ window.resetCamera = function() {
 
 
 // 8. DASHBOARD STATS (Fixed for Offer Board)
+// 8. DASHBOARD STATS (Fixed & Crash-Proof)
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
     container.innerHTML = "⏳ Calculating stats...";
 
     const config = TV_CONFIG_MAP[activeTvCategory];
-    if (!config) return;
+    if (!config) {
+        console.error("Config missing for:", activeTvCategory);
+        return;
+    }
 
-    // 1. Always fetch fresh data for accurate stats
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
+        // Check if data exists
         if (!data.values || data.values.length < 2) {
             resetStatsToZero();
-            container.innerHTML = "No data available.";
+            container.innerHTML = `<div style="padding:20px; text-align:center; color:#666;">No data found in ${config.tabName}</div>`;
             return;
         }
 
-        const rows = data.values.slice(1);
+        const rows = data.values.slice(1); // Skip Header
         let total = 0;
         let completed = 0;
         const storeStats = {};
 
-        // 2. LOGIC SWITCH BASED ON CATEGORY
+        // --- OFFER BOARD LOGIC ---
         if (activeTvCategory === "Offer Board") {
-            // --- OFFER BOARD LOGIC ---
-            // Col 1: Store No, Col 2: Store Name, Col 13: Completed Date (Index 13)
-            
             total = rows.length;
             
             rows.forEach(r => {
-                const storeName = r[2] || "Unknown Store"; // Column C
-                const completedDate = r[13]; // Column N (Completed Date)
+                // Column C (Index 2) is Store Name
+                const storeName = r[2] ? String(r[2]).trim() : "Unknown Store";
                 
-                // Determine Status
-                const isDone = (completedDate && completedDate.trim() !== "");
+                // Column N (Index 13) is Completed Date
+                // We use String() here to prevent crashes if the cell contains a number or is null
+                const completedVal = r[13];
+                const isDone = (completedVal && String(completedVal).trim().length > 0);
+
                 if (isDone) completed++;
 
                 // Aggregate Store Stats
@@ -2858,20 +2862,15 @@ async function loadTvStats() {
                 if (isDone) storeStats[storeName].C++;
             });
 
-        } else {
-            // --- STANDARD LOGIC (For other categories) ---
-            // Col 2: Category, Col 3: Store, Col 7: Status
-            
-            // Filter rows belonging to this category (if mixed sheet) OR take all (if separate sheet)
-            // Since we split sheets, we usually take all, but standard sheets might still share "Sheet1" in some setups.
-            // Let's assume separate sheets based on your latest config.
-            const relevantRows = rows; 
+        } 
+        // --- STANDARD LOGIC (For other categories) ---
+        else {
+            // Assume rows are relevant to this category or sheet is segregated
+            total = rows.length;
 
-            total = relevantRows.length;
-
-            relevantRows.forEach(r => {
-                const storeName = r[3] || "Unknown"; // Standard Store ID/Name
-                const status = r[7]; // Standard Status Col
+            rows.forEach(r => {
+                const storeName = r[3] || "Unknown"; // Col D (Store ID/Name)
+                const status = r[7]; // Col H (Status)
 
                 const isDone = (status === 'COMPLETED');
                 if (isDone) completed++;
@@ -2904,31 +2903,37 @@ async function loadTvStats() {
             </thead>
             <tbody>`;
             
-        Object.keys(storeStats).forEach(s => {
-            const d = storeStats[s];
-            const p = Math.round((d.C / d.T) * 100);
-            const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
-            
-            html += `<tr>
-                <td style="text-align:left; font-weight:500;">${s}</td>
-                <td>${d.T}</td>
-                <td>${d.C}</td>
-                <td>${d.T - d.C}</td>
-                <td style="width:100px;">
-                    <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
-                        <div style="width:${p}%; background:${barColor}; height:100%;"></div>
-                    </div>
-                    <div style="font-size:10px; text-align:right; margin-top:2px;">${p}%</div>
-                </td>
-            </tr>`;
-        });
+        const sortedStores = Object.keys(storeStats).sort();
+
+        if (sortedStores.length === 0) {
+            html += `<tr><td colspan="5" style="text-align:center;">No store data extracted.</td></tr>`;
+        } else {
+            sortedStores.forEach(s => {
+                const d = storeStats[s];
+                const p = d.T > 0 ? Math.round((d.C / d.T) * 100) : 0;
+                const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
+                
+                html += `<tr>
+                    <td style="text-align:left; font-weight:500;">${s}</td>
+                    <td>${d.T}</td>
+                    <td>${d.C}</td>
+                    <td>${d.T - d.C}</td>
+                    <td style="width:100px;">
+                        <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
+                            <div style="width:${p}%; background:${barColor}; height:100%;"></div>
+                        </div>
+                        <div style="font-size:10px; text-align:right; margin-top:2px;">${p}%</div>
+                    </td>
+                </tr>`;
+            });
+        }
         
         html += `</tbody></table>`;
         container.innerHTML = html;
 
     } catch (e) {
-        console.error(e);
-        container.innerHTML = "Error loading stats.";
+        console.error("Dashboard Error:", e);
+        container.innerHTML = `<div style="color:red; padding:10px;">Error calculating stats: ${e.message}</div>`;
     }
 }
 
