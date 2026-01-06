@@ -6,20 +6,14 @@ body {
     margin: 0; 
     padding: 0;
     height: 100vh;
-    
-    /* REMOVED IMAGE - Now just a clean professional grey */
     background-color: #f4f7f6; 
     color: #333;
-    
-    display: block; /* Keeps layout stable */
+    display: block;
 }
 
 /* Utility to hide elements */
 .hidden { display: none !important; }
 
-/* =========================================
-   2. LOGIN SCREEN (Solid & Opaque)
-   ========================================= */
 /* =========================================
    2. LOGIN SCREEN (Solid & Opaque)
    ========================================= */
@@ -29,10 +23,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    
-    /* SOLID BACKGROUND */
     background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -58,12 +49,12 @@ body {
 /* LOGIN BOX CONTAINER */
 .login-box {
     background: #ffffff;
-    padding: 30px; /* Reduced slightly for better proportion */
+    padding: 30px;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     width: 320px;
-    text-align: left; /* Aligns labels to the left */
-    box-sizing: border-box; /* IMPORTANT: Keeps width stable */
+    text-align: left;
+    box-sizing: border-box; /* Critical for alignment */
 }
 
 /* LABEL STYLING */
@@ -73,9 +64,8 @@ body {
     font-weight: 700;
     color: #555;
     margin-bottom: 6px;
-    margin-top: 15px; /* Adds space between fields */
+    margin-top: 15px;
 }
-/* Remove top margin for the very first label */
 .login-box label:first-child { margin-top: 0; }
 
 /* INPUT GROUP WRAPPERS */
@@ -85,7 +75,7 @@ body {
 }
 
 .password-wrapper {
-    position: relative; /* Necessary to hold the absolute eye icon */
+    position: relative;
     width: 100%;
 }
 
@@ -93,15 +83,15 @@ body {
 .login-box input {
     width: 100%;
     padding: 12px;
-    padding-right: 40px; /* Make room for the eye icon */
+    padding-right: 40px; /* Space for eye icon */
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 14px;
     outline: none;
     background: #f9f9f9;
     color: #333;
-    box-sizing: border-box; /* Prevents input from overflowing */
-    height: 45px; /* Fixed height for consistency */
+    box-sizing: border-box; /* Fixes alignment */
+    height: 45px;
 }
 
 .login-box input:focus {
@@ -114,12 +104,12 @@ body {
     position: absolute;
     right: 12px;
     top: 50%;
-    transform: translateY(-50%); /* Perfectly centers vertically */
+    transform: translateY(-50%);
     cursor: pointer;
     font-size: 16px;
     color: #777;
     z-index: 2;
-    user-select: none; /* Prevents highlighting the icon */
+    user-select: none;
 }
 
 /* DIVIDER LINE */
@@ -160,227 +150,151 @@ body {
     border: 1px solid #ffcdd2;
     margin-top: 15px;
     text-align: center;
-}/* =========================================
+}
+
+/* =========================================
    3. DASHBOARD CONTAINER
    ========================================= */
 #dashboard {
-    background-color: #f4f7f6; /* Matching grey background */
+    background-color: #f4f7f6;
     min-height: 100vh;
     padding: 20px;
     box-sizing: border-box;
 }
 
-/* Header Styling */
-header {
+/* Modern Layout */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+/* Sidebar */
+.sidebar {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    color: #ffffff;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 25px;
-    background: #ffffff;
-    padding: 15px 25px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    border: 1px solid #e0e0e0;
+    flex-direction: column;
+    padding: 25px 15px;
+    border-right: 1px solid #334155;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    z-index: 20;
+    height: 100%;
+    box-sizing: border-box;
 }
 
-/* Custom Select Dropdown */
-.select-wrapper select {
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    background-color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    color: #444;
-    cursor: pointer;
-    outline: none;
+.sidebar-header { margin-bottom: 35px; padding-left: 10px; }
+.sidebar-header h2 { font-size: 1.4rem; margin: 0 0 8px 0; color: #fff; font-weight: 700; }
+.user-badge { font-size: 11px; background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 12px; color: #94a3b8; border: 1px solid rgba(255,255,255,0.05); }
+
+.nav-group { margin-bottom: 30px; }
+.group-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; display: block; padding-left: 12px; opacity: 0.8; }
+
+.nav-item {
+    display: flex; align-items: center; width: 100%; background: transparent; border: none;
+    color: #cbd5e1; padding: 12px 15px; margin-bottom: 6px; border-radius: 8px;
+    cursor: pointer; font-size: 14px; font-weight: 500; text-align: left;
+    transition: all 0.25s ease-in-out;
+}
+.nav-item:hover { background: rgba(255,255,255,0.05); color: white; transform: translateX(3px); }
+.nav-item.active { background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.0) 100%); color: #60a5fa; font-weight: 600; border-left: 3px solid #3b82f6; }
+
+.sidebar-footer { margin-top: auto; padding-left: 10px; }
+.logout-btn { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; width: 100%; }
+.logout-btn:hover { background: #dc2626; }
+
+/* Main Content */
+.main-content {
+    background-color: #f8fafc;
+    display: flex; flex-direction: column;
+    height: 100vh; overflow: hidden; position: relative;
 }
 
-/* Action Buttons */
-.action-btn {
-    background: #fff;
-    border: 1px solid #1e3c72;
-    color: #1e3c72;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
+.top-bar {
+    background: white; height: 64px; padding: 0 30px; display: flex; align-items: center;
+    justify-content: space-between; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
 }
-.action-btn:hover { background: #e3f2fd; }
+#page-title { margin: 0; font-size: 1.25rem; color: #1e293b; font-weight: 700; }
+.header-controls { display: flex; gap: 15px; align-items: center; }
 
-.logout-btn {
-    background: #d32f2f;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-}
-.logout-btn:hover { background: #b71c1c; }
+#content-wrapper { flex-grow: 1; overflow-y: auto; padding: 25px 30px; }
+
+/* Hide Old Control Panel */
+.control-panel { display: none !important; }
 
 /* =========================================
-   4. NAVIGATION & FOLDER GRID
+   4. UI COMPONENTS (Buttons, Folders, Grids)
    ========================================= */
-.control-panel {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 25px;
-}
+.action-btn { background: #fff; border: 1px solid #1e3c72; color: #1e3c72; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; }
+.action-btn:hover { background: #e3f2fd; }
 
-.nav-btn {
-    flex: 1;
-    min-width: 140px;
-    padding: 14px 10px;
-    font-size: 13px;
-    border: none;
-    background: #ffffff;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    color: #444;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: all 0.2s;
-    border: 1px solid #eee;
-}
-.nav-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    color: #1e3c72;
-    border-color: #1e3c72;
-}
+.select-wrapper select { padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; background-color: #fff; font-size: 13px; font-weight: 600; color: #444; cursor: pointer; }
 
-/* UI Sections */
-#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, 
-#approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui {
-    background: #fff;
-    padding: 25px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
-    margin-bottom: 20px;
-    border: 1px solid #e0e0e0;
-}
-
-/* Folder Grids */
-.folder-grid { 
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
-    gap: 15px; 
-    margin-top: 20px; 
-}
-
+/* Folder Grid */
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; margin-top: 20px; }
 .folder-btn { 
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; gap: 8px;
-    padding: 20px 15px; 
-    background: #ffffff; 
-    border: 1px solid #e0e0e0; 
-    border-radius: 8px; 
-    cursor: pointer; 
-    font-weight: 600; 
-    color: #555;
-    font-size: 12px;
-    transition: all 0.2s;
-    min-height: 100px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px;
+    padding: 20px 15px; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px;
+    cursor: pointer; font-weight: 600; color: #555; font-size: 12px; transition: all 0.2s; min-height: 100px;
 }
-.folder-btn:hover { 
-    transform: translateY(-3px); 
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
-    border-color: #90caf9; 
-    background: #f5fafd;
-    color: #1565c0;
-}
-.folder-btn.active { 
-    background: #e3f2fd; 
-    border-color: #2196f3; 
-    color: #0d47a1; 
-}
+.folder-btn:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-color: #90caf9; background: #f5fafd; color: #1565c0; }
+.folder-btn.active { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; }
 
-/* Specific Folder Tints */
 #walkin-category-list .folder-btn { border-bottom: 3px solid #4db6ac; }
 #tracker-file-list .folder-btn { border-bottom: 3px solid #ffd54f; }
 #month-list .folder-btn { border-bottom: 3px solid #42a5f5; }
 
 /* =========================================
-   5. VIEW PANES (Split Screen)
+   5. VIEW PANES & TABLES
    ========================================= */
 #view-container { display: grid; gap: 15px; min-height: 600px; margin-top: 20px; }
 .grid-1 { grid-template-columns: 1fr; }
 .grid-2 { grid-template-columns: 1fr 1fr; }
 .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
-.grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 
-.pane {
-    background: #ffffff;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    position: relative;
-    min-height: 400px;
-    display: flex;
-    flex-direction: column;
-}
+.pane { background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; position: relative; min-height: 400px; display: flex; flex-direction: column; }
 .pane.active { border: 2px solid #1e3c72; }
-
-.pane-label {
-    background: #f5f5f5; color: #555; font-size: 11px;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    padding: 6px 12px; border-bottom-left-radius: 8px;
-    font-weight: 700; border-bottom: 1px solid #eee; border-left: 1px solid #eee;
-    position: absolute; top: 0; right: 0; z-index: 10;
-}
+.pane-label { background: #f5f5f5; color: #555; font-size: 11px; text-transform: uppercase; padding: 6px 12px; border-bottom-left-radius: 8px; font-weight: 700; border-bottom: 1px solid #eee; border-left: 1px solid #eee; position: absolute; top: 0; right: 0; z-index: 10; }
 .content-area { padding: 0; overflow: auto; flex-grow: 1; max-height: 80vh; }
 .empty-msg { text-align: center; color: #aaa; margin-top: 50px; }
 
-/* =========================================
-   6. DATA TABLE
-   ========================================= */
 .data-table { width: 100%; border-collapse: collapse; font-size: 13px; background-color: white; }
-.data-table thead th {
-    position: sticky; top: 0;
-    background-color: #1e3c72; color: #ffffff; /* Dark Blue Header */
-    padding: 10px; text-align: left; z-index: 5;
-}
-.data-table tbody td {
-    padding: 8px 10px; border-bottom: 1px solid #eee;
-    color: #333; white-space: nowrap; max-width: 250px;
-    overflow: hidden; text-overflow: ellipsis;
-}
+.data-table thead th { position: sticky; top: 0; background-color: #1e3c72; color: #ffffff; padding: 10px; text-align: left; z-index: 5; }
+.data-table tbody td { padding: 8px 10px; border-bottom: 1px solid #eee; color: #333; white-space: nowrap; max-width: 250px; overflow: hidden; text-overflow: ellipsis; }
 .data-table tbody tr:nth-child(even) { background-color: #fafafa; }
 .data-table tbody tr:hover { background-color: #e8eaf6; cursor: pointer; }
 
 /* =========================================
-   7. MODALS, CHARTS & MAPS
+   6. TRUEVIEW SPECIFICS
    ========================================= */
-.modal {
-    display: flex; position: fixed; z-index: 2000;
-    left: 0; top: 0; width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    align-items: center; justify-content: center;
-}
-.modal-content {
-    background-color: #fff; border-radius: 8px;
-    width: 90%; max-width: 600px; max-height: 90vh;
-    display: flex; flex-direction: column;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-}
+.tv-tab { padding: 10px 20px; border: none; background: #e0e0e0; color: #555; border-radius: 20px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.2s; }
+.tv-tab.active { background: #1e3c72; color: white; box-shadow: 0 4px 10px rgba(30, 60, 114, 0.3); }
+
+.tv-task-card { background: white; border: 1px solid #eee; border-left: 4px solid #ff9800; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: space-between; }
+
+.stat-card { background: #fff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #eee; }
+.stat-val { font-size: 22px; font-weight: bold; color: #2e7d32; }
+
+/* =========================================
+   7. MODALS, MAP & CHART
+   ========================================= */
+.modal { display: flex; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+.modal-content { background-color: #fff; border-radius: 8px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
 .modal-header { padding: 15px; background: #f5f5f5; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
 .modal-body { padding: 20px; overflow-y: auto; }
 .modal-footer { padding: 15px; border-top: 1px solid #ddd; text-align: right; }
 .close-btn { font-size: 24px; cursor: pointer; color: #666; }
 
-/* Pivot & Map */
 #pivot-wrapper { background: white; padding: 20px; border-radius: 8px; border: 1px solid #ccc; min-height: 500px; overflow: auto; }
 .pvtTable td, .pvtTable th, .pvtVal, .pvtTotal { color: #000 !important; }
 
 #business-map { height: 500px; width: 100%; border-radius: 8px; border: 2px solid #ccc; margin-bottom: 15px; z-index: 1; }
-.stat-card { background: #fff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #eee; }
-.stat-val { font-size: 22px; font-weight: bold; color: #2e7d32; }
 
-/* Chart Builder */
 .chart-builder-container { display: flex; height: 100%; font-family: sans-serif; }
 .chart-sidebar { width: 220px; background: #f8f9fa; border-right: 1px solid #ddd; padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .draggable-col { background: white; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; cursor: grab; font-size: 13px; }
@@ -391,190 +305,7 @@ header {
 .drop-zone .pill .remove { cursor: pointer; color: #c62828; margin-left: 5px; }
 .chart-canvas-container { flex: 1; position: relative; border: 1px solid #eee; border-radius: 8px; padding: 10px; }
 
-/* =========================================
-   MODERN SIDEBAR & LAYOUT (Replaces previous sidebar styles)
-   ========================================= */
-
-/* Main Layout Grid */
-.dashboard-layout {
-    display: grid;
-    grid-template-columns: 260px 1fr; /* 260px sidebar */
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden;
-}
-
-/* Sidebar Styling - Less Static */
-.sidebar {
-    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); /* Subtle Vertical Gradient */
-    color: #ffffff;
-    display: flex;
-    flex-direction: column;
-    padding: 25px 15px;
-    border-right: 1px solid #334155;
-    box-shadow: 4px 0 15px rgba(0,0,0,0.1); /* Shadow to lift it off the page */
-    z-index: 20;
-}
-
-.sidebar-header {
-    margin-bottom: 35px;
-    padding-left: 10px;
-}
-
-.sidebar-header h2 {
-    font-size: 1.4rem;
-    margin: 0 0 8px 0;
-    color: #fff;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-}
-
-.user-badge {
-    font-size: 11px;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 4px 10px;
-    border-radius: 12px;
-    color: #94a3b8;
-    display: inline-block;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Navigation Groups */
-.nav-group { margin-bottom: 30px; }
-
-.group-title {
-    font-size: 11px;
-    font-weight: 700;
-    color: #64748b; 
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    margin-bottom: 12px;
-    display: block;
-    padding-left: 12px;
-    opacity: 0.8;
-}
-
-/* Sidebar Buttons */
-.nav-item {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    background: transparent;
-    border: none;
-    color: #cbd5e1; /* Off-white text */
-    padding: 12px 15px;
-    margin-bottom: 6px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    text-align: left;
-    transition: all 0.25s ease-in-out;
-    position: relative;
-    overflow: hidden;
-}
-
-/* Hover Effect */
-.nav-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
-    transform: translateX(3px); /* Subtle slide right */
-}
-
-/* Active State (Selected) */
-.nav-item.active {
-    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.0) 100%);
-    color: #60a5fa; /* Light Blue Text */
-    font-weight: 600;
-    border-left: 3px solid #3b82f6; /* Blue indicator bar on left */
-    border-radius: 4px 8px 8px 4px; /* Adjust radius for the border */
-    padding-left: 12px; /* Offset for border */
-}
-
-.sidebar-footer { margin-top: auto; padding-left: 10px; }
-
-.logout-btn {
-    background: #ef4444;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-    width: 100%;
-    transition: background 0.2s;
-    box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3);
-}
-.logout-btn:hover { background: #dc2626; }
-
-/* Main Content Area */
-.main-content {
-    background-color: #f8fafc; /* Light Grey-Blue */
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-    position: relative;
-}
-
-/* Top Header Bar */
-.top-bar {
-    background: white;
-    height: 64px;
-    padding: 0 30px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid #e2e8f0;
-    flex-shrink: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-}
-
-#page-title { margin: 0; font-size: 1.25rem; color: #1e293b; font-weight: 700; }
-
-.header-controls { display: flex; gap: 15px; align-items: center; }
-
-/* Content Wrapper */
-#content-wrapper {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 25px 30px;
-}
-
-/* Hide Old Control Panel */
-.control-panel { display: none !important; }
-
-
-/* TrueView Specific Styles */
-.tv-tab {
-    padding: 10px 20px;
-    border: none;
-    background: #e0e0e0;
-    color: #555;
-    border-radius: 20px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 13px;
-    transition: all 0.2s;
-}
-.tv-tab.active {
-    background: #1e3c72;
-    color: white;
-    box-shadow: 0 4px 10px rgba(30, 60, 114, 0.3);
-}
-.tv-task-card {
-    background: white;
-    border: 1px solid #eee;
-    border-left: 4px solid #ff9800; /* Orange for Pending */
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-.tv-task-card.completed {
-    border-left-color: #4caf50; /* Green for Done */
-    opacity: 0.8;
+/* Hide sections initially */
+#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, #approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui, #trueview-ui {
+    background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); margin-bottom: 20px; border: 1px solid #e0e0e0;
 }
