@@ -20,94 +20,104 @@ body { 
 /* =========================================
    2. LOGIN SCREEN (Solid & Opaque)
    ========================================= */
+
 #auth-overlay {
-    position: fixed; /* Locks to screen */
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    
-    /* SOLID BACKGROUND - Prevents anything from showing through */
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000; /* Stays on top of everything */
-    color: white;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    color: white;
 }
 
 #auth-overlay h1 {
-    font-size: 2.2rem;
-    margin-bottom: 10px;
-    font-weight: 700;
-    color: #fff;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 #auth-overlay p {
-    color: #e3f2fd; /* Light blue text */
-    margin-bottom: 30px;
-    font-size: 1rem;
+    color: #e3f2fd;
+    margin-bottom: 30px;
+    font-size: 1rem;
 }
 
 .login-box {
-    background: #ffffff; /* Solid White Box */
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2); /* Soft shadow */
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    width: 320px;
-    text-align: center;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 320px;
+    text-align: left; /* Keep left alignment for labels */
+}
+
+/* Labels */
+.login-box label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #555;
+    margin-bottom: 5px;
 }
 
 /* Inputs inside the Login Box */
 .login-box input {
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
-    outline: none;
-    background: #f9f9f9;
-    color: #333;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    background: #f9f9f9;
+    color: #333;
+    width: 100%; 
+    box-sizing: border-box; /* Important for alignment */
 }
 .login-box input:focus {
-    border-color: #1e3c72;
-    background: #fff;
+    border-color: #1e3c72;
+    background: #fff;
 }
 
 /* Login Button */
 #login-btn {
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    background: #ff9800; /* Flipkart Orange */
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: transform 0.2s, background 0.2s;
-    margin-top: 10px;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: #ff9800;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    margin-top: 10px;
+    width: 100%;
 }
 
 #login-btn:hover {
-    background: #f57c00;
-    transform: translateY(-2px);
+    background: #f57c00;
+    transform: translateY(-2px);
 }
 
 #error-msg {
-    color: #d32f2f;
-    background: #ffebee;
-    padding: 10px;
-    border-radius: 5px;
-    font-size: 13px;
-    display: none;
-    border: 1px solid #ffcdd2;
+    color: #d32f2f;
+    background: #ffebee;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    display: none;
+    border: 1px solid #ffcdd2;
+    text-align: center;
 }
-
 /* =========================================
    3. DASHBOARD CONTAINER
    ========================================= */
