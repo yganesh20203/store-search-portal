@@ -147,6 +147,7 @@ async function unlockAndLogin() {
         document.getElementById("dashboard").classList.remove("hidden");
         localStorage.setItem("portal_user_email", username);
         document.getElementById("user-info").innerText = `● ${username}`;
+        loadSalesDashboard();
         initDuckDB();
 
         // 4. Create Initial Log Entry (Get the Row Number)
