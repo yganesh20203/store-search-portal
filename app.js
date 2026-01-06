@@ -2420,15 +2420,17 @@ window.switchTvTab = function(tabName) {
     const targetView = document.getElementById(`tv-view-${tabName}`);
     if (targetView) targetView.classList.remove("hidden");
 
-    // 4. TRIGGER DATA LOADING BASED ON TAB (The Fix)
+    // 4. Trigger Specific Logic
     if (tabName === 'tasks') {
-        loadTvTasks(); // Loads your specific pending tasks
+        loadTvTasks(); 
     } 
     else if (tabName === 'dashboard') {
-        loadTvStats(); // <--- THIS WAS MISSING
+        loadTvStats();
+    }
+    else if (tabName === 'download') {
+        renderDownloadOptions(); // <--- NEW CALL HERE
     }
 };
-
 // 4. DOWNLOAD TEMPLATE (Dynamic Headers)
 window.downloadTvTemplate = function() {
     let headers = [];
@@ -3258,10 +3260,8 @@ async function uploadBlobToDrive(blob, fileName, targetFolderId = null) {
 }
 
 
-
-
 // ==========================================
-// ⬇️ DOWNLOAD REPORT LOGIC
+// ⬇️ DOWNLOAD REPORT LOGIC (UPDATED WITH FILTERS)
 // ==========================================
 window.generateTvReport = async function() {
     const fromInput = document.getElementById("tv-rep-from").value;
@@ -3287,32 +3287,52 @@ window.generateTvReport = async function() {
         let filteredData = [];
         let headers = [];
 
-        if (activeTvCategory === "Offer Board") {
+        // --- PLANOGRAM DOWNLOAD LOGIC ---
+        if (activeTvCategory === "Planogram") {
+            headers = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Sub Div", "Cat No", "Cat Name", "Brand", "Approver", "Executed/Reason", "Photo", "Date"];
+            
+            // Get Optional Filter Values
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
+            const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase();
+            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
+            const fBrand = document.getElementById("filter-brand")?.value.trim().toLowerCase();
+
+            filteredData = rows.filter(r => {
+                // 1. Date Check (Col D - Start Date)
+                const d = new Date(r[3]); 
+                if (!(d >= fromDate && d <= toDate)) return false;
+
+                // 2. Store Filter (Col B - Index 1)
+                if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
+
+                // 3. Sub Division Filter (Col E - Index 4)
+                if (fSubDiv && String(r[4]).toLowerCase() !== fSubDiv) return false;
+
+                // 4. Category Filter (Col G - Index 6)
+                if (fCat && !String(r[6]).toLowerCase().includes(fCat)) return false;
+
+                // 5. Brand Filter (Col H - Index 7)
+                if (fBrand && !String(r[7]).toLowerCase().includes(fBrand)) return false;
+
+                return true;
+            });
+        }
+        else if (activeTvCategory === "Offer Board") {
             headers = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Approver", "Esc L1", "Esc L2", "Posters", "Executed", "Reason", "Photo", "By", "Time"];
             filteredData = rows.filter(r => {
-                const d = new Date(r[3]); // Col D is Start Date
+                const d = new Date(r[3]); 
                 return d >= fromDate && d <= toDate;
             });
         } 
         else if (activeTvCategory === "OFR Audit") {
             headers = ["ID", "Store No", "Store Name", "Invoice Date", "Due Date", "Art No", "Desc", "Short Orders", "Short Qty", "Manager Mail", "TL Mail", "Manager Input", "TL Input", "Manager Time", "TL Time"];
             filteredData = rows.filter(r => {
-                const d = new Date(r[3]); // Col D is Invoice Date
+                const d = new Date(r[3]); 
                 return d >= fromDate && d <= toDate;
             });
         }
-        // ... inside generateTvReport ...
-        else if (activeTvCategory === "Planogram") {
-            headers = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Sub Div", "Cat No", "Cat Name", "Brand", "Approver", "Executed/Reason", "Photo", "Date"];
-            filteredData = rows.filter(r => {
-                const d = new Date(r[3]); // Start Date in Col D
-                return d >= fromDate && d <= toDate;
-            });
-        }
-        // ...
-        
 
-        if (filteredData.length === 0) throw new Error("No records in date range.");
+        if (filteredData.length === 0) throw new Error("No records found matching filters.");
 
         let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\r\n";
         filteredData.forEach(row => {
@@ -3328,16 +3348,15 @@ window.generateTvReport = async function() {
         link.click();
         document.body.removeChild(link);
 
-        statusEl.innerText = "✅ Download Complete";
+        statusEl.innerText = `✅ Downloaded ${filteredData.length} records!`;
 
     } catch (e) {
         statusEl.innerText = "Error: " + e.message;
     } finally {
         btn.disabled = false;
-        btn.innerText = "⬇️ Download Report";
+        btn.innerText = "⬇️ Generate & Download CSV";
     }
 };
-
 
 
 // ==========================================
@@ -3354,3 +3373,55 @@ function resetStatsToZero() {
         document.getElementById("tv-stats-table").innerHTML = "<p style='text-align:center; padding:20px; color:#aaa;'>No Data</p>";
     }
 }
+
+// ==========================================
+// 🎛️ DYNAMIC DOWNLOAD VIEW RENDERER
+// ==========================================
+window.renderDownloadOptions = function() {
+    const container = document.getElementById("tv-view-download");
+    if (!container) return;
+
+    let extraFilters = "";
+
+    // Specific Filters for Planogram
+    if (activeTvCategory === "Planogram") {
+        extraFilters = `
+            <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
+                <h4 style="margin:0 0 10px 0; font-size:12px; color:#4527a0;">🔍 Optional Filters (Leave empty to ignore)</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-subdiv" placeholder="Sub Division" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-cat" placeholder="Category Name" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-brand" placeholder="Brand" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+            </div>
+        `;
+    }
+
+    // Standard HTML Structure
+    container.innerHTML = `
+        <div style="background:#e8eaf6; padding:20px; border-radius:8px; border:1px solid #c5cae9; max-width:500px;">
+            <h3 style="margin-top:0;">📅 Export ${activeTvCategory} Report</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:15px;">Filter data based on <b>Start/Invoice Date</b>.</p>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                <div>
+                    <label style="font-weight:bold; font-size:12px;">From Date:</label>
+                    <input type="date" id="tv-rep-from" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div>
+                    <label style="font-weight:bold; font-size:12px;">To Date:</label>
+                    <input type="date" id="tv-rep-to" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+            </div>
+
+            ${extraFilters}
+
+            <button id="btn-download-report" onclick="window.generateTvReport()" 
+                style="width:100%; background:#3f51b5; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                ⬇️ Generate & Download CSV
+            </button>
+            <p id="tv-download-status" style="margin-top:10px; font-size:12px; text-align:center;"></p>
+        </div>
+    `;
+};
