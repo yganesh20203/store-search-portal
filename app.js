@@ -2359,20 +2359,20 @@ function highlightSidebar(menuName) {
 // ==========================================
 
 // CONFIGURATION MAP
-// Maps Category Name -> { Sheet ID, Tab Name, Type }
+
 const TV_CONFIG_MAP = {
     "Offer Board": {
         sheetId: CONFIG.OFFER_BOARD_SHEET_ID,
-        tabName: "Sheet1", // Default tab name for the new sheet
+        tabName: "Sheet1", 
         type: "offer_board" 
     },
-    // You can add others here later, e.g.:
-    "Feature Space": {
-        sheetId: CONFIG.TRUEVIEW_SHEET_ID,
-        tabName: "TV_Feature_Space",
-        type: "standard"
+    "OFR Audit": { 
+        sheetId: "1Zg01KzKUefdKvONNmed7PRL7WU95BpAuvouo-nKk1kw", 
+        tabName: "Sheet1", 
+        type: "ofr_audit" 
     },
-    "OFR Audit": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_OFR_Audit", type: "standard" },
+    // Keep others as placeholders
+    "Feature Space": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Feature_Space", type: "standard" },
     "Hygiene Check": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Hygiene_Check", type: "standard" },
     "Planogram": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Planogram", type: "standard" },
     "Events": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Events", type: "standard" }
@@ -2433,10 +2433,19 @@ window.downloadTvTemplate = function() {
     let filename = "";
 
     if (activeTvCategory === "Offer Board") {
-        // 8 Columns for Input
         headers = ["Store No.", "Store Name", "Start Date (yyyy-mm-dd)", "End Date (yyyy-mm-dd)", "Approver LoginId", "Escalation L1", "Escalation L2", "No. of Posters"];
         filename = "OfferBoard_Template.csv";
-    } else {
+    } 
+    else if (activeTvCategory === "OFR Audit") {
+        // 10 Input Columns
+        headers = [
+            "Store No.", "Store Name", "Invoice Date", "Due Date", 
+            "Article Number", "Article Description", "Short Orders", "Short Qty", 
+            "Merchandising Manager mail id", "Audit TL mail id"
+        ];
+        filename = "OFR_Audit_Template.csv";
+    }
+    else {
         headers = ["Store_ID", "Assigned_To_Email", "Question_Type", "Task_Details"];
         filename = "TrueView_Standard_Template.csv";
     }
@@ -2455,7 +2464,6 @@ window.handleTvImpexUpload = function(input) {
     const file = input.files[0];
     if (!file) return;
 
-    // 1. Password Check
     const pass = prompt("🔒 Enter Admin Password to Upload Impex:");
     if (pass !== "admin123") {
         alert("❌ Incorrect Password!");
@@ -2463,7 +2471,6 @@ window.handleTvImpexUpload = function(input) {
         return;
     }
 
-    // 2. Get Config for Current Category
     const config = TV_CONFIG_MAP[activeTvCategory];
     if (!config) { 
         alert("❌ Configuration Error: No sheet mapped for " + activeTvCategory); 
@@ -2475,60 +2482,69 @@ window.handleTvImpexUpload = function(input) {
         const rows = e.target.result.split("\n").slice(1); // Skip header
         const newRows = [];
 
-        // 3. Parse CSV Rows
         rows.forEach(rowStr => {
             const cols = rowStr.split(",").map(c => c.trim());
-            if (cols.length < 2) return; // Skip empty lines
+            if (cols.length < 2) return; 
 
             const id = "TV-" + Math.floor(Math.random() * 1000000);
 
             if (activeTvCategory === "Offer Board") {
-                // Offer Board Schema (8 Input Cols -> Sheet)
                 if(cols.length >= 8) {
+                    newRows.push([
+                        id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], "", "", "", "", ""
+                    ]);
+                }
+            } 
+            else if (activeTvCategory === "OFR Audit") {
+                // OFR Audit Schema (10 Input Cols)
+                // Sheet Structure:
+                // Col A: ID
+                // Col B-K: Inputs (10 cols) -> Indices 1 to 10
+                // Col L: Manager Input (Empty)
+                // Col M: TL Input (Empty)
+                // Col N: Manager Time (Empty)
+                // Col O: TL Time (Empty)
+                if(cols.length >= 10) {
                     newRows.push([
                         id, 
                         cols[0], // Store No
                         cols[1], // Store Name
-                        cols[2], // Start Date
-                        cols[3], // End Date
-                        cols[4], // Approver LoginId
-                        cols[5], // Esc L1
-                        cols[6], // Esc L2
-                        cols[7], // Posters
-                        "", "", "", "", "" // J-N Empty (Execution Data)
+                        cols[2], // Invoice Date
+                        cols[3], // Due Date
+                        cols[4], // Article No
+                        cols[5], // Article Desc
+                        cols[6], // Short Orders
+                        cols[7], // Short Qty
+                        cols[8], // Manager Mail
+                        cols[9], // TL Mail
+                        "", "", "", "" // Empty Outputs
                     ]);
                 }
-            } else {
-                // Standard Schema (4 Input Cols -> Sheet)
+            }
+            else {
+                // Standard Fallback
                 const date = new Date().toLocaleDateString();
                 newRows.push([
-                    id, date, activeTvCategory, 
-                    cols[0], cols[1], cols[2], cols[3], 
-                    "OPEN", "", "", "", ""
+                    id, date, activeTvCategory, cols[0], cols[1], cols[2], cols[3], "OPEN", "", "", "", ""
                 ]);
             }
         });
 
-        // 4. Upload to the CORRECT Sheet ID
         if (newRows.length > 0) {
             if(confirm(`Create ${newRows.length} tasks in ${activeTvCategory} Database?`)) {
-                
-                // DYNAMIC URL: Uses config.sheetId (OFFER_BOARD_SHEET_ID or TRUEVIEW_SHEET_ID)
                 const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A1:append?valueInputOption=USER_ENTERED`;
-                
                 await fetch(url, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
                     body: JSON.stringify({ values: newRows })
                 });
-
                 alert(`✅ Successfully created ${newRows.length} tasks!`);
                 window.switchTvTab('dashboard');
             }
         }
     };
     reader.readAsText(file);
-    input.value = ""; // Reset input
+    input.value = ""; 
 };
 
 // 6. LOAD TASKS (With Escalation Logic)
@@ -2538,10 +2554,12 @@ async function loadTvTasks() {
     
     const config = TV_CONFIG_MAP[activeTvCategory];
     const rawUser = localStorage.getItem("portal_user_email")?.toLowerCase() || "";
+    // Note: We match full emails for OFR Audit, username only for Offer Board usually
+    const currentEmail = rawUser.trim(); 
     const currentUsername = rawUser.split('@')[0].trim(); 
 
     if (!config) { container.innerHTML = "Config Error."; return; }
-    if (!currentUsername) { container.innerHTML = "Please log in first."; return; }
+    if (!currentEmail) { container.innerHTML = "Please log in first."; return; }
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
@@ -2556,44 +2574,61 @@ async function loadTvTasks() {
         let myPendingTasks = [];
 
         if (activeTvCategory === "Offer Board") {
-            const today = new Date();
-            today.setHours(0,0,0,0); // Normalize today to midnight
-
+            const today = new Date(); today.setHours(0,0,0,0);
             myPendingTasks = data.values.slice(1).map((r, i) => {
-                const assigneeEmail = (r[5] || "").toLowerCase().trim();
-                const escL1Email = (r[6] || "").toLowerCase().trim(); // Column G (Index 6) is Esc L1
-                
+                const assignee = (r[5] || "").toLowerCase().trim().split('@')[0];
+                const escL1 = (r[6] || "").toLowerCase().trim().split('@')[0];
                 return {
                     rowIndex: i + 2,
                     id: r[0],
                     storeNo: r[1],
                     storeName: r[2],
-                    endDateStr: r[4], // Keep string for display
-                    endDateObj: new Date(r[4]), // Parse object for comparison
-                    assigneeUsername: assigneeEmail.split('@')[0],
-                    escL1Username: escL1Email.split('@')[0],
+                    endDateStr: r[4],
+                    endDateObj: new Date(r[4]),
+                    assignee: assignee,
+                    escL1: escL1,
                     posters: r[8],
                     completedDate: r[13]
                 };
-            })
-            .filter(t => {
-                const isPending = !t.completedDate || t.completedDate.trim() === "";
+            }).filter(t => {
+                const isPending = !t.completedDate;
                 if (!isPending) return false;
-
-                // 1. Show if I am the Assignee
-                if (t.assigneeUsername === currentUsername) return true;
-
-                // 2. Show if I am Esc L1 AND Task is Overdue
-                if (t.escL1Username === currentUsername && t.endDateObj < today) {
-                    t.isEscalated = true; // Mark for UI styling
-                    return true;
-                }
-
+                if (t.assignee === currentUsername) return true;
+                if (t.escL1 === currentUsername && t.endDateObj < today) { t.isEscalated = true; return true; }
                 return false;
             });
-            
-            // Save to cache for submission
-            tvDataCache = myPendingTasks;
+        } 
+        else if (activeTvCategory === "OFR Audit") {
+            // OFR Logic: Check if I am Manager OR TL, and if my specific field is empty
+            myPendingTasks = data.values.slice(1).map((r, i) => {
+                return {
+                    rowIndex: i + 2,
+                    id: r[0],
+                    storeNo: r[1],
+                    storeName: r[2],
+                    invoiceDate: r[3],
+                    dueDate: r[4],
+                    articleNo: r[5],
+                    articleDesc: r[6],
+                    shortQty: r[8],
+                    managerEmail: (r[9] || "").toLowerCase().trim(),
+                    tlEmail: (r[10] || "").toLowerCase().trim(),
+                    managerInput: r[11],
+                    tlInput: r[12]
+                };
+            }).filter(t => {
+                // 1. Am I the Manager? Is Manager Input Empty?
+                if (t.managerEmail === currentEmail && (!t.managerInput || t.managerInput === "")) {
+                    t.role = "Manager";
+                    return true;
+                }
+                // 2. Am I the TL? Is TL Input Empty?
+                if (t.tlEmail === currentEmail && (!t.tlInput || t.tlInput === "")) {
+                    t.role = "TL";
+                    return true;
+                }
+                return false;
+            });
         }
 
         if (myPendingTasks.length === 0) {
@@ -2601,26 +2636,48 @@ async function loadTvTasks() {
             return;
         }
 
-        container.innerHTML = myPendingTasks.map(t => `
-            <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
-                <div>
-                    <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                        <span>Store: ${t.storeNo}</span>
-                        <span style="color:${t.isEscalated ? '#d32f2f' : '#e65100'}; font-weight:bold;">
-                            ${t.isEscalated ? '🔥 OVERDUE: ' + t.endDateStr : 'Due: ' + t.endDateStr}
-                        </span>
+        // Render Cards based on Category
+        if (activeTvCategory === "Offer Board") {
+            container.innerHTML = myPendingTasks.map(t => `
+                <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
+                    <div>
+                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                            <span>Store: ${t.storeNo}</span>
+                            <span style="color:${t.isEscalated ? '#d32f2f' : '#e65100'}; font-weight:bold;">${t.endDateStr}</span>
+                        </div>
+                        <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
+                        <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px;">Posters: <b>${t.posters}</b></div>
                     </div>
-                    <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
-                    <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px;">
-                        Posters Required: <b>${t.posters}</b>
-                    </div>
+                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName}')" style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">▶️ Audit</button>
                 </div>
-                <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName} - ${t.posters} Posters')" 
-                    style="margin-top:15px; width:100%; background:${t.isEscalated ? '#d32f2f' : '#ff9800'}; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                    ${t.isEscalated ? '⚠️ Resolve Escalation' : '▶️ Start Audit'}
-                </button>
-            </div>
-        `).join("");
+            `).join("");
+        } 
+        else if (activeTvCategory === "OFR Audit") {
+            // Cache data for modal usage
+            tvDataCache = myPendingTasks; 
+            
+            container.innerHTML = myPendingTasks.map(t => `
+                <div class="tv-task-card" style="border-left: 5px solid #009688;">
+                    <div>
+                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                            <span>Invoice: ${t.invoiceDate}</span>
+                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.dueDate}</span>
+                        </div>
+                        <h4 style="margin:5px 0; color:#00695c;">${t.storeName} (${t.storeNo})</h4>
+                        <div style="font-size:12px; margin-bottom:5px; font-weight:bold;">${t.articleDesc}</div>
+                        <div style="display:flex; gap:10px;">
+                            <span style="background:#e0f2f1; padding:4px 8px; border-radius:4px; font-size:11px;">Art #: ${t.articleNo}</span>
+                            <span style="background:#ffebee; padding:4px 8px; border-radius:4px; font-size:11px; color:#c62828;">Short Qty: ${t.shortQty}</span>
+                        </div>
+                        <div style="margin-top:8px; font-size:11px; color:#555;"> Role: <b>${t.role}</b></div>
+                    </div>
+                    <button onclick="window.openTvExecuteModal('${t.id}', 'Short Qty: ${t.shortQty} | Article: ${t.articleDesc}')" 
+                        style="margin-top:15px; width:100%; background:#009688; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">
+                        ✏️ Provide Input
+                    </button>
+                </div>
+            `).join("");
+        }
 
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
@@ -2629,66 +2686,103 @@ async function loadTvTasks() {
 window.openTvExecuteModal = function(id, desc) {
     document.getElementById("tv-execute-modal").classList.remove("hidden");
     const body = document.querySelector("#tv-execute-modal .modal-body");
+    const footer = document.querySelector("#tv-execute-modal .modal-footer");
     
-    // Custom Form for Offer Board
+    // Clear previous state
+    pendingPhotoBlob = null; 
+    document.getElementById("tv-exec-id").value = id;
+
     if (activeTvCategory === "Offer Board") {
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#e3f2fd; padding:10px; border-radius:4px; font-weight:bold;">${desc}</p>
-            
-            <label style="font-size:12px; font-weight:bold;">Offer Board picture execution?</label>
+            <label style="font-size:12px; font-weight:bold;">Executed?</label>
             <select id="tv-exec-response" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc;">
-                <option value="">-- Select --</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
+                <option value="">-- Select --</option><option value="Yes">Yes</option><option value="No">No</option>
             </select>
-            
-            <label style="font-size:12px; font-weight:bold;">Reason (if No) / Remarks:</label>
-            <input type="text" id="tv-exec-reason" placeholder="Enter details..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc;">
-            
-            <label style="font-size:12px; font-weight:bold;">Visual Proof (Live Capture):</label>
-            <div id="tv-photo-status" style="margin-bottom:10px; color:#d32f2f; font-weight:bold;">❌ No photo taken.</div>
-            <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:#1e3c72; color:white; border:none; border-radius:4px;">📸 Open Camera</button>
+            <label style="font-size:12px; font-weight:bold;">Remarks:</label>
+            <input type="text" id="tv-exec-reason" placeholder="..." style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc;">
+            <div id="tv-photo-status" style="margin-bottom:10px; color:#d32f2f;">❌ No photo.</div>
+            <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:#1e3c72; color:white; border:none; border-radius:4px;">📸 Camera</button>
         `;
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#2e7d32; color:white; padding:10px; border:none; border-radius:4px;">✅ Submit Audit</button>`;
+    } 
+    else if (activeTvCategory === "OFR Audit") {
+        const task = tvDataCache.find(t => t.id === id);
+        const role = task ? task.role : "User";
+
+        body.innerHTML = `
+            <input type="hidden" id="tv-exec-id" value="${id}">
+            <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; color:#00695c;">${desc}</p>
+            
+            <label style="font-size:12px; font-weight:bold; color:#333;">${role} Input / Justification:</label>
+            <textarea id="tv-exec-input" rows="4" placeholder="Enter valid reason for shortage..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; font-family:sans-serif;"></textarea>
+        `;
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px;">✅ Save Input</button>`;
     }
-    pendingPhotoBlob = null;
 };
 
 // 8. SUBMIT TASK (Write to specific columns)
 window.submitTvTask = async function() {
     const taskId = document.getElementById("tv-exec-id").value;
-    const responseVal = document.getElementById("tv-exec-response").value;
-    const reasonVal = document.getElementById("tv-exec-reason")?.value || "-";
     const btn = document.querySelector("#tv-execute-modal .modal-footer button");
     const config = TV_CONFIG_MAP[activeTvCategory];
+    const timestamp = new Date().toLocaleString();
 
-    if (!responseVal) { alert("Please select Yes/No"); return; }
-    if (!pendingPhotoBlob) { alert("📸 Photo is mandatory."); return; }
-
-    btn.innerText = "⏳ Uploading...";
+    btn.innerText = "⏳ Saving...";
     btn.disabled = true;
 
     try {
-        // 1. Upload Photo
-        const fileName = `TV_${activeTvCategory}_${taskId}_${Date.now()}.jpg`;
-        const photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName);
-
-        // 2. Update Sheet
-        const task = tvDataCache.find(t => t.id === taskId);
-        const row = task.rowIndex;
-        const user = localStorage.getItem("portal_user_email");
-        const date = new Date().toLocaleString();
-
         let values = [];
         let range = "";
+        const task = tvDataCache.find(t => t.id === taskId);
+        const row = task.rowIndex;
 
         if (activeTvCategory === "Offer Board") {
-            // Update Cols J(9) to N(13)
-            // J: Exec(Yes/No), K: Reason, L: Photo, M: By, N: Date
+            const responseVal = document.getElementById("tv-exec-response").value;
+            const reasonVal = document.getElementById("tv-exec-reason")?.value || "-";
+            const user = localStorage.getItem("portal_user_email");
+
+            if (!responseVal) throw new Error("Select Yes/No");
+            if (!pendingPhotoBlob) throw new Error("Photo required");
+
+            const fileName = `TV_${activeTvCategory}_${taskId}_${Date.now()}.jpg`;
+            const photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName);
+
             range = `${config.tabName}!J${row}:N${row}`;
-            values = [[ responseVal, reasonVal, photoLink, user, date ]];
+            values = [[ responseVal, reasonVal, photoLink, user, timestamp ]];
+        } 
+        else if (activeTvCategory === "OFR Audit") {
+            const inputVal = document.getElementById("tv-exec-input").value;
+            if (!inputVal) throw new Error("Please enter input.");
+
+            // OFR Columns:
+            // L(11): Manager Input, M(12): TL Input, N(13): Manager Time, O(14): TL Time
+            if (task.role === "Manager") {
+                range = `${config.tabName}!L${row}:L${row}`; // Just input
+                // We actually need to update Input AND Time. 
+                // Since they are not adjacent (L & N), we might need two requests or fill M with existing?
+                // Easier strategy: Update L, then Update N separately, OR assume structure allows block update.
+                // Let's do batch update logic if needed, but here simple PUT to specific cells is safest.
+                
+                // Construct range for Input column L
+                await updateCell(config.sheetId, `${config.tabName}!L${row}`, [[inputVal]]);
+                // Construct range for Time column N
+                await updateCell(config.sheetId, `${config.tabName}!N${row}`, [[timestamp]]);
+            } 
+            else if (task.role === "TL") {
+                await updateCell(config.sheetId, `${config.tabName}!M${row}`, [[inputVal]]);
+                await updateCell(config.sheetId, `${config.tabName}!O${row}`, [[timestamp]]);
+            }
+            
+            // Skip the main fetch below since we did helpers
+            alert("✅ Input Saved!");
+            document.getElementById("tv-execute-modal").classList.add("hidden");
+            loadTvTasks();
+            return; 
         }
 
+        // Main Fetch for Offer Board
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
         await fetch(url, {
             method: "PUT",
@@ -2696,13 +2790,23 @@ window.submitTvTask = async function() {
             body: JSON.stringify({ values: values })
         });
 
-        alert("✅ Audit Submitted!");
+        alert("✅ Submitted!");
         document.getElementById("tv-execute-modal").classList.add("hidden");
         loadTvTasks();
 
     } catch (e) { alert("Error: " + e.message); }
-    finally { btn.innerText = "✅ Submit Audit"; btn.disabled = false; }
+    finally { btn.innerText = "✅ Submit"; btn.disabled = false; }
 };
+
+// Helper for non-contiguous updates
+async function updateCell(sheetId, range, values) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+    await fetch(url, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: values })
+    });
+}
 // ==========================================
 // 📸 CORE CAMERA FUNCTIONS (Required for TrueView)
 // ==========================================
@@ -3032,79 +3136,63 @@ window.generateTvReport = async function() {
     const toInput = document.getElementById("tv-rep-to").value;
     const statusEl = document.getElementById("tv-download-status");
     const btn = document.getElementById("btn-download-report");
+    const config = TV_CONFIG_MAP[activeTvCategory];
 
-    if (!fromInput || !toInput) {
-        alert("⚠️ Please select both From and To dates.");
-        return;
-    }
-
-    // --- CRITICAL FIX: HARDCODE THE CORRECT TAB NAME HERE ---
-    const targetSheetId = "1oE7xB9egfdRumclW-l5BzLXJZm5feddA0x3USe3pBUc"; // Your specific ID
-    const targetTabName = "Sheet1"; // Your specific Tab Name
-    // --------------------------------------------------------
+    if (!fromInput || !toInput) { alert("Select Dates"); return; }
 
     btn.disabled = true;
-    btn.innerText = "⏳ Connecting...";
-    statusEl.innerText = "";
-
+    btn.innerText = "⏳ Downloading...";
+    
     try {
-        // Use the hardcoded values instead of 'config'
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${targetSheetId}/values/${encodeURIComponent(targetTabName)}`;
-        
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
-
-        if (data.error) throw new Error(data.error.message);
-        if (!data.values || data.values.length < 2) throw new Error("No data found.");
-
         const rows = data.values.slice(1);
-        
-        // Date Logic
+
         const fromDate = new Date(fromInput); fromDate.setHours(0,0,0,0);
         const toDate = new Date(toInput); toDate.setHours(23,59,59,999);
 
-        const filteredData = rows.filter(r => {
-            const dateStr = r[3]; // Column D
-            if (!dateStr) return false;
-            const parts = dateStr.split('/');
-            if (parts.length < 3) return false;
-            const rowDate = new Date(parts[2], parts[1] - 1, parts[0]);
-            return rowDate >= fromDate && rowDate <= toDate;
-        });
+        let filteredData = [];
+        let headers = [];
 
-        if (filteredData.length === 0) throw new Error(`No records between ${fromInput} and ${toInput}`);
+        if (activeTvCategory === "Offer Board") {
+            headers = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Approver", "Esc L1", "Esc L2", "Posters", "Executed", "Reason", "Photo", "By", "Time"];
+            filteredData = rows.filter(r => {
+                const d = new Date(r[3]); // Col D is Start Date
+                return d >= fromDate && d <= toDate;
+            });
+        } 
+        else if (activeTvCategory === "OFR Audit") {
+            headers = ["ID", "Store No", "Store Name", "Invoice Date", "Due Date", "Art No", "Desc", "Short Orders", "Short Qty", "Manager Mail", "TL Mail", "Manager Input", "TL Input", "Manager Time", "TL Time"];
+            filteredData = rows.filter(r => {
+                const d = new Date(r[3]); // Col D is Invoice Date
+                return d >= fromDate && d <= toDate;
+            });
+        }
 
-        // CSV Generation (Same as before)
-        let csvContent = "data:text/csv;charset=utf-8,";
-        const reportHeaders = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Approver", "Esc L1", "Esc L2", "Posters", "Status", "Reason", "Photo", "By", "Time"];
-        csvContent += reportHeaders.join(",") + "\r\n";
+        if (filteredData.length === 0) throw new Error("No records in date range.");
 
+        let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\r\n";
         filteredData.forEach(row => {
-            const safe = (val) => `"${(val || "").toString().replace(/"/g, '""')}"`;
-            const cleanRow = [
-                safe(row[0]), safe(row[1]), safe(row[2]), safe(row[3]), safe(row[4]),
-                safe(row[5]), safe(row[6]), safe(row[7]), safe(row[8]), safe(row[9]),
-                safe(row[10]), safe(row[11]), safe(row[12]), safe(row[13])
-            ];
-            csvContent += cleanRow.join(",") + "\r\n";
+            const safeRow = row.map(cell => `"${(cell || "").toString().replace(/"/g, '""')}"`);
+            csvContent += safeRow.join(",") + "\r\n";
         });
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `OfferBoard_Export.csv`);
+        link.setAttribute("download", `${activeTvCategory}_Report.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        statusEl.innerHTML = `<span style="color:green">✅ Downloaded ${filteredData.length} records!</span>`;
+        statusEl.innerText = "✅ Download Complete";
 
     } catch (e) {
-        console.error(e);
-        statusEl.innerHTML = `<span style="color:red">❌ Error: ${e.message}</span>`;
+        statusEl.innerText = "Error: " + e.message;
     } finally {
         btn.disabled = false;
-        btn.innerText = "⬇️ Generate & Download CSV";
+        btn.innerText = "⬇️ Download Report";
     }
 };
 
