@@ -2353,15 +2353,11 @@ function highlightSidebar(menuName) {
     if (pageTitle) pageTitle.innerText = menuName;
 }
 
-
-
-
 // ==========================================
 // 👁️ TRUEVIEW CONFIGURATION (UPDATED)
 // ==========================================
 const TV_CONFIG_MAP = {
     "Offer Board": {
-        // Updated to the specific sheet you provided
         sheetId: "1oE7xB9egfdRumclW-l5BzLXJZm5feddA0x3USe3pBUc", 
         tabName: "Sheet1", 
         type: "offer_board" 
@@ -2371,10 +2367,16 @@ const TV_CONFIG_MAP = {
         tabName: "Sheet1", 
         type: "ofr_audit" 
     },
+    "Planogram": { 
+        sheetId: "1FVguVJAG4oLiBRhbdPoBa680AD6S39bnTB1jg2M7R9c", 
+        tabName: "Sheet1", 
+        type: "planogram",
+        // Helper property for image uploads
+        folderId: "19w8KEeWjTL0vNZUe5gekTkP2FaA52rAv" 
+    },
     // Standard Placeholders
     "Feature Space": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Feature_Space", type: "standard" },
     "Hygiene Check": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Hygiene_Check", type: "standard" },
-    "Planogram": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Planogram", type: "standard" },
     "Events": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Events", type: "standard" }
 };
 
@@ -2437,13 +2439,16 @@ window.downloadTvTemplate = function() {
         filename = "OfferBoard_Template.csv";
     } 
     else if (activeTvCategory === "OFR Audit") {
-        // 10 Input Columns
-        headers = [
-            "Store No.", "Store Name", "Invoice Date", "Due Date", 
-            "Article Number", "Article Description", "Short Orders", "Short Qty", 
-            "Merchandising Manager mail id", "Audit TL mail id"
-        ];
+        headers = ["Store No.", "Store Name", "Invoice Date", "Due Date", "Article Number", "Article Description", "Short Orders", "Short Qty", "Merchandising Manager mail id", "Audit TL mail id"];
         filename = "OFR_Audit_Template.csv";
+    }
+    else if (activeTvCategory === "Planogram") {
+        // 9 Input Columns
+        headers = [
+            "Store No.", "Store Name", "Start Date (yyyy-mm-dd)", "End Date (yyyy-mm-dd)", 
+            "Sub Division", "Category Number", "Category Name", "Brand", "Approver LoginId"
+        ];
+        filename = "Planogram_Template.csv";
     }
     else {
         headers = ["Store_ID", "Assigned_To_Email", "Question_Type", "Task_Details"];
@@ -2486,47 +2491,40 @@ window.handleTvImpexUpload = function(input) {
             const cols = rowStr.split(",").map(c => c.trim());
             if (cols.length < 2) return; 
 
-            const id = "TV-" + Math.floor(Math.random() * 1000000);
+            const id = "PL-" + Math.floor(Math.random() * 1000000);
 
             if (activeTvCategory === "Offer Board") {
                 if(cols.length >= 8) {
-                    newRows.push([
-                        id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], "", "", "", "", ""
-                    ]);
+                    newRows.push([id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], "", "", "", "", ""]);
                 }
             } 
             else if (activeTvCategory === "OFR Audit") {
-                // OFR Audit Schema (10 Input Cols)
-                // Sheet Structure:
-                // Col A: ID
-                // Col B-K: Inputs (10 cols) -> Indices 1 to 10
-                // Col L: Manager Input (Empty)
-                // Col M: TL Input (Empty)
-                // Col N: Manager Time (Empty)
-                // Col O: TL Time (Empty)
                 if(cols.length >= 10) {
+                    newRows.push([id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], "", "", "", ""]);
+                }
+            }
+            else if (activeTvCategory === "Planogram") {
+                // Planogram Schema: 9 Input Columns
+                // Sheet Columns: A(ID) | B-J(Inputs) | K(Execution Yes/No/Reason) | L(Picture) | M(Date)
+                if(cols.length >= 9) {
                     newRows.push([
                         id, 
                         cols[0], // Store No
                         cols[1], // Store Name
-                        cols[2], // Invoice Date
-                        cols[3], // Due Date
-                        cols[4], // Article No
-                        cols[5], // Article Desc
-                        cols[6], // Short Orders
-                        cols[7], // Short Qty
-                        cols[8], // Manager Mail
-                        cols[9], // TL Mail
-                        "", "", "", "" // Empty Outputs
+                        cols[2], // Start Date
+                        cols[3], // End Date
+                        cols[4], // Sub Div
+                        cols[5], // Cat No
+                        cols[6], // Cat Name
+                        cols[7], // Brand
+                        cols[8], // Approver
+                        "", "", "" // Empty Output Columns (K, L, M)
                     ]);
                 }
             }
             else {
-                // Standard Fallback
                 const date = new Date().toLocaleDateString();
-                newRows.push([
-                    id, date, activeTvCategory, cols[0], cols[1], cols[2], cols[3], "OPEN", "", "", "", ""
-                ]);
+                newRows.push([id, date, activeTvCategory, cols[0], cols[1], cols[2], cols[3], "OPEN", "", "", "", ""]);
             }
         });
 
@@ -2554,12 +2552,10 @@ async function loadTvTasks() {
     
     const config = TV_CONFIG_MAP[activeTvCategory];
     const rawUser = localStorage.getItem("portal_user_email")?.toLowerCase() || "";
-    // Note: We match full emails for OFR Audit, username only for Offer Board usually
-    const currentEmail = rawUser.trim(); 
     const currentUsername = rawUser.split('@')[0].trim(); 
 
     if (!config) { container.innerHTML = "Config Error."; return; }
-    if (!currentEmail) { container.innerHTML = "Please log in first."; return; }
+    if (!currentUsername) { container.innerHTML = "Please log in first."; return; }
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
@@ -2573,7 +2569,32 @@ async function loadTvTasks() {
 
         let myPendingTasks = [];
 
-        if (activeTvCategory === "Offer Board") {
+        if (activeTvCategory === "Planogram") {
+            // Planogram Logic
+            myPendingTasks = data.values.slice(1).map((r, i) => {
+                const approver = (r[9] || "").toLowerCase().trim().split('@')[0]; // Col J (Index 9) is Approver
+                return {
+                    rowIndex: i + 2,
+                    id: r[0],
+                    storeNo: r[1],
+                    storeName: r[2],
+                    startDate: r[3],
+                    endDate: r[4],
+                    subDiv: r[5],
+                    category: r[7], // Col H (Index 7) Category Name
+                    brand: r[8],
+                    approver: approver,
+                    executionDate: r[12] // Col M (Index 12) is Execution Date
+                };
+            }).filter(t => {
+                const isPending = !t.executionDate || t.executionDate.trim() === "";
+                if (!isPending) return false;
+                // Show if I am the Approver (using username logic)
+                if (t.approver === currentUsername) return true;
+                return false;
+            });
+        }
+        else if (activeTvCategory === "Offer Board") {
             const today = new Date(); today.setHours(0,0,0,0);
             myPendingTasks = data.values.slice(1).map((r, i) => {
                 const assignee = (r[5] || "").toLowerCase().trim().split('@')[0];
@@ -2599,7 +2620,7 @@ async function loadTvTasks() {
             });
         } 
         else if (activeTvCategory === "OFR Audit") {
-            // OFR Logic: Check if I am Manager OR TL, and if my specific field is empty
+            const currentEmail = rawUser.trim();
             myPendingTasks = data.values.slice(1).map((r, i) => {
                 return {
                     rowIndex: i + 2,
@@ -2608,7 +2629,6 @@ async function loadTvTasks() {
                     storeName: r[2],
                     invoiceDate: r[3],
                     dueDate: r[4],
-                    articleNo: r[5],
                     articleDesc: r[6],
                     shortQty: r[8],
                     managerEmail: (r[9] || "").toLowerCase().trim(),
@@ -2617,16 +2637,8 @@ async function loadTvTasks() {
                     tlInput: r[12]
                 };
             }).filter(t => {
-                // 1. Am I the Manager? Is Manager Input Empty?
-                if (t.managerEmail === currentEmail && (!t.managerInput || t.managerInput === "")) {
-                    t.role = "Manager";
-                    return true;
-                }
-                // 2. Am I the TL? Is TL Input Empty?
-                if (t.tlEmail === currentEmail && (!t.tlInput || t.tlInput === "")) {
-                    t.role = "TL";
-                    return true;
-                }
+                if (t.managerEmail === currentEmail && (!t.managerInput || t.managerInput === "")) { t.role = "Manager"; return true; }
+                if (t.tlEmail === currentEmail && (!t.tlInput || t.tlInput === "")) { t.role = "TL"; return true; }
                 return false;
             });
         }
@@ -2636,9 +2648,32 @@ async function loadTvTasks() {
             return;
         }
 
-        // Render Cards based on Category
-        if (activeTvCategory === "Offer Board") {
+        // Render Cards
+        if (activeTvCategory === "Planogram") {
+            // Cache data specifically for Planogram modals
+            tvDataCache = myPendingTasks; 
+            
             container.innerHTML = myPendingTasks.map(t => `
+                <div class="tv-task-card" style="border-left: 5px solid #673ab7;">
+                    <div>
+                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                            <span>Store: ${t.storeNo}</span>
+                            <span style="color:#e91e63; font-weight:bold;">Due: ${t.endDate}</span>
+                        </div>
+                        <h4 style="margin:5px 0; color:#4527a0;">${t.storeName}</h4>
+                        <div style="font-size:12px; margin-bottom:5px;"><b>${t.brand}</b> (${t.category})</div>
+                        <div style="font-size:11px; background:#ede7f6; padding:4px 8px; border-radius:4px; display:inline-block;">SubDiv: ${t.subDiv}</div>
+                    </div>
+                    <button onclick="window.openTvExecuteModal('${t.id}', 'Audit: ${t.brand} - ${t.category}')" 
+                        style="margin-top:15px; width:100%; background:#673ab7; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">
+                        📸 Execute
+                    </button>
+                </div>
+            `).join("");
+        }
+        else if (activeTvCategory === "Offer Board") {
+            // ... (Existing Offer Board Render Logic)
+             container.innerHTML = myPendingTasks.map(t => `
                 <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
                     <div>
                         <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
@@ -2653,8 +2688,8 @@ async function loadTvTasks() {
             `).join("");
         } 
         else if (activeTvCategory === "OFR Audit") {
-            // Cache data for modal usage
-            tvDataCache = myPendingTasks; 
+            // ... (Existing OFR Render Logic)
+             tvDataCache = myPendingTasks; 
             
             container.innerHTML = myPendingTasks.map(t => `
                 <div class="tv-task-card" style="border-left: 5px solid #009688;">
@@ -2666,7 +2701,6 @@ async function loadTvTasks() {
                         <h4 style="margin:5px 0; color:#00695c;">${t.storeName} (${t.storeNo})</h4>
                         <div style="font-size:12px; margin-bottom:5px; font-weight:bold;">${t.articleDesc}</div>
                         <div style="display:flex; gap:10px;">
-                            <span style="background:#e0f2f1; padding:4px 8px; border-radius:4px; font-size:11px;">Art #: ${t.articleNo}</span>
                             <span style="background:#ffebee; padding:4px 8px; border-radius:4px; font-size:11px; color:#c62828;">Short Qty: ${t.shortQty}</span>
                         </div>
                         <div style="margin-top:8px; font-size:11px; color:#555;"> Role: <b>${t.role}</b></div>
@@ -2692,8 +2726,32 @@ window.openTvExecuteModal = function(id, desc) {
     pendingPhotoBlob = null; 
     document.getElementById("tv-exec-id").value = id;
 
-    if (activeTvCategory === "Offer Board") {
+    if (activeTvCategory === "Planogram") {
         body.innerHTML = `
+            <input type="hidden" id="tv-exec-id" value="${id}">
+            <p style="background:#ede7f6; padding:10px; border-radius:4px; font-weight:bold; color:#4527a0;">${desc}</p>
+            
+            <label style="font-size:12px; font-weight:bold;">Planogram Picture Uploaded?</label>
+            <select id="tv-exec-response" onchange="window.toggleReasonInput(this.value)" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc;">
+                <option value="">-- Select --</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+            </select>
+            
+            <div id="tv-reason-container" class="hidden">
+                <label style="font-size:12px; font-weight:bold; color:#d32f2f;">Reason for No Upload:</label>
+                <input type="text" id="tv-exec-reason" placeholder="Explain why..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc;">
+            </div>
+
+            <label style="font-size:12px; font-weight:bold;">Capture Planogram:</label>
+            <div id="tv-photo-status" style="margin-bottom:10px; color:#d32f2f;">📸 Photo required if Yes.</div>
+            <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:#673ab7; color:white; border:none; border-radius:4px;">📸 Open Camera</button>
+        `;
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#673ab7; color:white; padding:10px; border:none; border-radius:4px;">✅ Submit</button>`;
+    }
+    else if (activeTvCategory === "Offer Board") {
+        // ... (Existing Offer Board HTML)
+         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#e3f2fd; padding:10px; border-radius:4px; font-weight:bold;">${desc}</p>
             <label style="font-size:12px; font-weight:bold;">Executed?</label>
@@ -2701,14 +2759,15 @@ window.openTvExecuteModal = function(id, desc) {
                 <option value="">-- Select --</option><option value="Yes">Yes</option><option value="No">No</option>
             </select>
             <label style="font-size:12px; font-weight:bold;">Remarks:</label>
-            <input type="text" id="tv-exec-reason" placeholder="..." style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc;">
+            <input type="text" id="tv-exec-reason" placeholder="..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc;">
             <div id="tv-photo-status" style="margin-bottom:10px; color:#d32f2f;">❌ No photo.</div>
             <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:#1e3c72; color:white; border:none; border-radius:4px;">📸 Camera</button>
         `;
         footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#2e7d32; color:white; padding:10px; border:none; border-radius:4px;">✅ Submit Audit</button>`;
     } 
     else if (activeTvCategory === "OFR Audit") {
-        const task = tvDataCache.find(t => t.id === id);
+        // ... (Existing OFR HTML)
+         const task = tvDataCache.find(t => t.id === id);
         const role = task ? task.role : "User";
 
         body.innerHTML = `
@@ -2719,6 +2778,15 @@ window.openTvExecuteModal = function(id, desc) {
             <textarea id="tv-exec-input" rows="4" placeholder="Enter valid reason for shortage..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; font-family:sans-serif;"></textarea>
         `;
         footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px;">✅ Save Input</button>`;
+    }
+};
+
+// Helper to toggle reason input
+window.toggleReasonInput = function(val) {
+    const div = document.getElementById("tv-reason-container");
+    if(div) {
+        if(val === "No") div.classList.remove("hidden");
+        else div.classList.add("hidden");
     }
 };
 
@@ -2735,10 +2803,41 @@ window.submitTvTask = async function() {
     try {
         let values = [];
         let range = "";
+        // For Planogram and Offer Board, we rely on cached list to find row index
         const task = tvDataCache.find(t => t.id === taskId);
         const row = task.rowIndex;
 
-        if (activeTvCategory === "Offer Board") {
+        // --- PLANOGRAM LOGIC ---
+        if (activeTvCategory === "Planogram") {
+            const responseVal = document.getElementById("tv-exec-response").value; // Yes or No
+            const reasonVal = document.getElementById("tv-exec-reason")?.value || ""; 
+
+            if (!responseVal) throw new Error("Select Yes/No");
+
+            let colK_Value = ""; // Execution (Yes/No OR Reason)
+            let colL_Value = ""; // Picture Link
+
+            if (responseVal === "Yes") {
+                if (!pendingPhotoBlob) throw new Error("Photo required for 'Yes'");
+                
+                // Upload Photo specifically to Planogram Folder
+                const fileName = `PL_${taskId}_${Date.now()}.jpg`;
+                colL_Value = await uploadBlobToDrive(pendingPhotoBlob, fileName, config.folderId);
+                colK_Value = "Yes";
+            } else {
+                // If No, save reason in the same column as Yes/No would have been (as per requirement logic interpretation)
+                // Requirement: "if no then reason , that reason should be logged in Planogram Picture upload(yes/No) column"
+                if (!reasonVal) throw new Error("Please enter a reason.");
+                colK_Value = "No: " + reasonVal;
+                colL_Value = ""; // No picture
+            }
+
+            // Update Col K, L, M (Indices 10, 11, 12)
+            range = `${config.tabName}!K${row}:M${row}`;
+            values = [[ colK_Value, colL_Value, timestamp ]];
+        }
+        // --- OFFER BOARD LOGIC ---
+        else if (activeTvCategory === "Offer Board") {
             const responseVal = document.getElementById("tv-exec-response").value;
             const reasonVal = document.getElementById("tv-exec-reason")?.value || "-";
             const user = localStorage.getItem("portal_user_email");
@@ -2752,22 +2851,13 @@ window.submitTvTask = async function() {
             range = `${config.tabName}!J${row}:N${row}`;
             values = [[ responseVal, reasonVal, photoLink, user, timestamp ]];
         } 
+        // --- OFR AUDIT LOGIC ---
         else if (activeTvCategory === "OFR Audit") {
             const inputVal = document.getElementById("tv-exec-input").value;
             if (!inputVal) throw new Error("Please enter input.");
 
-            // OFR Columns:
-            // L(11): Manager Input, M(12): TL Input, N(13): Manager Time, O(14): TL Time
             if (task.role === "Manager") {
-                range = `${config.tabName}!L${row}:L${row}`; // Just input
-                // We actually need to update Input AND Time. 
-                // Since they are not adjacent (L & N), we might need two requests or fill M with existing?
-                // Easier strategy: Update L, then Update N separately, OR assume structure allows block update.
-                // Let's do batch update logic if needed, but here simple PUT to specific cells is safest.
-                
-                // Construct range for Input column L
                 await updateCell(config.sheetId, `${config.tabName}!L${row}`, [[inputVal]]);
-                // Construct range for Time column N
                 await updateCell(config.sheetId, `${config.tabName}!N${row}`, [[timestamp]]);
             } 
             else if (task.role === "TL") {
@@ -2775,14 +2865,13 @@ window.submitTvTask = async function() {
                 await updateCell(config.sheetId, `${config.tabName}!O${row}`, [[timestamp]]);
             }
             
-            // Skip the main fetch below since we did helpers
             alert("✅ Input Saved!");
             document.getElementById("tv-execute-modal").classList.add("hidden");
             loadTvTasks();
             return; 
         }
 
-        // Main Fetch for Offer Board
+        // Main Fetch
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
         await fetch(url, {
             method: "PUT",
@@ -3000,6 +3089,23 @@ async function loadTvStats() {
                 if (isDone) storeStats[storeName].C++;
             });
         }
+            // ... inside loadTvStats ...
+        else if (activeTvCategory === "Planogram") {
+            total = rows.length;
+            rows.forEach(r => {
+                // Store Name is Index 2 (Column C)
+                const storeName = r[2] ? String(r[2]).trim() : "Unknown Store";
+                // Execution Date is Index 12 (Column M)
+                const execDate = r[12];
+                const isDone = (execDate && String(execDate).trim().length > 0);
+
+                if (isDone) completed++;
+                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
+                storeStats[storeName].T++;
+                if (isDone) storeStats[storeName].C++;
+            });
+        }
+        // ...
         // --- STANDARD LOGIC (Fallback) ---
         else {
             total = rows.length;
@@ -3112,12 +3218,16 @@ window.uploadCapturedPhoto = function() {
 // ==========================================
 // ☁️ DRIVE HELPER: UPLOAD BLOB
 // ==========================================
-async function uploadBlobToDrive(blob, fileName) {
-    // Determine target folder (Use TrueView folder if available, else generic)
-    const folderId = CONFIG.TRUEVIEW_FOLDER_ID || CONFIG.WORK_REPORTS_FOLDER_ID;
+
+
+async function uploadBlobToDrive(blob, fileName, targetFolderId = null) {
+    // 1. Priority: Function argument
+    // 2. Fallback: TrueView global folder
+    // 3. Fallback: Work Reports global folder
+    const folderId = targetFolderId || CONFIG.TRUEVIEW_FOLDER_ID || CONFIG.WORK_REPORTS_FOLDER_ID;
 
     if (!folderId) {
-        throw new Error("No Target Folder ID configured in config.js");
+        throw new Error("No Target Folder ID configured");
     }
 
     const metadata = {
@@ -3144,9 +3254,11 @@ async function uploadBlobToDrive(blob, fileName) {
     }
 
     const data = await response.json();
-    console.log("☁️ Upload Success:", data.webViewLink);
     return data.webViewLink;
 }
+
+
+
 
 // ==========================================
 // ⬇️ DOWNLOAD REPORT LOGIC
@@ -3189,6 +3301,16 @@ window.generateTvReport = async function() {
                 return d >= fromDate && d <= toDate;
             });
         }
+        // ... inside generateTvReport ...
+        else if (activeTvCategory === "Planogram") {
+            headers = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Sub Div", "Cat No", "Cat Name", "Brand", "Approver", "Executed/Reason", "Photo", "Date"];
+            filteredData = rows.filter(r => {
+                const d = new Date(r[3]); // Start Date in Col D
+                return d >= fromDate && d <= toDate;
+            });
+        }
+        // ...
+        
 
         if (filteredData.length === 0) throw new Error("No records in date range.");
 
