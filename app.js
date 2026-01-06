@@ -2930,6 +2930,7 @@ window.resetCamera = function() {
 
 // 8. DASHBOARD STATS (Fixed for Offer Board)
 // 8. DASHBOARD STATS (Fixed & Crash-Proof)
+// 8. DASHBOARD STATS (Fixed for OFR Audit)
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
     container.innerHTML = "⏳ Calculating stats...";
@@ -2962,31 +2963,50 @@ async function loadTvStats() {
             total = rows.length;
             
             rows.forEach(r => {
-                // Column C (Index 2) is Store Name
+                // Col C (Index 2) is Store Name
                 const storeName = r[2] ? String(r[2]).trim() : "Unknown Store";
                 
-                // Column N (Index 13) is Completed Date
-                // We use String() here to prevent crashes if the cell contains a number or is null
+                // Col N (Index 13) is Completed Date
                 const completedVal = r[13];
                 const isDone = (completedVal && String(completedVal).trim().length > 0);
 
                 if (isDone) completed++;
 
-                // Aggregate Store Stats
                 if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
                 storeStats[storeName].T++;
                 if (isDone) storeStats[storeName].C++;
             });
 
         } 
-        // --- STANDARD LOGIC (For other categories) ---
-        else {
-            // Assume rows are relevant to this category or sheet is segregated
+        // --- OFR AUDIT LOGIC (FIXED) ---
+        else if (activeTvCategory === "OFR Audit") {
             total = rows.length;
 
             rows.forEach(r => {
-                const storeName = r[3] || "Unknown"; // Col D (Store ID/Name)
-                const status = r[7]; // Col H (Status)
+                // Col C (Index 2) is Store Name 
+                // (Previously this was grabbing Index 3 which is Invoice Date)
+                const storeName = r[2] ? String(r[2]).trim() : "Unknown Store";
+                
+                // Done Logic: Check if BOTH Manager Input (Col L, Idx 11) AND TL Input (Col M, Idx 12) exist
+                const mgrInput = r[11];
+                const tlInput = r[12];
+                const isDone = (mgrInput && String(mgrInput).trim().length > 0) && 
+                               (tlInput && String(tlInput).trim().length > 0);
+
+                if (isDone) completed++;
+
+                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
+                storeStats[storeName].T++;
+                if (isDone) storeStats[storeName].C++;
+            });
+        }
+        // --- STANDARD LOGIC (Fallback) ---
+        else {
+            total = rows.length;
+
+            rows.forEach(r => {
+                const storeName = r[3] || "Unknown"; // Col D
+                const status = r[7]; // Col H
 
                 const isDone = (status === 'COMPLETED');
                 if (isDone) completed++;
