@@ -3128,3 +3128,18 @@ window.togglePassword = function(inputId, iconElement) {
         iconElement.innerText = "👁️"; // Change icon back to 'Show'
     }
 };
+
+// ==========================================
+// 🧹 HELPER: RESET STATS TO ZERO
+// ==========================================
+function resetStatsToZero() {
+    // Check if elements exist before setting text to avoid errors
+    const totalEl = document.getElementById("tv-stat-total");
+    if (totalEl) {
+        document.getElementById("tv-stat-total").innerText = "0";
+        document.getElementById("tv-stat-pending").innerText = "0";
+        document.getElementById("tv-stat-completed").innerText = "0";
+        document.getElementById("tv-stat-percent").innerText = "0%";
+        document.getElementById("tv-stats-table").innerHTML = "<p style='text-align:center; padding:20px; color:#aaa;'>No Data</p>";
+    }
+}
