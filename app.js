@@ -2354,15 +2354,15 @@ function highlightSidebar(menuName) {
 }
 
 
-// ==========================================
-// 👁️ TRUEVIEW AUDIT LOGIC (MULTI-DB VERSION)
-// ==========================================
 
-// CONFIGURATION MAP
 
+// ==========================================
+// 👁️ TRUEVIEW CONFIGURATION (UPDATED)
+// ==========================================
 const TV_CONFIG_MAP = {
     "Offer Board": {
-        sheetId: CONFIG.OFFER_BOARD_SHEET_ID,
+        // Updated to the specific sheet you provided
+        sheetId: "1oE7xB9egfdRumclW-l5BzLXJZm5feddA0x3USe3pBUc", 
         tabName: "Sheet1", 
         type: "offer_board" 
     },
@@ -2371,7 +2371,7 @@ const TV_CONFIG_MAP = {
         tabName: "Sheet1", 
         type: "ofr_audit" 
     },
-    // Keep others as placeholders
+    // Standard Placeholders
     "Feature Space": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Feature_Space", type: "standard" },
     "Hygiene Check": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Hygiene_Check", type: "standard" },
     "Planogram": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Planogram", type: "standard" },
