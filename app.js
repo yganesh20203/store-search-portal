@@ -3108,19 +3108,7 @@ window.generateTvReport = async function() {
     }
 };
 
-// ==========================================
-// 👁️ PASSWORD VISIBILITY TOGGLE
-// ==========================================
-window.togglePassword = function(inputId, iconElement) {
-    const input = document.getElementById(inputId);
-    if (input.type === "password") {
-        input.type = "text";
-        iconElement.innerText = "🔒"; // Change icon to 'Hide' (Lock or Slashed Eye)
-    } else {
-        input.type = "password";
-        iconElement.innerText = "👁️"; // Change icon back to 'Show'
-    }
-};
+
 
 // ==========================================
 // 🧹 HELPER: RESET STATS TO ZERO
