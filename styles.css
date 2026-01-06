@@ -158,20 +158,20 @@ body {
 #dashboard {
     background-color: #f4f7f6;
     min-height: 100vh;
-    padding: 20px;
+
+    padding: 0; 
     box-sizing: border-box;
+    width: 100vw;
 }
 
-/* Modern Layout */
 .dashboard-layout {
     display: grid;
     grid-template-columns: 260px 1fr;
     height: 100vh;
     width: 100vw;
     overflow: hidden;
-    position: fixed;
-    top: 0;
-    left: 0;
+    /* Change fixed to relative to avoid stacking context issues */
+    position: relative; 
 }
 
 /* Sidebar */
