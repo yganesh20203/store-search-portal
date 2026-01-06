@@ -2948,14 +2948,6 @@ async function loadTvStats() {
     }
 }
 
-function resetStatsToZero() {
-    document.getElementById("tv-stat-total").innerText = "0";
-    document.getElementById("tv-stat-pending").innerText = "0";
-    document.getElementById("tv-stat-completed").innerText = "0";
-    document.getElementById("tv-stat-percent").innerText = "0%";
-}
-
-
 // ==========================================
 // 📸 CAMERA HELPER: SAVE PHOTO TO MEMORY
 // ==========================================
