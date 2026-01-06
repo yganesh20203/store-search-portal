@@ -1,66 +1,41 @@
 /* =========================================
-   1. VARIABLES & DESIGN TOKENS
+   1. VARIABLES & RESET
    ========================================= */
 :root {
-    /* -- Colors: Slate & Indigo Theme -- */
-    --primary: #4f46e5;       /* Indigo 600 - Main Action */
-    --primary-hover: #4338ca; /* Indigo 700 */
-    --primary-light: #eef2ff; /* Indigo 50 */
-    
-    --secondary: #64748b;     /* Slate 500 - Secondary Text */
-    --surface: #ffffff;       /* Pure White - Cards/Panels */
-    --background: #f1f5f9;    /* Slate 100 - App Background */
-    --border: #e2e8f0;        /* Slate 200 - Borders */
-    
-    --text-main: #0f172a;     /* Slate 900 - Headings */
-    --text-body: #334155;     /* Slate 700 - Body text */
-    
-    --danger: #ef4444;        /* Red */
-    --success: #10b981;       /* Emerald */
-    --warning: #f59e0b;       /* Amber */
-
-    /* -- Spacing & Shape -- */
+    /* Enterprise Slate Theme */
+    --primary: #4f46e5;       /* Indigo */
+    --primary-hover: #4338ca;
+    --sidebar-bg: #0f172a;    /* Dark Slate */
+    --sidebar-text: #cbd5e1;
+    --bg-body: #f1f5f9;       /* Light Grey-Blue */
+    --bg-surface: #ffffff;
+    --border: #e2e8f0;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
     --radius: 8px;
-    --header-height: 64px;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* =========================================
-   2. GLOBAL RESET & BASE
-   ========================================= */
 * { box-sizing: border-box; }
 
 body { 
-    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    margin: 0; 
-    padding: 0;
+    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+    margin: 0; padding: 0;
+    background-color: var(--bg-body); 
+    color: var(--text-main);
     height: 100vh;
-    background-color: var(--background); 
-    color: var(--text-body);
-    -webkit-font-smoothing: antialiased;
-    font-size: 14px;
-    line-height: 1.5;
-    overflow-x: hidden; /* Prevent horizontal scroll */
+    overflow: hidden; /* Important: Prevents double scrollbars */
 }
 
-/* Utility to hide elements */
+/* Utility */
 .hidden { display: none !important; }
 
-/* Scrollbar Styling */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
 /* =========================================
-   3. LOGIN SCREEN (Full Overlay)
+   2. LOGIN SCREEN (Overlay)
    ========================================= */
 #auth-overlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
-    /* Professional Deep Gradient */
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     display: flex;
     flex-direction: column;
@@ -69,513 +44,244 @@ body {
     z-index: 10000;
 }
 
-#auth-overlay h1 {
-    font-size: 2rem;
-    margin-bottom: 10px;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: -0.5px;
-}
-
-#auth-overlay p {
-    color: #94a3b8;
-    margin-bottom: 30px;
-    font-size: 1rem;
-}
+#auth-overlay h1 { color: white; margin-bottom: 10px; font-size: 2rem; }
+#auth-overlay p { color: #94a3b8; margin-bottom: 30px; }
 
 .login-box {
-    background: var(--surface);
+    background: white;
     padding: 40px;
     border-radius: 12px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Deep float shadow */
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 340px;
-    text-align: left;
-}
-
-.login-box label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--secondary);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    width: 320px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    display: flex; flex-direction: column; gap: 15px;
 }
 
 .login-box input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 1rem;
-    background: #f8fafc;
-    transition: all 0.2s;
-}
-
-.login-box input:focus {
-    outline: none;
-    border-color: var(--primary);
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    width: 100%; padding: 12px;
+    border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 14px; background: #f8fafc;
 }
 
 #login-btn {
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    background: var(--primary);
-    color: white;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 10px;
+    padding: 12px; background: var(--primary); color: white;
+    border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
 }
-
-#login-btn:hover {
-    background: var(--primary-hover);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-}
-
-#error-msg {
-    color: var(--danger);
-    background: #fef2f2;
-    padding: 10px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    display: none;
-    border: 1px solid #fecaca;
-    text-align: center;
-}
+#login-btn:hover { background: var(--primary-hover); }
 
 /* =========================================
-   4. DASHBOARD LAYOUT & HEADER
+   3. DASHBOARD LAYOUT (The Fix)
    ========================================= */
 #dashboard {
-    background-color: var(--background);
-    min-height: 100vh;
-    padding: 20px;
-    max-width: 1600px;
-    margin: 0 auto;
+    width: 100vw;
+    height: 100vh;
+    display: block;
 }
 
-/* Header Styling */
-header {
+/* This container creates the Left/Right split */
+.dashboard-layout {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: var(--surface);
-    padding: 15px 25px;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--border);
-    margin-bottom: 25px;
-}
-
-header h1 {
-    font-size: 1.25rem;
-    color: var(--text-main);
-    margin: 0;
-    font-weight: 700;
-}
-
-header div { /* User Info */
-    font-size: 0.85rem;
-    color: var(--secondary);
-    font-weight: 500;
-}
-
-/* =========================================
-   5. NAVIGATION & CONTROL PANEL
-   ========================================= */
-.control-panel {
-    background: var(--surface);
-    padding: 20px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    margin-bottom: 25px;
-    align-items: center;
-}
-
-/* Group Labels (e.g., ANALYTICS, OPERATIONS) */
-.control-panel strong, .nav-group-label {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: var(--secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-right: 5px;
-}
-
-/* Nav Buttons */
-.nav-btn, .action-btn {
-    appearance: none;
-    border: 1px solid var(--border);
-    background: white;
-    color: var(--text-body);
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.nav-btn:hover, .action-btn:hover {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: var(--primary-light);
-    transform: translateY(-1px);
-}
-
-/* Active State for Buttons */
-.nav-btn.active {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-    box-shadow: var(--shadow-md);
-}
-
-.logout-btn {
-    background: #fff;
-    color: var(--danger);
-    border: 1px solid #fecaca;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 0.85rem;
-    margin-left: auto; /* Push to right if in flex container */
-    transition: all 0.2s;
-}
-
-.logout-btn:hover {
-    background: var(--danger);
-    color: white;
-    border-color: var(--danger);
-}
-
-/* =========================================
-   6. MAIN UI CONTAINERS (The White Boxes)
-   ========================================= */
-#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, 
-#approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui {
-    background: var(--surface);
-    padding: 25px;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    margin-bottom: 20px;
-    border: 1px solid var(--border);
-    animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Filter Bar (Search & Selects) */
-.filter-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid var(--border);
-}
-
-select, input[type="text"], input[type="search"] {
-    padding: 9px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background-color: #f8fafc;
-    font-size: 0.9rem;
-    color: var(--text-body);
-    outline: none;
-    transition: border 0.2s, box-shadow 0.2s;
-}
-
-input[type="text"]:focus, select:focus {
-    border-color: var(--primary);
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-}
-
-/* =========================================
-   7. FOLDER GRID SYSTEM
-   ========================================= */
-.folder-grid { 
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); 
-    gap: 16px; 
-    margin-top: 20px; 
-}
-
-.folder-btn { 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    text-align: center; 
-    gap: 8px;
-    padding: 24px 16px; 
-    background: var(--surface); 
-    border: 1px solid var(--border); 
-    border-radius: 12px; 
-    cursor: pointer; 
-    font-weight: 600; 
-    color: var(--text-body);
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
-    position: relative;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
 }
 
-.folder-btn:hover { 
-    transform: translateY(-3px); 
-    box-shadow: var(--shadow-md); 
-    border-color: var(--primary);
-    color: var(--primary);
-}
-
-/* Add a visual "tab" at the bottom */
-.folder-btn::after {
-    content: '';
-    position: absolute; bottom: 0; left: 0; width: 100%; height: 4px;
-    background: var(--border);
-    transition: background 0.2s;
-}
-.folder-btn:hover::after { background: var(--primary); }
-
-/* Folder Tints/Categories */
-#walkin-category-list .folder-btn::after { background: #10b981; } /* Green */
-#tracker-file-list .folder-btn::after { background: #f59e0b; } /* Amber */
-
-/* =========================================
-   8. VIEW PANES (Split Screen)
-   ========================================= */
-#view-container { 
-    display: grid; 
-    gap: 20px; 
-    min-height: 500px; 
-    margin-top: 20px; 
-}
-.grid-1 { grid-template-columns: 1fr; }
-.grid-2 { grid-template-columns: 1fr 1fr; }
-
-.pane {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    position: relative;
-    min-height: 400px;
+/* --- A. Sidebar (Left) --- */
+.sidebar {
+    width: 260px;
+    height: 100%;
+    background-color: var(--sidebar-bg);
+    color: white;
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
+    flex-shrink: 0; /* Prevents sidebar from squishing */
+    border-right: 1px solid #1e293b;
+    z-index: 10;
 }
 
-.pane.active { 
-    border-color: var(--primary); 
-    box-shadow: 0 0 0 1px var(--primary);
+.sidebar-header {
+    padding: 25px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
-.pane-label {
-    background: #f8fafc; 
-    color: var(--secondary); 
-    font-size: 0.7rem;
-    text-transform: uppercase; 
-    letter-spacing: 1px;
-    padding: 8px 16px; 
-    font-weight: 700; 
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+.sidebar-header h2 {
+    margin: 0; font-size: 1.2rem; color: white; display: flex; align-items: center; gap: 10px;
 }
 
-.content-area { 
-    padding: 0; 
-    overflow: auto; 
-    flex-grow: 1; 
-    max-height: 75vh; 
+.user-badge {
+    font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #34d399;
+    padding: 2px 8px; border-radius: 10px; margin-top: 5px; display: inline-block;
 }
 
-/* =========================================
-   9. DATA TABLE
-   ========================================= */
-.data-table { 
-    width: 100%; 
-    border-collapse: collapse; 
-    font-size: 0.85rem; 
-    background-color: var(--surface); 
+/* Sidebar Navigation */
+.sidebar-nav {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px;
 }
 
-.data-table thead th {
-    position: sticky; top: 0;
-    background-color: #f8fafc; /* Light grey header */
-    color: var(--secondary); 
-    padding: 12px 16px; 
-    text-align: left; 
-    z-index: 5;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    border-bottom: 2px solid var(--border);
+.nav-group { margin-bottom: 25px; }
+.group-title {
+    font-size: 0.7rem; font-weight: 700; color: #64748b;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; display: block;
 }
 
-.data-table tbody td {
-    padding: 10px 16px; 
-    border-bottom: 1px solid var(--border);
-    color: var(--text-body); 
-    white-space: nowrap; 
-    max-width: 280px;
-    overflow: hidden; 
-    text-overflow: ellipsis;
-}
-
-.data-table tbody tr:hover { 
-    background-color: #f8fafc; 
-    cursor: pointer; 
-}
-
-/* =========================================
-   10. MODALS
-   ========================================= */
-.modal {
-    display: flex; position: fixed; z-index: 2000;
-    left: 0; top: 0; width: 100%; height: 100%;
-    background-color: rgba(15, 23, 42, 0.6); /* Darker backdrop */
-    backdrop-filter: blur(2px);
-    align-items: center; justify-content: center;
-}
-
-.modal-content {
-    background-color: var(--surface); 
-    border-radius: 12px;
-    width: 90%; max-width: 700px; max-height: 90vh;
-    display: flex; flex-direction: column;
-    box-shadow: var(--shadow-lg);
-    border: 1px solid rgba(255,255,255,0.1);
-    animation: slideUp 0.2s ease-out;
-}
-
-@keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-
-.modal-header { 
-    padding: 20px; 
-    border-bottom: 1px solid var(--border); 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-}
-
-.modal-header h2 { margin: 0; font-size: 1.25rem; }
-
-.modal-body { padding: 25px; overflow-y: auto; }
-
-.modal-footer { 
-    padding: 20px; 
-    border-top: 1px solid var(--border); 
-    text-align: right; 
-    background: #f8fafc;
-    border-bottom-left-radius: 12px;
-    border-bottom-right-radius: 12px;
-}
-
-.close-btn { 
-    font-size: 24px; cursor: pointer; color: var(--secondary); transition: 0.2s; 
-}
-.close-btn:hover { color: var(--danger); }
-
-/* =========================================
-   11. CHARTS & MAPS (Specifics)
-   ========================================= */
-#business-map { 
-    height: 500px; width: 100%; 
-    border-radius: var(--radius); 
-    border: 1px solid var(--border); 
-    margin-bottom: 20px; 
-}
-
-.stat-card { 
-    background: var(--surface); 
-    padding: 20px; 
-    border-radius: var(--radius); 
-    text-align: center; 
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm); 
-}
-.stat-val { 
-    font-size: 24px; 
-    font-weight: 700; 
-    color: var(--success); 
-    margin-top: 5px; 
-}
-
-/* Chart Builder - Drag & Drop Areas */
-.chart-builder-container { 
-    display: flex; height: 100%; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
-}
-.chart-sidebar { 
-    width: 240px; background: #f8fafc; border-right: 1px solid var(--border); 
-    padding: 15px; display: flex; flex-direction: column; gap: 10px; 
-}
-.draggable-col { 
-    background: white; padding: 10px; border: 1px solid var(--border); 
-    border-radius: 4px; cursor: grab; font-size: 0.85rem; box-shadow: var(--shadow-sm);
-}
-
-.drop-zone { 
-    flex: 1; border: 2px dashed #cbd5e1; background: #f8fafc; 
-    border-radius: 8px; margin: 10px; display: flex; 
-    align-items: center; justify-content: center; flex-direction: column; 
-    min-height: 80px; transition: background 0.2s;
-}
-.drop-zone.drag-over { background: #e0e7ff; border-color: var(--primary); }
-
-.pill { 
-    background: var(--primary-light); color: var(--primary); 
-    padding: 4px 12px; border-radius: 20px; font-weight: 600; 
-    font-size: 0.75rem; margin-top: 5px; 
-}
-
-/* =========================================
-   12. TRUEVIEW / OPERATIONS SPECIFIC
-   ========================================= */
-.tv-tab {
-    padding: 8px 16px; border: none; background: #f1f5f9;
-    color: var(--secondary); border-radius: 20px;
-    cursor: pointer; font-weight: 600; font-size: 0.85rem;
+.nav-item {
+    display: flex; align-items: center; width: 100%;
+    background: transparent; border: none;
+    color: var(--sidebar-text);
+    padding: 10px 12px; margin-bottom: 5px;
+    border-radius: 6px; cursor: pointer;
+    font-size: 0.9rem; text-align: left;
     transition: all 0.2s;
 }
-.tv-tab.active {
-    background: var(--primary); color: white;
+
+.nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+.nav-item.active { background: var(--primary); color: white; font-weight: 600; }
+
+.sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+.logout-btn {
+    width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.1);
+    color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px; cursor: pointer; font-weight: 600;
+}
+.logout-btn:hover { background: #ef4444; color: white; }
+
+/* --- B. Main Content (Right) --- */
+.main-content {
+    flex-grow: 1;
+    height: 100%;
+    background-color: var(--bg-body);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
 }
 
-.tv-task-card {
-    background: white;
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--warning); /* Orange default */
-    padding: 16px;
-    border-radius: 8px;
-    box-shadow: var(--shadow-sm);
-    display: flex; flex-direction: column; gap: 8px;
+/* Top Header Bar */
+.top-bar {
+    height: 64px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 30px;
+    flex-shrink: 0;
 }
-.tv-task-card.completed { border-left-color: var(--success); opacity: 0.8; }
+
+.top-bar h2 { font-size: 1.2rem; color: var(--text-main); margin: 0; }
+
+.header-controls { display: flex; gap: 15px; align-items: center; }
+
+.select-wrapper select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: #f8fafc; color: var(--text-main); cursor: pointer;
+}
+
+.action-btn {
+    background: white; border: 1px solid var(--border);
+    padding: 8px 16px; border-radius: 6px; cursor: pointer;
+    font-weight: 600; color: var(--text-main);
+}
+.action-btn:hover { background: #f1f5f9; border-color: var(--primary); color: var(--primary); }
+
+/* Scrollable Content Area */
+#content-wrapper {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 30px;
+}
+
+/* =========================================
+   4. UI COMPONENT STYLES
+   ========================================= */
+
+/* Folder Grids */
+.folder-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 15px; margin-top: 15px;
+}
+
+.folder-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 20px; background: white; border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; text-align: center; gap: 8px;
+    font-weight: 600; color: var(--text-main); transition: transform 0.2s;
+    min-height: 100px;
+}
+.folder-btn:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--primary); }
+
+/* UI Sections (White Cards) */
+#sales-ui, #member-ui, #tracker-ui, #hourly-ui, #ticket-ui, 
+#approvals-ui, #business-ui, #walkin-ui, #daily-ui, #work-ui {
+    background: white; padding: 25px; border-radius: 12px;
+    box-shadow: var(--shadow); border: 1px solid var(--border);
+    margin-bottom: 20px;
+}
+
+/* Inputs & Forms */
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], select, textarea {
+    padding: 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: #f8fafc; width: auto; max-width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--primary); background: white;
+}
+
+/* Data Tables */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 15px; }
+.data-table thead th {
+    background: #f1f5f9; color: var(--text-muted);
+    text-align: left; padding: 12px; font-weight: 700;
+    border-bottom: 2px solid var(--border);
+}
+.data-table tbody td { padding: 12px; border-bottom: 1px solid var(--border); }
+.data-table tr:hover { background: #f8fafc; }
+
+/* Panes (Split View) */
+#view-container { display: grid; gap: 20px; margin-top: 20px; }
+.grid-1 { grid-template-columns: 1fr; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.pane {
+    background: white; border: 1px solid var(--border);
+    border-radius: 8px; min-height: 400px; display: flex; flex-direction: column;
+}
+.pane.active { border: 2px solid var(--primary); }
+
+.pane-label {
+    background: #f1f5f9; padding: 8px 15px; font-size: 0.8rem;
+    font-weight: bold; color: var(--text-muted); border-bottom: 1px solid var(--border);
+}
+.content-area { padding: 0; flex-grow: 1; overflow: auto; max-height: 600px; }
+.empty-msg { padding: 40px; text-align: center; color: var(--text-muted); }
+
+/* =========================================
+   5. MODALS
+   ========================================= */
+.modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); display: flex; 
+    align-items: center; justify-content: center; z-index: 2000;
+}
+.modal-content {
+    background: white; padding: 0; border-radius: 12px;
+    width: 90%; max-width: 500px; display: flex; flex-direction: column;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+}
+.modal-header {
+    padding: 15px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+}
+.modal-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
+.modal-footer { padding: 15px 20px; border-top: 1px solid var(--border); text-align: right; background: #f8fafc; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+
+.close-btn { font-size: 24px; cursor: pointer; color: #999; }
+.close-btn:hover { color: #333; }
+
+/* Chart/Map Containers */
+#business-map { height: 400px; border-radius: 8px; border: 1px solid var(--border); }
+.stat-card {
+    background: white; border: 1px solid var(--border); padding: 15px;
+    border-radius: 8px; text-align: center;
+}
+.stat-val { font-size: 1.5rem; font-weight: bold; color: var(--primary); margin-top: 5px; }
