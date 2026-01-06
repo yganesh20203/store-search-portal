@@ -1,17 +1,18 @@
 /* =========================================
    1. GLOBAL RESET & BASE STYLES
    ========================================= */
-body { 
-    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+html, body { 
+    height: 100%;         /* CRITICAL FIX: Ensures the app fills the window */
     margin: 0; 
     padding: 0;
-    height: 100vh;
+    overflow: hidden;     /* Prevents double scrollbars */
+    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
     background-color: #f4f7f6; 
     color: #333;
-    display: block;
 }
 
 /* Utility to hide elements */
+/* CRITICAL FIX: Ensures hidden elements stay hidden, overriding other display styles */
 .hidden { display: none !important; }
 
 /* =========================================
@@ -54,7 +55,7 @@ body {
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     width: 320px;
     text-align: left;
-    box-sizing: border-box; /* Critical for alignment */
+    box-sizing: border-box; 
 }
 
 /* LABEL STYLING */
@@ -83,14 +84,14 @@ body {
 .login-box input {
     width: 100%;
     padding: 12px;
-    padding-right: 40px; /* Space for eye icon */
+    padding-right: 40px; 
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 14px;
     outline: none;
     background: #f9f9f9;
     color: #333;
-    box-sizing: border-box; /* Fixes alignment */
+    box-sizing: border-box; 
     height: 45px;
 }
 
@@ -153,24 +154,26 @@ body {
 }
 
 /* =========================================
-   3. DASHBOARD CONTAINER
+   3. DASHBOARD CONTAINER (FIXED LAYOUT)
    ========================================= */
 #dashboard {
     background-color: #f4f7f6;
-    min-height: 100vh;
-
-    padding: 0; 
-    box-sizing: border-box;
     width: 100vw;
+    height: 100vh;
+    padding: 0; /* CRITICAL: Remove padding so grid fits exactly */
+    box-sizing: border-box;
+    display: block; /* Ensures it renders as block when 'hidden' is removed */
+    position: relative;
+    z-index: 1;
 }
 
+/* Modern Layout - Grid Definition */
 .dashboard-layout {
     display: grid;
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 260px 1fr; /* Sidebar Fixed | Content Fluid */
     height: 100vh;
     width: 100vw;
     overflow: hidden;
-    /* Change fixed to relative to avoid stacking context issues */
     position: relative; 
 }
 
@@ -184,7 +187,8 @@ body {
     border-right: 1px solid #334155;
     box-shadow: 4px 0 15px rgba(0,0,0,0.1);
     z-index: 20;
-    height: 100%;
+    height: 100vh; /* Force full height */
+    overflow-y: auto;
     box-sizing: border-box;
 }
 
@@ -224,7 +228,7 @@ body {
 
 #content-wrapper { flex-grow: 1; overflow-y: auto; padding: 25px 30px; }
 
-/* Hide Old Control Panel */
+/* Hide Old Control Panel - Kept just in case, but structure should be fixed now */
 .control-panel { display: none !important; }
 
 /* =========================================
