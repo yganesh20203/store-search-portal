@@ -124,8 +124,10 @@ body { 
 #dashboard {
     background-color: #f4f7f6; /* Matching grey background */
     min-height: 100vh;
-    padding: 20px;
+    
     box-sizing: border-box;
+    width: 100vw;
+    overflow: hidden;
 }
 
 /* Header Styling */
