@@ -2543,91 +2543,197 @@ window.handleTvImpexUpload = function(input) {
 };
 
 // 6. LOAD TASKS (With Escalation Logic)
+// 6. LOAD TASKS (Robust Matching Fix)
 async function loadTvTasks() {
     const container = document.getElementById("tv-task-list");
     container.innerHTML = "⏳ Fetching tasks...";
     
     const config = TV_CONFIG_MAP[activeTvCategory];
-    const rawUser = localStorage.getItem("portal_user_email")?.toLowerCase() || "";
-    const currentUsername = rawUser.split('@')[0].trim(); 
+    // Get logged-in user details
+    const rawUser = localStorage.getItem("portal_user_email")?.toLowerCase().trim() || "";
+    const currentUsername = rawUser.split('@')[0]; // e.g. "y.ganesh"
 
-    if (!config || !currentUsername) { container.innerHTML = "Error or Login required."; return; }
+    if (!config) { container.innerHTML = "Config Error."; return; }
+    if (!rawUser) { container.innerHTML = "Please log in first."; return; }
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        if (!data.values || data.values.length < 2) { container.innerHTML = "No tasks."; return; }
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "No tasks found in sheet.";
+            return;
+        }
 
         let myPendingTasks = [];
 
-        if (activeTvCategory === "Feature Space") {
-            // Feature Space Logic
+        // --- OFFER BOARD LOGIC ---
+        if (activeTvCategory === "Offer Board") {
+            const today = new Date(); today.setHours(0,0,0,0);
+            
             myPendingTasks = data.values.slice(1).map((r, i) => {
-                const approver = (r[4] || "").toLowerCase().trim().split('@')[0]; // Col E (Index 4)
+                // Get Raw Emails from Sheet
+                const rawAssignee = (r[5] || "").toLowerCase().trim(); // Col F: Approver
+                const rawEscL1 = (r[6] || "").toLowerCase().trim();    // Col G: Esc L1
+
                 return {
                     rowIndex: i + 2,
                     id: r[0],
                     storeNo: r[1],
                     storeName: r[2],
-                    endDate: r[3],
-                    itemDesc: r[10], // Col K (Index 10)
-                    dispLoc: r[11],  // Col L (Index 11)
-                    execType: r[12], // Col M (Index 12)
-                    approver: approver,
-                    status: r[14]    // Col O (Index 14) Execution Status
+                    endDateStr: r[4],
+                    endDateObj: new Date(r[4]),
+                    
+                    // Store both Full Email and Username for flexible matching
+                    assigneeEmail: rawAssignee,
+                    assigneeUser: rawAssignee.split('@')[0],
+                    
+                    escL1Email: rawEscL1,
+                    escL1User: rawEscL1.split('@')[0],
+                    
+                    posters: r[8],
+                    completedDate: r[13] // Col N
                 };
             }).filter(t => {
-                // Pending if Status is empty
-                if (t.status && t.status.trim().length > 0) return false;
-                if (t.approver === currentUsername) return true;
+                // 1. Check if Pending (Completed Date is empty)
+                const isPending = !t.completedDate || t.completedDate.trim() === "";
+                if (!isPending) return false;
+
+                // 2. ROBUST MATCHING: Check Full Email OR Username
+                const isMyTask = (t.assigneeEmail === rawUser) || (t.assigneeUser === currentUsername);
+                
+                if (isMyTask) return true;
+
+                // 3. Escalation Check
+                const isMyEscalation = (t.escL1Email === rawUser) || (t.escL1User === currentUsername);
+                if (isMyEscalation && t.endDateObj < today) { 
+                    t.isEscalated = true; 
+                    return true; 
+                }
+
                 return false;
             });
-        }
-        // ... (Keep existing filters for Planogram, Offer Board, OFR) ...
-        else if (activeTvCategory === "Planogram") {
-             myPendingTasks = data.values.slice(1).map((r, i) => {
-                const approver = (r[9] || "").toLowerCase().trim().split('@')[0];
+        } 
+        // --- OFR AUDIT LOGIC ---
+        else if (activeTvCategory === "OFR Audit") {
+            myPendingTasks = data.values.slice(1).map((r, i) => {
                 return {
-                    rowIndex: i + 2, id: r[0], storeNo: r[1], storeName: r[2],
-                    endDate: r[4], subDiv: r[5], category: r[7], brand: r[8],
-                    approver: approver, executionDate: r[12]
+                    rowIndex: i + 2,
+                    id: r[0],
+                    storeNo: r[1],
+                    storeName: r[2],
+                    invoiceDate: r[3],
+                    dueDate: r[4],
+                    articleDesc: r[6],
+                    shortQty: r[8],
+                    
+                    managerEmail: (r[9] || "").toLowerCase().trim(),
+                    tlEmail: (r[10] || "").toLowerCase().trim(),
+                    
+                    managerInput: r[11],
+                    tlInput: r[12]
                 };
             }).filter(t => {
-                if (t.executionDate && t.executionDate.trim() !== "") return false;
-                if (t.approver === currentUsername) return true;
+                // Flexible Matching for Manager/TL
+                const isManager = (t.managerEmail === rawUser) || (t.managerEmail.split('@')[0] === currentUsername);
+                const isTL = (t.tlEmail === rawUser) || (t.tlEmail.split('@')[0] === currentUsername);
+
+                // Logic: If I am Manager AND Input Empty -> Pending
+                if (isManager && (!t.managerInput || t.managerInput === "")) { 
+                    t.role = "Manager"; 
+                    return true; 
+                }
+                // Logic: If I am TL AND Input Empty -> Pending
+                if (isTL && (!t.tlInput || t.tlInput === "")) { 
+                    t.role = "TL"; 
+                    return true; 
+                }
                 return false;
             });
         }
-        else if (activeTvCategory === "Offer Board") { /* ... existing ... */ } 
-        else if (activeTvCategory === "OFR Audit") { /* ... existing ... */ }
+        // --- PLANOGRAM & FEATURE SPACE (Existing Logic with Robust Match) ---
+        else if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
+            // Determine column indices based on type
+            const isPlano = activeTvCategory === "Planogram";
+            const approverIdx = isPlano ? 9 : 4; // Col J vs Col E
+            const statusIdx = isPlano ? 12 : 14; // Col M vs Col O
 
-        if (myPendingTasks.length === 0) { container.innerHTML = "✅ No pending audits!"; return; }
+            myPendingTasks = data.values.slice(1).map((r, i) => {
+                const rawAppr = (r[approverIdx] || "").toLowerCase().trim();
+                return {
+                    rowIndex: i + 2,
+                    id: r[0],
+                    storeNo: r[1],
+                    storeName: r[2],
+                    endDate: isPlano ? r[4] : r[3],
+                    // Planogram specifics
+                    subDiv: isPlano ? r[5] : "", category: isPlano ? r[7] : "", brand: isPlano ? r[8] : "",
+                    // Feature Space specifics
+                    itemDesc: !isPlano ? r[10] : "", dispLoc: !isPlano ? r[11] : "", execType: !isPlano ? r[12] : "",
+                    
+                    approverEmail: rawAppr,
+                    approverUser: rawAppr.split('@')[0],
+                    status: r[statusIdx]
+                };
+            }).filter(t => {
+                const isPending = !t.status || t.status.trim() === "";
+                if (!isPending) return false;
 
-        // Render Cards
-        tvDataCache = myPendingTasks; // Cache for modal
+                // Robust Match
+                return (t.approverEmail === rawUser) || (t.approverUser === currentUsername);
+            });
+        }
 
-        if (activeTvCategory === "Feature Space") {
+        // --- RENDER ---
+        if (myPendingTasks.length === 0) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:20px; color:#666;">
+                    ✅ No pending tasks found for <b>${currentUsername}</b>
+                </div>`;
+            return;
+        }
+
+        // Cache for Modal
+        tvDataCache = myPendingTasks;
+
+        // Render Cards (Existing Template Logic)
+        if (activeTvCategory === "Offer Board") {
             container.innerHTML = myPendingTasks.map(t => `
-                <div class="tv-task-card" style="border-left: 5px solid #2196f3;">
+                <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
                     <div>
                         <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                            <span>${t.storeName} (${t.storeNo})</span>
-                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
+                            <span>Store: ${t.storeNo}</span>
+                            <span style="color:${t.isEscalated ? '#d32f2f' : '#e65100'}; font-weight:bold;">${t.endDateStr}</span>
                         </div>
-                        <h4 style="margin:5px 0; color:#1565c0;">${t.itemDesc}</h4>
-                        <div style="font-size:12px;">Loc: <b>${t.dispLoc}</b> | Type: <b>${t.execType}</b></div>
+                        <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
+                        <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px;">Posters: <b>${t.posters}</b></div>
                     </div>
-                    <button onclick="window.openTvExecuteModal('${t.id}', 'Execute: ${t.itemDesc}')" 
-                        style="margin-top:15px; width:100%; background:#2196f3; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">
-                        📸 Execute
-                    </button>
+                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName}')" style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">▶️ Audit</button>
+                </div>
+            `).join("");
+        }
+        else if (activeTvCategory === "OFR Audit") {
+            container.innerHTML = myPendingTasks.map(t => `
+                <div class="tv-task-card" style="border-left: 5px solid #009688;">
+                    <div>
+                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                            <span>Invoice: ${t.invoiceDate}</span>
+                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.dueDate}</span>
+                        </div>
+                        <h4 style="margin:5px 0; color:#00695c;">${t.storeName} (${t.storeNo})</h4>
+                        <div style="font-size:12px; margin-bottom:5px; font-weight:bold;">${t.articleDesc}</div>
+                        <div style="display:flex; gap:10px;">
+                            <span style="background:#ffebee; padding:4px 8px; border-radius:4px; font-size:11px; color:#c62828;">Short Qty: ${t.shortQty}</span>
+                        </div>
+                        <div style="margin-top:8px; font-size:11px; color:#555;"> Role: <b>${t.role}</b></div>
+                    </div>
+                    <button onclick="window.openTvExecuteModal('${t.id}', 'Short Qty: ${t.shortQty}')" style="margin-top:15px; width:100%; background:#009688; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">✏️ Input</button>
                 </div>
             `).join("");
         }
         else if (activeTvCategory === "Planogram") {
-             container.innerHTML = myPendingTasks.map(t => `
+            container.innerHTML = myPendingTasks.map(t => `
                 <div class="tv-task-card" style="border-left: 5px solid #673ab7;">
                     <div>
                         <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
@@ -2638,14 +2744,26 @@ async function loadTvTasks() {
                         <div style="font-size:12px; margin-bottom:5px;"><b>${t.brand}</b> (${t.category})</div>
                         <div style="font-size:11px; background:#ede7f6; padding:4px 8px; border-radius:4px; display:inline-block;">SubDiv: ${t.subDiv}</div>
                     </div>
-                    <button onclick="window.openTvExecuteModal('${t.id}', 'Audit: ${t.brand} - ${t.category}')" 
-                        style="margin-top:15px; width:100%; background:#673ab7; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">
-                        📸 Execute
-                    </button>
+                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.brand} - ${t.category}')" style="margin-top:15px; width:100%; background:#673ab7; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">📸 Execute</button>
                 </div>
             `).join("");
         }
-        // ... (Include render blocks for Offer Board & OFR) ...
+        else if (activeTvCategory === "Feature Space") {
+            container.innerHTML = myPendingTasks.map(t => `
+                <div class="tv-task-card" style="border-left: 5px solid #2196f3;">
+                    <div>
+                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                            <span>${t.storeName} (${t.storeNo})</span>
+                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
+                        </div>
+                        <h4 style="margin:5px 0; color:#1565c0;">${t.itemDesc}</h4>
+                        <div style="font-size:12px;">Loc: <b>${t.dispLoc}</b> | Type: <b>${t.execType}</b></div>
+                    </div>
+                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.itemDesc}')" style="margin-top:15px; width:100%; background:#2196f3; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">📸 Execute</button>
+                </div>
+            `).join("");
+        }
+
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
 
