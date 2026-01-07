@@ -2768,6 +2768,7 @@ async function loadTvTasks() {
 }
 
 // 5. EXECUTE MODAL (Standardized Yes/No Logic)
+// 5. EXECUTE MODAL (Fixed: No null error)
 window.openTvExecuteModal = function(id, desc) {
     document.getElementById("tv-execute-modal").classList.remove("hidden");
     const body = document.querySelector("#tv-execute-modal .modal-body");
@@ -2775,7 +2776,9 @@ window.openTvExecuteModal = function(id, desc) {
     
     // Clear previous state
     pendingPhotoBlob = null; 
-    document.getElementById("tv-exec-id").value = id; // Ensure hidden input exists if we need it outside, but we inject it below
+    
+    // --- REMOVED THE CAUSE OF ERROR ---
+    // document.getElementById("tv-exec-id").value = id; <--- This line was causing the crash
 
     // --- A. OFR AUDIT (Reason Only - NO PHOTO) ---
     if (activeTvCategory === "OFR Audit") {
