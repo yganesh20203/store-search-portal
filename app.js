@@ -2856,6 +2856,7 @@ async function loadTvTasks() {
 // 5. EXECUTE MODAL (Standardized Yes/No Logic)
 
 
+// 5. EXECUTE MODAL (Fixed: No null error + Dropdowns for OFR Audit)
 window.openTvExecuteModal = function(id, desc) {
     // 1. Show the modal container
     document.getElementById("tv-execute-modal").classList.remove("hidden");
@@ -2867,30 +2868,71 @@ window.openTvExecuteModal = function(id, desc) {
     // 3. Reset photo state
     pendingPhotoBlob = null; 
     
-    // --- A. OFR AUDIT (Reason Only - NO PHOTO) ---
+    // --- A. OFR AUDIT (Dropdowns - NO PHOTO) ---
     if (activeTvCategory === "OFR Audit") {
         const task = tvDataCache.find(t => t.id === id);
         const role = task ? task.role : "User";
+        
+        let inputHtml = "";
 
-        // Inject HTML
+        // Define options based on role
+        if (role === "Manager") {
+            inputHtml = `
+                <select id="tv-exec-input" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;">
+                    <option value="">-- Select Reason --</option>
+                    <option value="Overbooking">Overbooking</option>
+                    <option value="Item not found at store">Item not found at store</option>
+                    <option value="Item Damaged">Item Damaged</option>
+                    <option value="MRP mismatch">MRP mismatch</option>
+                    <option value="Delay in shrink booking">Delay in shrink booking</option>
+                    <option value="Picker | Operation Miss">Picker | Operation Miss</option>
+                    <option value="Nego">Nego</option>
+                    <option value="Near Expiry">Near Expiry</option>
+                    <option value="BDA - Ordered By Mistake">BDA - Ordered By Mistake</option>
+                    <option value="Customer Order Cancellation">Customer Order Cancellation</option>
+                    <option value="Freebie Issue">Freebie Issue</option>
+                </select>
+            `;
+        } else if (role === "TL") {
+            inputHtml = `
+                <select id="tv-exec-input" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;">
+                    <option value="">-- Select Audit Finding --</option>
+                    <option value="Overbooking Confirmed - System checked">Overbooking Confirmed - System checked</option>
+                    <option value="Shrink Booked">Shrink Booked</option>
+                    <option value="Item Damaged">Item Damaged</option>
+                    <option value="Found Item">Found Item</option>
+                    <option value="Item not found at store">Item not found at store</option>
+                    <option value="Near Expiry">Near Expiry</option>
+                    <option value="Nego">Nego</option>
+                </select>
+            `;
+        } else {
+            // Fallback for unauthorized/guest view
+            inputHtml = `<p style="color:red;">You are not authorized to edit this task (Email mismatch).</p>`;
+        }
+
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; color:#00695c;">${desc}</p>
             
-            <label style="font-size:12px; font-weight:bold; color:#333;">${role} Input / Justification:</label>
-            <textarea id="tv-exec-input" rows="4" placeholder="Enter valid reason for shortage..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; font-family:sans-serif; margin-bottom:15px;"></textarea>
+            <label style="font-size:12px; font-weight:bold; color:#333;">${role} Input:</label>
+            ${inputHtml}
         `;
-        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px;">✅ Save Input</button>`;
+        
+        // Only show save button if role is valid
+        if (role === "Manager" || role === "TL") {
+            footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px;">✅ Save Input</button>`;
+        } else {
+            footer.innerHTML = `<button onclick="document.getElementById('tv-execute-modal').classList.add('hidden')" style="background:#ddd; color:#333; padding:10px; border:none; border-radius:4px;">Close</button>`;
+        }
     }
     
     // --- B. OFFER BOARD / PLANOGRAM / FEATURE SPACE (Yes/No + Photo) ---
     else {
-        // Define color themes
         let color = "#1e3c72"; 
         if (activeTvCategory === "Planogram") color = "#673ab7";
         if (activeTvCategory === "Feature Space") color = "#2196f3";
 
-        // Inject HTML
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#f5f5f5; padding:10px; border-radius:4px; font-weight:bold; border-left:4px solid ${color};">${desc}</p>
