@@ -2769,22 +2769,29 @@ async function loadTvTasks() {
 
 // 5. EXECUTE MODAL (Standardized Yes/No Logic)
 // 5. EXECUTE MODAL (Fixed: No null error)
+// 5. EXECUTE MODAL (Fixed: removed the crashing line)
 window.openTvExecuteModal = function(id, desc) {
+    // 1. Show the modal container
     document.getElementById("tv-execute-modal").classList.remove("hidden");
+    
+    // 2. Get references to the empty body/footer
     const body = document.querySelector("#tv-execute-modal .modal-body");
     const footer = document.querySelector("#tv-execute-modal .modal-footer");
     
-    // Clear previous state
+    // 3. Reset photo state
     pendingPhotoBlob = null; 
     
-    // --- REMOVED THE CAUSE OF ERROR ---
-    // document.getElementById("tv-exec-id").value = id; <--- This line was causing the crash
+    // ---------------------------------------------------------
+    // ⚠️ IMPORTANT: Do NOT try to set value of "tv-exec-id" here.
+    // The element does not exist yet. It is created below.
+    // ---------------------------------------------------------
 
     // --- A. OFR AUDIT (Reason Only - NO PHOTO) ---
     if (activeTvCategory === "OFR Audit") {
         const task = tvDataCache.find(t => t.id === id);
         const role = task ? task.role : "User";
 
+        // We inject the ID directly into the HTML here: value="${id}"
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; color:#00695c;">${desc}</p>
@@ -2797,11 +2804,11 @@ window.openTvExecuteModal = function(id, desc) {
     
     // --- B. OFFER BOARD / PLANOGRAM / FEATURE SPACE (Yes/No + Photo) ---
     else {
-        // Define color themes based on category
         let color = "#1e3c72"; 
         if (activeTvCategory === "Planogram") color = "#673ab7";
         if (activeTvCategory === "Feature Space") color = "#2196f3";
 
+        // We inject the ID directly into the HTML here: value="${id}"
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#f5f5f5; padding:10px; border-radius:4px; font-weight:bold; border-left:4px solid ${color};">${desc}</p>
