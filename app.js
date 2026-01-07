@@ -3297,16 +3297,26 @@ window.renderDownloadOptions = function() {
     if (!container) return;
 
     let extraFilters = "";
+    let pptButton = "";
 
+    // 1. Planogram Specifics
     if (activeTvCategory === "Planogram") {
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-subdiv" placeholder="Sub Division" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <input type="text" id="filter-cat" placeholder="Category Name" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-brand" placeholder="Brand" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
+        
+        pptButton = `
+            <button onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                📊 Generate & Download PPT
+            </button>`;
     }
+    // 2. Feature Space Specifics
     else if (activeTvCategory === "Feature Space") {
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
@@ -3317,8 +3327,14 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-item" placeholder="Item Desc" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
+            
+        pptButton = `
+            <button onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                📊 Generate & Download PPT
+            </button>`;
     }
 
+    // Render HTML
     container.innerHTML = `
         <div style="background:#e8eaf6; padding:20px; border-radius:8px; border:1px solid #c5cae9; max-width:500px;">
             <h3 style="margin-top:0;">📅 Export ${activeTvCategory} Report</h3>
@@ -3328,7 +3344,179 @@ window.renderDownloadOptions = function() {
             </div>
             ${extraFilters}
             <button id="btn-download-report" onclick="window.generateTvReport()" style="width:100%; background:#3f51b5; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer;">⬇️ Download CSV</button>
+            ${pptButton}
             <p id="tv-download-status" style="margin-top:10px; font-size:12px; text-align:center;"></p>
         </div>
     `;
 };
+
+// ==========================================
+// 📊 PPT GENERATION LOGIC
+// ==========================================
+window.generateTvPPT = async function() {
+    const fromInput = document.getElementById("tv-rep-from").value;
+    const toInput = document.getElementById("tv-rep-to").value;
+    const statusEl = document.getElementById("tv-download-status");
+    const config = TV_CONFIG_MAP[activeTvCategory];
+
+    if (!fromInput || !toInput) { alert("Select Dates"); return; }
+
+    statusEl.innerText = "⏳ Initializing PPT Engine...";
+    
+    try {
+        // 1. Fetch Data
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+        
+        if (!data.values || data.values.length < 2) throw new Error("No data found.");
+        
+        const rows = data.values.slice(1);
+        const fromDate = new Date(fromInput); fromDate.setHours(0,0,0,0);
+        const toDate = new Date(toInput); toDate.setHours(23,59,59,999);
+
+        let filteredData = [];
+        let headers = [];
+        let imageColIndex = -1; // To find where the image link is
+
+        // --- FILTER LOGIC (Reused) ---
+        if (activeTvCategory === "Planogram") {
+            headers = ["Store No", "Store Name", "Start Date", "End Date", "Sub Div", "Category", "Brand", "Approver", "Status"];
+            // Image is usually at Index 11 (Column L) in Sheet, but we need to map Row Index to Header
+            // Sheet: 0:ID, 1:StoreNo, 2:Name, 3:Start, 4:End, 5:SubDiv, 6:CatNo, 7:CatName, 8:Brand, 9:Approver, 10:Reason, 11:Image, 12:Date
+            imageColIndex = 11;
+
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
+            const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase();
+            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
+            const fBrand = document.getElementById("filter-brand")?.value.trim().toLowerCase();
+
+            filteredData = rows.filter(r => {
+                const d = new Date(r[3]); 
+                if (!(d >= fromDate && d <= toDate)) return false;
+                if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
+                if (fSubDiv && String(r[4]).toLowerCase() !== fSubDiv) return false;
+                if (fCat && !String(r[7]).toLowerCase().includes(fCat)) return false; // Cat Name is Index 7
+                if (fBrand && !String(r[8]).toLowerCase().includes(fBrand)) return false;
+                // Only include rows with images
+                if (!r[11] || r[11].trim() === "") return false; 
+                return true;
+            });
+        }
+        else if (activeTvCategory === "Feature Space") {
+            headers = ["Store No", "Store Name", "Start Date", "End Date", "Approver", "Category", "Item No", "Item Desc", "Location", "Type", "Status"];
+            // Sheet: 0:ID, 1:Store, 2:Name, 3:Start, 4:End, 5:Appr, 6:CatNo, 7:Div, 8:SubDiv, 9:CatName, 10:ItemNo, 11:Desc, 12:Loc, 13:Type, 14:Status, 15:Image
+            imageColIndex = 15;
+
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
+            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
+            const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase();
+
+            filteredData = rows.filter(r => {
+                const d = new Date(r[3]); 
+                if (!(d >= fromDate && d <= toDate)) return false;
+                if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
+                if (fCat && !String(r[9]).toLowerCase().includes(fCat)) return false;
+                if (fItem && !String(r[11]).toLowerCase().includes(fItem)) return false;
+                if (!r[15] || r[15].trim() === "" || r[15] === "N/A") return false;
+                return true;
+            });
+        }
+
+        if (filteredData.length === 0) throw new Error("No records with images found matching filters.");
+
+        // 2. Initialize PPT
+        let pres = new PptxGenJS();
+        pres.layout = "LAYOUT_16x9";
+
+        // 3. Process Rows & Fetch Images
+        for (let i = 0; i < filteredData.length; i++) {
+            const row = filteredData[i];
+            const driveLink = row[imageColIndex];
+            
+            statusEl.innerText = `⏳ Processing Slide ${i+1} of ${filteredData.length}...`;
+
+            // Extract File ID from Drive Link
+            let fileId = null;
+            if (driveLink.includes("id=")) fileId = driveLink.split("id=")[1].split("&")[0];
+            else if (driveLink.includes("/d/")) fileId = driveLink.split("/d/")[1].split("/")[0];
+
+            if (fileId) {
+                try {
+                    // Fetch image data as Base64 because PPTXGenJS needs it directly (cannot use auth-protected URLs)
+                    const base64Img = await fetchImageAsBase64(fileId);
+                    
+                    // Create Slide
+                    let slide = pres.addSlide();
+                    
+                    // --- LEFT HALF: DATA TABLE ---
+                    // Build rows for the slide table
+                    let tableRows = [];
+                    // We map the specific columns we want based on category
+                    if (activeTvCategory === "Planogram") {
+                        // [Header, Value]
+                        tableRows = [
+                            ["Store", row[1] + " - " + row[2]],
+                            ["Date Range", row[3] + " to " + row[4]],
+                            ["Sub Division", row[5]],
+                            ["Category", row[7]], // Index 7 is Name
+                            ["Brand", row[8]],
+                            ["Status", row[10]]
+                        ];
+                    } else {
+                        tableRows = [
+                            ["Store", row[1] + " - " + row[2]],
+                            ["Approver", row[5]],
+                            ["Item", row[11]],
+                            ["Display Loc", row[12]],
+                            ["Type", row[13]],
+                            ["Status", row[14]]
+                        ];
+                    }
+
+                    // Add Table to Slide (x, y, w, h) -> Left Half
+                    slide.addTable(tableRows, {
+                        x: 0.5, y: 0.5, w: 4.5, h: 4.5,
+                        colW: [1.5, 3.0],
+                        fontSize: 14, border: { pt: 1, color: "E0E0E0" },
+                        fill: { color: "F9F9F9" }
+                    });
+
+                    // --- RIGHT HALF: IMAGE ---
+                    if (base64Img) {
+                        slide.addImage({
+                            data: base64Img,
+                            x: 5.2, y: 0.5, w: 4.5, h: 4.5,
+                            sizing: { type: "contain", w: 4.5, h: 4.5 }
+                        });
+                    }
+
+                } catch (err) {
+                    console.error("Failed to add image for slide " + i, err);
+                }
+            }
+        }
+
+        statusEl.innerText = "💾 Saving PPT...";
+        await pres.writeFile({ fileName: `${activeTvCategory}_Report.pptx` });
+        statusEl.innerText = "✅ PPT Downloaded!";
+
+    } catch (e) {
+        statusEl.innerText = "Error: " + e.message;
+        console.error(e);
+    }
+};
+
+// HELPER: Fetch Drive Image as Base64 string
+async function fetchImageAsBase64(fileId) {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+    if (!response.ok) return null;
+    
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result); // This includes 'data:image/jpeg;base64,...'
+        reader.readAsDataURL(blob);
+    });
+}
