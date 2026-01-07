@@ -285,3 +285,74 @@ input:focus, select:focus, textarea:focus {
     border-radius: 8px; text-align: center;
 }
 .stat-val { font-size: 1.5rem; font-weight: bold; color: var(--primary); margin-top: 5px; }
+
+/* =========================================
+   MOBILE RESPONSIVENESS
+   ========================================= */
+
+/* Default: Hide these mobile-specific buttons on desktop */
+#mobile-menu-btn, .mobile-close-btn {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    /* 1. Change Layout to Stacked/Overlay */
+    .dashboard-layout {
+        position: relative; /* Allows sidebar to float over content */
+    }
+
+    /* 2. Sidebar: Hidden off-screen by default */
+    .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100vh; /* Full height */
+        z-index: 1000; /* Float above everything */
+        width: 260px;
+        transform: translateX(-100%); /* Hide to the left */
+        transition: transform 0.3s ease-in-out;
+        box-shadow: 4px 0 15px rgba(0,0,0,0.5); /* Strong shadow for depth */
+    }
+
+    /* Class to slide sidebar IN */
+    .sidebar.show-mobile {
+        transform: translateX(0);
+    }
+
+    /* 3. Sidebar Header: Adjust for Close Button */
+    .sidebar-header h2 {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    /* 4. Show Mobile Buttons */
+    #mobile-menu-btn {
+        display: block;
+        background: transparent;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding-right: 15px;
+        color: var(--text-main);
+    }
+
+    .mobile-close-btn {
+        display: block;
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 1.2rem;
+        cursor: pointer;
+    }
+
+    /* 5. Main Content: Force Full Width */
+    .main-content {
+        width: 100vw;
+        margin-left: 0;
+    }
+    
+    /* Adjust header padding for mobile */
+    .top-bar {
+        padding: 0 15px; 
+    }
+}
