@@ -2767,41 +2767,81 @@ async function loadTvTasks() {
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
 
-// 7. EXECUTE MODAL (Custom Form)
+// 5. EXECUTE MODAL (Standardized Yes/No Logic)
 window.openTvExecuteModal = function(id, desc) {
     document.getElementById("tv-execute-modal").classList.remove("hidden");
     const body = document.querySelector("#tv-execute-modal .modal-body");
     const footer = document.querySelector("#tv-execute-modal .modal-footer");
     
+    // Clear previous state
     pendingPhotoBlob = null; 
-    document.getElementById("tv-exec-id").value = id;
+    document.getElementById("tv-exec-id").value = id; // Ensure hidden input exists if we need it outside, but we inject it below
 
-    if (activeTvCategory === "Feature Space") {
+    // --- A. OFR AUDIT (Reason Only - NO PHOTO) ---
+    if (activeTvCategory === "OFR Audit") {
+        const task = tvDataCache.find(t => t.id === id);
+        const role = task ? task.role : "User";
+
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
-            <p style="background:#e3f2fd; padding:10px; border-radius:4px; font-weight:bold; color:#1565c0;">${desc}</p>
+            <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; color:#00695c;">${desc}</p>
             
-            <label style="font-size:12px; font-weight:bold;">Execution Status:</label>
-            <select id="tv-exec-response" onchange="window.toggleReasonInput(this.value)" style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ccc;">
+            <label style="font-size:12px; font-weight:bold; color:#333;">${role} Input / Justification:</label>
+            <textarea id="tv-exec-input" rows="4" placeholder="Enter valid reason for shortage..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; font-family:sans-serif; margin-bottom:15px;"></textarea>
+        `;
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px;">✅ Save Input</button>`;
+    }
+    
+    // --- B. OFFER BOARD / PLANOGRAM / FEATURE SPACE (Yes/No + Photo) ---
+    else {
+        // Define color themes based on category
+        let color = "#1e3c72"; 
+        if (activeTvCategory === "Planogram") color = "#673ab7";
+        if (activeTvCategory === "Feature Space") color = "#2196f3";
+
+        body.innerHTML = `
+            <input type="hidden" id="tv-exec-id" value="${id}">
+            <p style="background:#f5f5f5; padding:10px; border-radius:4px; font-weight:bold; border-left:4px solid ${color};">${desc}</p>
+            
+            <label style="font-size:12px; font-weight:bold;">Task Completed?</label>
+            <select id="tv-exec-response" onchange="window.toggleReasonInput(this.value)" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
                 <option value="">-- Select --</option>
-                <option value="Executed">Executed</option>
-                <option value="Not Executed">Not Executed</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
             </select>
             
             <div id="tv-reason-container" class="hidden">
-                <label style="font-size:12px; font-weight:bold; color:#d32f2f;">Reason if Not Executed:</label>
-                <input type="text" id="tv-exec-reason" placeholder="Why?" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc;">
+                <label style="font-size:12px; font-weight:bold; color:#d32f2f;">Reason for Non-Completion:</label>
+                <input type="text" id="tv-exec-reason" placeholder="Explain why..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
             </div>
 
-            <label style="font-size:12px; font-weight:bold;">Evidence:</label>
-            <div id="tv-photo-status" style="margin-bottom:10px; color:#d32f2f;">📸 Photo required for 'Executed'.</div>
-            <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:#2196f3; color:white; border:none; border-radius:4px;">📸 Open Camera</button>
+            <div id="tv-camera-container" class="hidden">
+                <label style="font-size:12px; font-weight:bold;">Visual Proof:</label>
+                <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#555;">📸 Photo required for verification.</div>
+                <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:${color}; color:white; border:none; border-radius:4px; cursor:pointer;">📸 Open Camera</button>
+            </div>
         `;
-        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#2196f3; color:white; padding:10px; border:none; border-radius:4px;">✅ Submit</button>`;
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:${color}; color:white; padding:10px; border:none; border-radius:4px;">✅ Submit</button>`;
     }
-    // ... (Keep Planogram, Offer Board, OFR blocks here) ...
-    // Note: Reuse toggleReasonInput helper logic (Executed/Not Executed maps to logic below)
 };
+
+// Updated Helper to toggle UI elements based on Yes/No
+window.toggleReasonInput = function(val) {
+    const reasonDiv = document.getElementById("tv-reason-container");
+    const cameraDiv = document.getElementById("tv-camera-container");
+    
+    if (val === "No") {
+        reasonDiv.classList.remove("hidden");
+        cameraDiv.classList.add("hidden");
+    } else if (val === "Yes") {
+        reasonDiv.classList.add("hidden");
+        cameraDiv.classList.remove("hidden");
+    } else {
+        reasonDiv.classList.add("hidden");
+        cameraDiv.classList.add("hidden");
+    }
+};
+
 
 // Update Helper to handle 'Not Executed' string as well
 window.toggleReasonInput = function(val) {
@@ -2837,49 +2877,70 @@ window.submitTvTask = async function() {
         const task = tvDataCache.find(t => t.id === taskId);
         const row = task.rowIndex;
 
-        // --- FEATURE SPACE LOGIC ---
-        if (activeTvCategory === "Feature Space") {
-            const statusVal = document.getElementById("tv-exec-response").value; // Executed / Not Executed
-            const reasonVal = document.getElementById("tv-exec-reason")?.value || ""; 
+        // --- 1. OFR AUDIT (Input Only) ---
+        if (activeTvCategory === "OFR Audit") {
+            const inputVal = document.getElementById("tv-exec-input").value;
+            if (!inputVal) throw new Error("Please enter input.");
 
-            if (!statusVal) throw new Error("Select Status");
-
-            let colO_Value = ""; // Execution Status (If Not Executed, append reason)
-            let colP_Value = ""; // Image Link
-
-            if (statusVal === "Executed") {
-                if (!pendingPhotoBlob) throw new Error("Photo required");
-                const fileName = `FS_${taskId}_${Date.now()}.jpg`;
-                colP_Value = await uploadBlobToDrive(pendingPhotoBlob, fileName, config.folderId);
-                colO_Value = "Executed";
-            } else {
-                if (!reasonVal) throw new Error("Enter reason.");
-                colO_Value = "Not Executed: " + reasonVal;
-                colP_Value = "N/A"; 
+            if (task.role === "Manager") {
+                await updateCell(config.sheetId, `${config.tabName}!L${row}`, [[inputVal]]);
+                await updateCell(config.sheetId, `${config.tabName}!N${row}`, [[timestamp]]);
+            } 
+            else if (task.role === "TL") {
+                await updateCell(config.sheetId, `${config.tabName}!M${row}`, [[inputVal]]);
+                await updateCell(config.sheetId, `${config.tabName}!O${row}`, [[timestamp]]);
             }
-
-            // Update Col O, P, Q (Indices 14, 15, 16)
-            range = `${config.tabName}!O${row}:Q${row}`;
-            values = [[ colO_Value, colP_Value, timestamp ]];
+            alert("✅ Input Saved!");
+            closeAndRefresh();
+            return;
         }
-        // ... (Keep Planogram, Offer Board, OFR logic) ...
-        else if (activeTvCategory === "Planogram") {
-            const responseVal = document.getElementById("tv-exec-response").value;
-            const reasonVal = document.getElementById("tv-exec-reason")?.value || ""; 
-            if (!responseVal) throw new Error("Select Yes/No");
 
-            let colK = "", colL = "";
-            if (responseVal === "Yes") {
-                if (!pendingPhotoBlob) throw new Error("Photo required");
-                colL = await uploadBlobToDrive(pendingPhotoBlob, `PL_${taskId}.jpg`, config.folderId);
-                colK = "Yes";
-            } else {
-                if (!reasonVal) throw new Error("Reason required");
-                colK = "No: " + reasonVal;
-                colL = "";
+        // --- 2. YES/NO LOGIC (Planogram, Offer Board, Feature Space) ---
+        const responseVal = document.getElementById("tv-exec-response").value; // Yes or No
+        const reasonVal = document.getElementById("tv-exec-reason")?.value || ""; 
+
+        if (!responseVal) throw new Error("Please select Yes or No");
+
+        let statusCell = ""; // The cell for Yes/No/Status
+        let reasonCell = ""; // Sometimes reason is combined, sometimes separate column
+        let photoLink = "";
+
+        if (responseVal === "Yes") {
+            if (!pendingPhotoBlob) throw new Error("📸 Photo is required when selecting 'Yes'");
+            const fileName = `${activeTvCategory.substring(0,3)}_${taskId}_${Date.now()}.jpg`;
+            // Use specific folder if defined, else generic
+            const targetFolder = config.folderId || CONFIG.TRUEVIEW_FOLDER_ID;
+            photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName, targetFolder);
+            statusCell = "Yes"; 
+        } else {
+            if (!reasonVal) throw new Error("Please provide a reason.");
+            statusCell = "No";
+            // For categories where Reason doesn't have its own column, append it to Status
+            if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
+                statusCell = "No: " + reasonVal; 
             }
+        }
+
+        // --- MAPPING VALUES TO COLUMNS ---
+        const user = localStorage.getItem("portal_user_email");
+
+        if (activeTvCategory === "Offer Board") {
+            // Col J: Executed(Yes/No), K: Reason, L: Photo, M: By, N: Date
+            range = `${config.tabName}!J${row}:N${row}`;
+            values = [[ statusCell, (responseVal === "No" ? reasonVal : "-"), photoLink, user, timestamp ]];
+        } 
+        else if (activeTvCategory === "Planogram") {
+            // Col K: Executed(Yes/No + Reason), L: Photo, M: Date
             range = `${config.tabName}!K${row}:M${row}`;
-            values = [[ colK, colL, timestamp ]];
+            values = [[ statusCell, photoLink, timestamp ]];
+        }
+        else if (activeTvCategory === "Feature Space") {
+            // Col O: Executed(Yes/No + Reason), P: Photo, Q: Date
+            // Note: Map "Yes" -> "Executed", "No" -> "Not Executed" for Feature Space preference?
+            // Let's standardize to the input:
+            const fsStatus = (responseVal === "Yes") ? "Executed" : ("Not Executed: " + reasonVal);
+            range = `${config.tabName}!O${row}:Q${row}`;
+            values = [[ fsStatus, photoLink, timestamp ]];
         }
 
         // Main Fetch
@@ -2891,12 +2952,19 @@ window.submitTvTask = async function() {
         });
 
         alert("✅ Submitted!");
-        document.getElementById("tv-execute-modal").classList.add("hidden");
-        loadTvTasks();
+        closeAndRefresh();
 
-    } catch (e) { alert("Error: " + e.message); }
-    finally { btn.innerText = "✅ Submit"; btn.disabled = false; }
+    } catch (e) { 
+        alert("Error: " + e.message); 
+    } finally { 
+        btn.innerText = "✅ Submit"; btn.disabled = false; 
+    }
 };
+
+function closeAndRefresh() {
+    document.getElementById("tv-execute-modal").classList.add("hidden");
+    loadTvTasks();
+}
 
 // Helper for non-contiguous updates
 async function updateCell(sheetId, range, values) {
