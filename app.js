@@ -2768,8 +2768,8 @@ async function loadTvTasks() {
 }
 
 // 5. EXECUTE MODAL (Standardized Yes/No Logic)
-// 5. EXECUTE MODAL (Fixed: No null error)
-// 5. EXECUTE MODAL (Fixed: removed the crashing line)
+
+
 window.openTvExecuteModal = function(id, desc) {
     // 1. Show the modal container
     document.getElementById("tv-execute-modal").classList.remove("hidden");
@@ -2781,17 +2781,12 @@ window.openTvExecuteModal = function(id, desc) {
     // 3. Reset photo state
     pendingPhotoBlob = null; 
     
-    // ---------------------------------------------------------
-    // ⚠️ IMPORTANT: Do NOT try to set value of "tv-exec-id" here.
-    // The element does not exist yet. It is created below.
-    // ---------------------------------------------------------
-
     // --- A. OFR AUDIT (Reason Only - NO PHOTO) ---
     if (activeTvCategory === "OFR Audit") {
         const task = tvDataCache.find(t => t.id === id);
         const role = task ? task.role : "User";
 
-        // We inject the ID directly into the HTML here: value="${id}"
+        // Inject HTML
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; color:#00695c;">${desc}</p>
@@ -2804,11 +2799,12 @@ window.openTvExecuteModal = function(id, desc) {
     
     // --- B. OFFER BOARD / PLANOGRAM / FEATURE SPACE (Yes/No + Photo) ---
     else {
+        // Define color themes
         let color = "#1e3c72"; 
         if (activeTvCategory === "Planogram") color = "#673ab7";
         if (activeTvCategory === "Feature Space") color = "#2196f3";
 
-        // We inject the ID directly into the HTML here: value="${id}"
+        // Inject HTML
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#f5f5f5; padding:10px; border-radius:4px; font-weight:bold; border-left:4px solid ${color};">${desc}</p>
@@ -2835,11 +2831,15 @@ window.openTvExecuteModal = function(id, desc) {
     }
 };
 
-// Updated Helper to toggle UI elements based on Yes/No
+// --- THE CRITICAL HELPER FUNCTION ---
+// This function MUST exist for the dropdown to work
 window.toggleReasonInput = function(val) {
     const reasonDiv = document.getElementById("tv-reason-container");
     const cameraDiv = document.getElementById("tv-camera-container");
     
+    // Safety check
+    if (!reasonDiv || !cameraDiv) return;
+
     if (val === "No") {
         reasonDiv.classList.remove("hidden");
         cameraDiv.classList.add("hidden");
@@ -2847,29 +2847,14 @@ window.toggleReasonInput = function(val) {
         reasonDiv.classList.add("hidden");
         cameraDiv.classList.remove("hidden");
     } else {
+        // Reset (Hide both if nothing selected)
         reasonDiv.classList.add("hidden");
         cameraDiv.classList.add("hidden");
     }
 };
 
 
-// Update Helper to handle 'Not Executed' string as well
-window.toggleReasonInput = function(val) {
-    const div = document.getElementById("tv-reason-container");
-    if(div) {
-        if(val === "No" || val === "Not Executed") div.classList.remove("hidden");
-        else div.classList.add("hidden");
-    }
-};
 
-// Helper to toggle reason input
-window.toggleReasonInput = function(val) {
-    const div = document.getElementById("tv-reason-container");
-    if(div) {
-        if(val === "No") div.classList.remove("hidden");
-        else div.classList.add("hidden");
-    }
-};
 
 // 8. SUBMIT TASK (Write to specific col
 window.submitTvTask = async function() {
