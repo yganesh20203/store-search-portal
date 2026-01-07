@@ -112,16 +112,21 @@ let sessionInteractionCount = 0; // Counts clicks & keystrokes
 document.addEventListener('click', () => { sessionInteractionCount++; });
 document.addEventListener('keydown', () => { sessionInteractionCount++; });
 
+// ==========================================
+// 🔐 AUTHENTICATION LOGIC (UPDATED)
+// ==========================================
+
+// 1. MAIN LOGIN FUNCTION
 async function unlockAndLogin() {
     const accessKey = document.getElementById("access-key").value;
-    const username = document.getElementById("login-user").value.trim();
+    const username = document.getElementById("login-user").value.trim().toLowerCase(); // Normalize email
     const password = document.getElementById("login-pass").value.trim();
     
     const btn = document.getElementById("login-btn");
     const errorMsg = document.getElementById("error-msg");
 
     if(!accessKey) { showLoginError("⚠️ Missing Team Access Key"); return; }
-    if(!username || !password) { showLoginError("⚠️ Enter Username & Password."); return; }
+    if(!username) { showLoginError("⚠️ Enter Username"); return; }
 
     btn.innerText = "🔄 Verifying...";
     btn.disabled = true;
@@ -130,7 +135,7 @@ async function unlockAndLogin() {
     try {
         if (typeof CONFIG === 'undefined') throw new Error("Config not loaded.");
 
-        // 1. Decrypt (Gatekeeper)
+        // 1. Decrypt Team Key
         const bytes = CryptoJS.AES.decrypt(CONFIG.ENCRYPTED_CREDS, accessKey);
         const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
         if (!decryptedString) throw new Error("Incorrect Access Key");
@@ -138,33 +143,36 @@ async function unlockAndLogin() {
         const creds = JSON.parse(decryptedString);
         accessToken = await generateAccessToken(creds);
 
-        // 2. Check Backend Credentials
-        btn.innerText = "🔍 Checking DB...";
-        const isValidUser = await checkBackendCredentials(username, password);
-
-        // 3. Unlock Dashboard
-        document.getElementById("auth-overlay").classList.add("hidden");
-        document.getElementById("dashboard").classList.remove("hidden");
-        localStorage.setItem("portal_user_email", username);
-        document.getElementById("user-info").innerText = `● ${username}`;
-        loadSalesDashboard();
-        initDuckDB();
-
-        // 4. Create Initial Log Entry (Get the Row Number)
-        // We reset interaction count on new login
-        sessionInteractionCount = 0; 
+        // 2. CHECK USER DB
+        btn.innerText = "🔍 Checking User DB...";
         
-        if (isValidUser) {
-            console.log("✅ Valid User. Creating Session Row...");
-            // Create the row and save the Row ID
-            await createSessionRow(username, "VALID_USER");
-            startSilentUsageTimer(username); 
+        // This function now returns an OBJECT, not just boolean
+        const userStatus = await checkBackendCredentials(username, password);
+
+        if (userStatus.found) {
+            // SCENARIO A: First Time User (Empty Password or Default '123456')
+            if (userStatus.isNewUser || password === "123456") {
+                // Open "Set Password" Modal
+                document.getElementById("sp-username").value = username;
+                document.getElementById("sp-row-index").value = userStatus.rowIndex;
+                document.getElementById("auth-overlay").classList.add("hidden"); // Hide login
+                document.getElementById("set-password-modal").classList.remove("hidden"); // Show setup
+            } 
+            // SCENARIO B: Valid Login
+            else if (userStatus.validPass) {
+                completeLogin(username);
+            } 
+            // SCENARIO C: Wrong Password
+            else {
+                throw new Error("Invalid Password");
+            }
         } else {
+            // SCENARIO D: User Not Found (Guest Mode)
             console.warn("⛔ Guest User.");
-            // Even guests get a row so we can track their clicks/time before kickout
             await createSessionRow(username, "GUEST_INVALID");
             startGuestCountdown();
             alert(`⚠️ User not found.\n\nGranted GUEST ACCESS for 2 minutes.`);
+            completeLogin(username); // Allow guest entry
         }
 
     } catch (e) {
@@ -175,21 +183,99 @@ async function unlockAndLogin() {
     }
 }
 
-// --- HELPER: Verify Credentials ---
+// 2. CHECK CREDENTIALS HELPER
 async function checkBackendCredentials(user, pass) {
-    if (!CONFIG.USER_DB_SHEET_ID) return true; 
+    if (!CONFIG.USER_DB_SHEET_ID) return { found: false };
+    
     try {
+        // Fetch Columns A (User) and B (Pass)
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.USER_DB_SHEET_ID}/values/Sheet2!A:B`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
-        if (!data.values) return false;
+        
+        if (!data.values) return { found: false };
 
-        return !!data.values.find(row => 
-            row[0] && row[0].toString().toLowerCase() === user.toLowerCase() && 
-            row[1] && row[1].toString() === pass
-        );
-    } catch (e) { return false; }
+        // Find row index (1-based for Sheets API)
+        const rowIndex = data.values.findIndex(row => row[0] && row[0].toString().toLowerCase() === user);
+        
+        if (rowIndex !== -1) {
+            const storedPass = data.values[rowIndex][1] ? data.values[rowIndex][1].toString() : "";
+            
+            // Check if password is "Empty" (New User)
+            if (storedPass === "" || storedPass === "123456") {
+                return { found: true, validPass: true, isNewUser: true, rowIndex: rowIndex + 1 };
+            }
+            
+            // Check if password matches
+            if (storedPass === pass) {
+                return { found: true, validPass: true, isNewUser: false, rowIndex: rowIndex + 1 };
+            }
+            
+            return { found: true, validPass: false }; // User exists, wrong pass
+        }
+        
+        return { found: false };
+
+    } catch (e) { return { found: false }; }
 }
+
+// 3. SUCCESSFUL LOGIN ROUTINE
+function completeLogin(username) {
+    document.getElementById("auth-overlay").classList.add("hidden");
+    document.getElementById("dashboard").classList.remove("hidden");
+    localStorage.setItem("portal_user_email", username);
+    document.getElementById("user-info").innerText = `● ${username}`;
+    
+    loadSalesDashboard();
+    initDuckDB();
+    
+    // Log the session
+    createSessionRow(username, "VALID_USER");
+    startSilentUsageTimer(username);
+}
+
+// 4. SAVE NEW PASSWORD (User sets their own)
+window.saveNewPassword = async function() {
+    const newPass = document.getElementById("sp-new-pass").value;
+    const confirmPass = document.getElementById("sp-confirm-pass").value;
+    const rowIndex = document.getElementById("sp-row-index").value;
+    const username = document.getElementById("sp-username").value;
+    const btn = document.querySelector("#set-password-modal button");
+
+    if (newPass.length < 4) { alert("Password too short!"); return; }
+    if (newPass !== confirmPass) { alert("Passwords do not match!"); return; }
+
+    btn.innerText = "⏳ Saving...";
+    btn.disabled = true;
+
+    try {
+        // Write to Column B (Password) at specific Row
+        const range = `Sheet2!B${rowIndex}`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.USER_DB_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
+        
+        await fetch(url, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [[ newPass ]] })
+        });
+
+        alert("✅ Password Set Successfully! Logging you in...");
+        document.getElementById("set-password-modal").classList.add("hidden");
+        
+        // Finalize Login
+        completeLogin(username);
+
+    } catch (e) {
+        alert("Error saving password: " + e.message);
+        btn.innerText = "💾 Save & Login";
+        btn.disabled = false;
+    }
+};
+
+// 5. FORGOT PASSWORD HANDLER
+window.openForgotPassword = function() {
+    document.getElementById("forgot-password-modal").classList.remove("hidden");
+};
 
 
 // --- LOGGING STEP 1: CREATE THE ROW (Targeting Sheet3) ---
