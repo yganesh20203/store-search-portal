@@ -454,26 +454,13 @@
                 <h3>📝 Complete Audit Task</h3>
                 <span class="close-btn" onclick="document.getElementById('tv-execute-modal').classList.add('hidden')">&times;</span>
             </div>
+            
             <div class="modal-body">
-                <input type="hidden" id="tv-exec-id">
-                <p id="tv-exec-desc" style="font-weight:bold; color:#333; margin-bottom:15px; background:#f0f4c3; padding:10px; border-radius:4px;"></p>
-                
-                <label style="font-size:12px; font-weight:bold;">Observation / Answer:</label>
-                <select id="tv-exec-response" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
-                    <option value="">-- Select Status --</option>
-                    <option value="Compliant">✅ Compliant / Available</option>
-                    <option value="Non-Compliant">❌ Non-Compliant / Missing</option>
-                    <option value="Needs Action">⚠️ Needs Attention</option>
-                </select>
-
-                <label style="font-size:12px; font-weight:bold;">Visual Proof (Live Capture Only):</label>
-                <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#d32f2f;">No photo taken yet.</div>
-                <button onclick="window.openCameraModal()" style="width:100%; padding:12px; background:#1e3c72; color:white; border:none; border-radius:4px; cursor:pointer; display:flex; justify-content:center; gap:8px;">
-                    📸 Open TrueView Camera
-                </button>
+                <p style="text-align:center; color:#666;">Loading form...</p>
             </div>
+
             <div class="modal-footer">
-                <button onclick="window.submitTvTask()" style="background:#2e7d32; color:white;">✅ Submit Audit</button>
+                <button id="btn-tv-submit" onclick="window.submitTvTask()" style="background:#2e7d32; color:white;">✅ Submit</button>
             </div>
         </div>
     </div>
