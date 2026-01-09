@@ -2473,7 +2473,7 @@ const TV_CONFIG_MAP = {
         sheetId: "1yR38ofRtblES3GI4A4tijGBkF3tspukBz-17C5aWSbo", 
         tabName: "Sheet1", 
         type: "events" 
-        // No specific folder provided, will use default TrueView folder
+        folderId: "1sP-RfLzcQDgfJ6LeB5TqVLJGnMR5FSH3"
     },
     // Placeholders
     "Hygiene Check": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Hygiene_Check", type: "standard" }
