@@ -2680,17 +2680,18 @@ async function loadTvTasks() {
                 // We split by ';', trim spaces, and remove the @domain part
                 const approverList = rawApproverStr.split(';').map(email => email.trim().split('@')[0]);
 
-                return {
+               return {
                     rowIndex: i + 2,
-                    id: r[0],
-                    storeNo: r[1],
-                    storeName: r[2],
-                    endDate: r[4], 
-                    approverList: approverList, // Store the array
-                    subDiv: r[6],
-                    catName: r[8],
-                    specialOffer: r[9], 
-                    status: r[10]       
+                    id: r[0],           // Col A: Task Id
+                    storeNo: r[1],      // Col B: Store No
+                    storeName: r[2],    // Col C: Store Name (Ensure this is Text, not Date)
+                    startDate: r[3],    // Col D: Start Date
+                    endDate: r[4],      // Col E: End Date
+                    approverList: approverList,
+                    subDiv: r[6],       // Col G
+                    catName: r[8],      // Col I
+                    specialOffer: r[9], // Col J
+                    status: r[10]       // Col K
                 };
             }).filter(t => {
                 // 3. Check Status (Shared by all)
