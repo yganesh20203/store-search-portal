@@ -25,18 +25,39 @@
         <h1>Internal Data Portal</h1>
         <p>Sign in to access store data.</p>
         <div class="login-box">
-            <label>Team Access Key</label>
-            <input type="password" id="access-key" placeholder="Enter Access Key...">
-            
-            <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
+    
+    <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">Team Access Key</label>
+    <div style="position: relative; width: 100%;">
+        <input type="password" id="access-key" placeholder="Enter Access Key..." 
+               style="width:100%; padding-right: 40px;"> <span onclick="window.toggleInput('access-key', this)" 
+              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px;">
+            👁️
+        </span>
+    </div>
+    
+    <hr style="width:100%; border:0; border-top:1px solid #eee; margin:10px 0;">
 
-            <label>User Credentials</label>
-            <input type="text" id="login-user" placeholder="Username">
-            <input type="password" id="login-pass" placeholder="Password">
-            
-            <button id="login-btn" onclick="window.unlockAndLogin()">Unlock & Login</button>
-            <p id="error-msg"></p>
-        </div>
+    <label style="text-align:left; font-size:12px; font-weight:bold; color:#555;">User Credentials</label>
+    
+    <input type="text" id="login-user" placeholder="Username (Email)">
+    
+    <div style="position: relative; width: 100%; margin-top: 10px;">
+        <input type="password" id="login-pass" placeholder="Password" 
+               style="width:100%; padding-right: 40px;">
+        <span onclick="window.toggleInput('login-pass', this)" 
+              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 16px;">
+            👁️
+        </span>
+    </div>
+    
+    <button id="login-btn" onclick="window.unlockAndLogin()" style="margin-top: 15px;">Unlock & Login</button>
+    
+    <p style="margin-top:10px; font-size:12px; text-align:center;">
+        <a href="#" onclick="window.openForgotPassword()" style="color:#4f46e5; text-decoration:none;">Forgot Password?</a>
+    </p>
+    
+    <p id="error-msg"></p>
+</div>
     </div>
     <div id="set-password-modal" class="modal hidden">
     <div class="modal-content" style="max-width: 400px;">
