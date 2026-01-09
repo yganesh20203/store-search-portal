@@ -3051,13 +3051,7 @@ function closeAndRefresh() {
 }
 
 // Helper for non-contiguous updates
-async function updateCell(sheetId, range, values) {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
-    await fetch(url, {
-        method: "PUT",
-        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ values: values })
-    });
+
 }
 // ==========================================
 // 📸 CORE CAMERA FUNCTIONS (Required for TrueView)
