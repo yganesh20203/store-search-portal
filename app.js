@@ -3829,3 +3829,19 @@ async function fetchImageAsBase64(fileId) {
         reader.readAsDataURL(blob);
     });
 }
+
+// ==========================================
+// 👁️ UI HELPER: TOGGLE PASSWORD VISIBILITY
+// ==========================================
+window.toggleInput = function(inputId, icon) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    if (input.type === "password") {
+        input.type = "text"; // Show
+        icon.innerText = "🙈"; // Change icon to 'Hide'
+    } else {
+        input.type = "password"; // Hide
+        icon.innerText = "👁️"; // Change icon back to 'Show'
+    }
+};
