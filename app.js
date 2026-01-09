@@ -2918,11 +2918,15 @@ window.toggleReasonInput = function(val) {
 
 
 // 8. SUBMIT TASK (Write to specific col
+// ==========================================
+// 📝 SUBMIT TASK LOGIC (FIXED & COMPLETE)
+// ==========================================
 window.submitTvTask = async function() {
     const taskId = document.getElementById("tv-exec-id").value;
     const btn = document.querySelector("#tv-execute-modal .modal-footer button");
     const config = TV_CONFIG_MAP[activeTvCategory];
     const timestamp = new Date().toLocaleString();
+    const user = localStorage.getItem("portal_user_email");
 
     btn.innerText = "⏳ Saving...";
     btn.disabled = true;
@@ -2931,13 +2935,32 @@ window.submitTvTask = async function() {
         let values = [];
         let range = "";
         const task = tvDataCache.find(t => t.id === taskId);
+        
+        if (!task) throw new Error("Task not found in cache.");
         const row = task.rowIndex;
 
-        // --- OFR AUDIT ---
-        if (activeTvCategory === "OFR Audit") { /* ... existing ... */ }
+        // --- 1. OFR AUDIT (Input Only) ---
+        if (activeTvCategory === "OFR Audit") {
+            const inputVal = document.getElementById("tv-exec-input").value;
+            if (!inputVal) throw new Error("Please enter input.");
 
-        // --- YES/NO LOGIC ---
-        const responseVal = document.getElementById("tv-exec-response").value;
+            if (task.role === "Manager") {
+                // Manager: Input in Col L (12), Time in Col N (14)
+                await updateCell(config.sheetId, `${config.tabName}!L${row}`, [[inputVal]]);
+                await updateCell(config.sheetId, `${config.tabName}!N${row}`, [[timestamp]]);
+            } 
+            else if (task.role === "TL") {
+                // TL: Input in Col M (13), Time in Col O (15)
+                await updateCell(config.sheetId, `${config.tabName}!M${row}`, [[inputVal]]);
+                await updateCell(config.sheetId, `${config.tabName}!O${row}`, [[timestamp]]);
+            }
+            alert("✅ Input Saved!");
+            closeAndRefresh();
+            return; // Exit here for OFR Audit
+        }
+
+        // --- 2. YES/NO LOGIC (Offer Board, Planogram, Feature Space, Events) ---
+        const responseVal = document.getElementById("tv-exec-response").value; // Yes or No
         const reasonVal = document.getElementById("tv-exec-reason")?.value || ""; 
 
         if (!responseVal) throw new Error("Please select Yes or No");
@@ -2952,22 +2975,45 @@ window.submitTvTask = async function() {
             photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName, targetFolder);
             statusCell = "Yes"; 
         } else {
-            if (!reasonVal) throw new Error("Reason required");
-            statusCell = "No: " + reasonVal;
+            if (!reasonVal) throw new Error("Reason required for 'No'");
+            statusCell = "No"; 
+            
+            // For categories where Reason is merged into Status
+            if (activeTvCategory !== "Offer Board") {
+                statusCell = "No: " + reasonVal;
+            }
         }
 
-        // --- EVENTS LOGIC ---
-        if (activeTvCategory === "Events") {
-            // Col K(10): Status, L(11): Picture, M(12): Date
+        // --- MAPPING RANGES PER CATEGORY ---
+        
+        if (activeTvCategory === "Offer Board") {
+            // Col J: Executed, K: Reason, L: Photo, M: By, N: Date
+            range = `${config.tabName}!J${row}:N${row}`;
+            // If No, reason goes to Col K. If Yes, Col K is "-"
+            const reasonCell = (responseVal === "No" ? reasonVal : "-");
+            values = [[ statusCell, reasonCell, photoLink, user, timestamp ]];
+        } 
+        else if (activeTvCategory === "Planogram") {
+            // Col K: Status, L: Photo, M: Date
             range = `${config.tabName}!K${row}:M${row}`;
             values = [[ statusCell, photoLink, timestamp ]];
         }
-        // --- OTHER CATEGORIES ---
-        else if (activeTvCategory === "Offer Board") { /* ... existing ... */ }
-        else if (activeTvCategory === "Planogram") { /* ... existing ... */ }
-        else if (activeTvCategory === "Feature Space") { /* ... existing ... */ }
+        else if (activeTvCategory === "Feature Space") {
+            // Col O: Status, P: Photo, Q: Date
+            const fsStatus = (responseVal === "Yes") ? "Executed" : ("Not Executed: " + reasonVal);
+            range = `${config.tabName}!O${row}:Q${row}`;
+            values = [[ fsStatus, photoLink, timestamp ]];
+        }
+        else if (activeTvCategory === "Events") {
+            // Col K: Status, L: Picture, M: Date
+            range = `${config.tabName}!K${row}:M${row}`;
+            values = [[ statusCell, photoLink, timestamp ]];
+        }
 
-        // Main Fetch
+        // --- FINAL CHECK ---
+        if (!range) throw new Error("Configuration Error: Range not defined for this category.");
+
+        // --- API CALL ---
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
         await fetch(url, {
             method: "PUT",
@@ -2978,9 +3024,29 @@ window.submitTvTask = async function() {
         alert("✅ Submitted!");
         closeAndRefresh();
 
-    } catch (e) { alert("Error: " + e.message); } 
-    finally { btn.innerText = "✅ Submit"; btn.disabled = false; }
+    } catch (e) { 
+        console.error(e);
+        alert("Error: " + e.message); 
+    } finally { 
+        btn.innerText = "✅ Submit"; btn.disabled = false; 
+    }
 };
+
+// Helper to close modal and reload
+function closeAndRefresh() {
+    document.getElementById("tv-execute-modal").classList.add("hidden");
+    loadTvTasks();
+}
+
+// Helper for single cell updates (Used by OFR Audit)
+async function updateCell(sheetId, range, values) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+    await fetch(url, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: values })
+    });
+}
 
 function closeAndRefresh() {
     document.getElementById("tv-execute-modal").classList.add("hidden");
