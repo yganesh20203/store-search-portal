@@ -3052,7 +3052,7 @@ function closeAndRefresh() {
 
 // Helper for non-contiguous updates
 
-}
+
 // ==========================================
 // 📸 CORE CAMERA FUNCTIONS (Required for TrueView)
 // ==========================================
