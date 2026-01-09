@@ -3263,6 +3263,23 @@ async function loadTvStats() {
                 if (isDone) storeStats[storeName].C++;
             });
         }
+            else if (activeTvCategory === "Events") {
+            total = rows.length;
+            rows.forEach(r => {
+                // Col C (Index 2) is Store Name
+                const storeName = r[2] ? String(r[2]).trim() : "Unknown Store";
+                
+                // Col K (Index 10) is Status in the Events Schema
+                const status = r[10]; 
+                const isDone = (status && String(status).trim().length > 0);
+
+                if (isDone) completed++;
+
+                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
+                storeStats[storeName].T++;
+                if (isDone) storeStats[storeName].C++;
+            });
+        }
         // ...
         // --- STANDARD LOGIC (Fallback) ---
         else {
