@@ -3033,10 +3033,7 @@ window.submitTvTask = async function() {
 };
 
 // Helper to close modal and reload
-function closeAndRefresh() {
-    document.getElementById("tv-execute-modal").classList.add("hidden");
-    loadTvTasks();
-}
+
 
 // Helper for single cell updates (Used by OFR Audit)
 async function updateCell(sheetId, range, values) {
