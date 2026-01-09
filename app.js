@@ -2472,7 +2472,7 @@ const TV_CONFIG_MAP = {
     "Events": { 
         sheetId: "1yR38ofRtblES3GI4A4tijGBkF3tspukBz-17C5aWSbo", 
         tabName: "Sheet1", 
-        type: "events" 
+        type: "events" ,
         folderId: "1sP-RfLzcQDgfJ6LeB5TqVLJGnMR5FSH3"
     },
     // Placeholders
