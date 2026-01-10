@@ -3464,6 +3464,7 @@ window.generateTvReport = async function() {
         let headers = [];
 
         // --- 1. EVENTS LOGIC (NEW) ---
+        // --- 1. EVENTS LOGIC (NEW) ---
         if (activeTvCategory === "Events") {
             headers = ["ID", "Store No", "Store Name", "Start Date", "End Date", "Approver", "Sub Div", "Cat No", "Cat Name", "Special Offer", "Status", "Picture", "Date"];
             
@@ -3472,9 +3473,21 @@ window.generateTvReport = async function() {
             const fOffer = document.getElementById("filter-offer")?.value.trim().toLowerCase();
 
             filteredData = rows.filter(r => {
-                const d = new Date(r[3]); // Start Date
+                // 🔴 OLD LINE (Causing Issue): 
+                // const d = new Date(r[3]); 
+
+                // 🟢 NEW FIX: Append Current Year if missing
+                let dateStr = r[3]; 
+                if (dateStr && !dateStr.match(/\d{4}/)) {
+                    dateStr += "-" + new Date().getFullYear(); // Turns "Jan-10" into "Jan-10-2026"
+                }
+                const d = new Date(dateStr); 
+
+                // Date Range Check
+                if (isNaN(d.getTime())) return false; // Safety check for invalid dates
                 if (!(d >= fromDate && d <= toDate)) return false;
 
+                // Other Filters
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
                 if (fCat && !String(r[8]).toLowerCase().includes(fCat)) return false;
                 if (fOffer && !String(r[9]).toLowerCase().includes(fOffer)) return false;
