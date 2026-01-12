@@ -2631,7 +2631,7 @@ window.handleTvImpexUpload = function(input) {
                         "", "", "", "" // Empty Output Columns for Inputs & Times
                     ]);
             }
-        });
+        }
 
         if (newRows.length > 0) {
             if(confirm(`Create ${newRows.length} tasks in ${activeTvCategory}?`)) {
