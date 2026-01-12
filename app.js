@@ -2540,7 +2540,7 @@ window.downloadTvTemplate = function() {
         filename = "OfferBoard_Template.csv";
     } 
     else if (activeTvCategory === "OFR Audit") {
-        headers = ["Store No.", "Store Name", "Invoice Date", "Due Date", "Article Number", "Article Description", "Short Orders", "Short Qty", "Merchandising Manager mail id", "Audit TL mail id"];
+        headers = ["Store No.", "Store Name", "Invoice Date", "Manager Due Date","TL Due Date", "Article Number", "Article Description", "Short Orders", "Short Qty", "Merchandising Manager mail id", "Audit TL mail id"];
         filename = "OFR_Audit_Template.csv";
     }
     else if (activeTvCategory === "Planogram") {
@@ -2622,7 +2622,14 @@ window.handleTvImpexUpload = function(input) {
                 if(cols.length >= 8) newRows.push([id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], "", "", "", "", ""]);
             } 
             else if (activeTvCategory === "OFR Audit") {
-                if(cols.length >= 10) newRows.push([id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], "", "", "", ""]);
+                if(cols.length >= 11) {
+                    newRows.push([
+                        id, 
+                        cols[0], cols[1], cols[2], 
+                        cols[3], cols[4], // Col E (Mgr Due), Col F (TL Due)
+                        cols[5], cols[6], cols[7], cols[8], cols[9], cols[10], 
+                        "", "", "", "" // Empty Output Columns for Inputs & Times
+                    ]);
             }
         });
 
@@ -2729,18 +2736,46 @@ async function loadTvTasks() {
         } 
         
         // --- OFR AUDIT LOGIC (Existing) ---
+       // --- OFR AUDIT LOGIC (UPDATED FOR DUAL DATES) ---
         else if (activeTvCategory === "OFR Audit") {
             myPendingTasks = data.values.slice(1).map((r, i) => {
                 return {
-                    rowIndex: i + 2, id: r[0], storeNo: r[1], storeName: r[2], invoiceDate: r[3], dueDate: r[4], articleDesc: r[6], shortQty: r[8],
-                    managerEmail: (r[9] || "").toLowerCase().trim(), tlEmail: (r[10] || "").toLowerCase().trim(),
-                    managerInput: r[11], tlInput: r[12]
+                    rowIndex: i + 2, 
+                    id: r[0], 
+                    storeNo: r[1], 
+                    storeName: r[2], 
+                    invoiceDate: r[3], 
+                    
+                    // NEW: Capture Both Dates
+                    mgrDueDate: r[4], 
+                    tlDueDate: r[5],
+
+                    articleDesc: r[7], // Shifted +1 (was 6)
+                    shortQty: r[9],    // Shifted +1 (was 8)
+                    
+                    // Shifted Emails (+1)
+                    managerEmail: (r[10] || "").toLowerCase().trim(), 
+                    tlEmail: (r[11] || "").toLowerCase().trim(),
+                    
+                    // Shifted Inputs (+1)
+                    managerInput: r[12], 
+                    tlInput: r[13]
                 };
             }).filter(t => {
+                // Check Role & Assign Specific Due Date
                 const isManager = (t.managerEmail === rawUser) || (t.managerEmail.split('@')[0] === currentUsername);
                 const isTL = (t.tlEmail === rawUser) || (t.tlEmail.split('@')[0] === currentUsername);
-                if (isManager && (!t.managerInput || t.managerInput === "")) { t.role = "Manager"; return true; }
-                if (isTL && (!t.tlInput || t.tlInput === "")) { t.role = "TL"; return true; }
+                
+                if (isManager && (!t.managerInput || t.managerInput === "")) { 
+                    t.role = "Manager"; 
+                    t.dueDate = t.mgrDueDate; // <--- Set Display Date for Manager
+                    return true; 
+                }
+                if (isTL && (!t.tlInput || t.tlInput === "")) { 
+                    t.role = "TL"; 
+                    t.dueDate = t.tlDueDate; // <--- Set Display Date for TL
+                    return true; 
+                }
                 return false;
             });
         }
@@ -2992,19 +3027,20 @@ window.submitTvTask = async function() {
         const row = task.rowIndex;
 
         // --- 1. OFR AUDIT (Input Only) ---
+       // --- 1. OFR AUDIT (Input Only) ---
         if (activeTvCategory === "OFR Audit") {
             const inputVal = document.getElementById("tv-exec-input").value;
             if (!inputVal) throw new Error("Please enter input.");
 
             if (task.role === "Manager") {
-                // Manager: Input in Col L (12), Time in Col N (14)
-                await updateCell(config.sheetId, `${config.tabName}!L${row}`, [[inputVal]]);
-                await updateCell(config.sheetId, `${config.tabName}!N${row}`, [[timestamp]]);
-            } 
-            else if (task.role === "TL") {
-                // TL: Input in Col M (13), Time in Col O (15)
+                // Manager: Input in Col M (12), Time in Col O (14)
                 await updateCell(config.sheetId, `${config.tabName}!M${row}`, [[inputVal]]);
                 await updateCell(config.sheetId, `${config.tabName}!O${row}`, [[timestamp]]);
+            } 
+            else if (task.role === "TL") {
+                // TL: Input in Col N (13), Time in Col P (15)
+                await updateCell(config.sheetId, `${config.tabName}!N${row}`, [[inputVal]]);
+                await updateCell(config.sheetId, `${config.tabName}!P${row}`, [[timestamp]]);
             }
             alert("✅ Input Saved!");
             closeAndRefresh();
