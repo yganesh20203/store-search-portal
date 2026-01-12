@@ -2597,7 +2597,6 @@ window.handleTvImpexUpload = function(input) {
 
             if (activeTvCategory === "Events") {
                 // Events Schema: 9 Inputs
-                // Sheet: A(ID) | B-J(Inputs) | K(Status) | L(Picture) | M(Time)
                 if(cols.length >= 9) {
                     newRows.push([
                         id, 
@@ -2607,7 +2606,6 @@ window.handleTvImpexUpload = function(input) {
                     ]);
                 }
             }
-            // ... (Keep existing logic for other categories) ...
             else if (activeTvCategory === "Feature Space") {
                 if(cols.length >= 13) {
                     newRows.push([id, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9], cols[10], cols[11], cols[12], "", "", ""]);
@@ -2630,9 +2628,11 @@ window.handleTvImpexUpload = function(input) {
                         cols[5], cols[6], cols[7], cols[8], cols[9], cols[10], 
                         "", "", "", "" // Empty Output Columns for Inputs & Times
                     ]);
+                }
             }
-        }
+        }); // <--- THIS WAS MISSING: Closes the forEach loop properly
 
+        // Now 'await' works because it's inside the async onload, but outside the synchronous forEach
         if (newRows.length > 0) {
             if(confirm(`Create ${newRows.length} tasks in ${activeTvCategory}?`)) {
                 const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A1:append?valueInputOption=USER_ENTERED`;
