@@ -2713,67 +2713,95 @@ async function loadTvTasks() {
         }
 
         // --- OFFER BOARD LOGIC (Existing) ---
+       // --- OFFER BOARD LOGIC (Multi-User Update) ---
         else if (activeTvCategory === "Offer Board") {
             const today = new Date(); today.setHours(0,0,0,0);
+            
             myPendingTasks = data.values.slice(1).map((r, i) => {
-                const rawAssignee = (r[5] || "").toLowerCase().trim();
-                const rawEscL1 = (r[6] || "").toLowerCase().trim();
+                // 1. Parse Assignee List (Col F / Index 5)
+                const rawAssignee = (r[5] || "").toLowerCase();
+                const assigneeList = rawAssignee.split(';').map(e => e.trim().split('@')[0]);
+
+                // 2. Parse Escalation L1 List (Col G / Index 6)
+                const rawEscL1 = (r[6] || "").toLowerCase();
+                const escL1List = rawEscL1.split(';').map(e => e.trim().split('@')[0]);
+
                 return {
-                    rowIndex: i + 2, id: r[0], storeNo: r[1], storeName: r[2], endDateStr: r[4], endDateObj: new Date(r[4]),
-                    assigneeEmail: rawAssignee, assigneeUser: rawAssignee.split('@')[0],
-                    escL1Email: rawEscL1, escL1User: rawEscL1.split('@')[0],
-                    posters: r[8], completedDate: r[13]
+                    rowIndex: i + 2, 
+                    id: r[0], 
+                    storeNo: r[1], 
+                    storeName: r[2], 
+                    endDateStr: r[4], 
+                    endDateObj: new Date(r[4]),
+                    
+                    assigneeList: assigneeList, // Store list instead of single string
+                    escL1List: escL1List,
+                    
+                    posters: r[8], 
+                    completedDate: r[13]
                 };
             }).filter(t => {
                 const isPending = !t.completedDate || t.completedDate.trim() === "";
                 if (!isPending) return false;
-                const isMyTask = (t.assigneeEmail === rawUser) || (t.assigneeUser === currentUsername);
+
+                // 3. Check if Current User is in the Assignee List
+                const isMyTask = t.assigneeList.includes(currentUsername);
                 if (isMyTask) return true;
-                const isMyEscalation = (t.escL1Email === rawUser) || (t.escL1User === currentUsername);
-                if (isMyEscalation && t.endDateObj < today) { t.isEscalated = true; return true; }
+
+                // 4. Check if Current User is in the Escalation List
+                const isMyEscalation = t.escL1List.includes(currentUsername);
+                if (isMyEscalation && t.endDateObj < today) { 
+                    t.isEscalated = true; 
+                    return true; 
+                }
+                
                 return false;
             });
-        } 
-        
+        }
         // --- OFR AUDIT LOGIC (Existing) ---
-       // --- OFR AUDIT LOGIC (UPDATED FOR DUAL DATES) ---
+       // --- OFR AUDIT LOGIC (Multi-User Update) ---
         else if (activeTvCategory === "OFR Audit") {
             myPendingTasks = data.values.slice(1).map((r, i) => {
+                // 1. Parse Manager List (Col K / Index 10)
+                const rawMgr = (r[10] || "").toLowerCase();
+                const mgrList = rawMgr.split(';').map(e => e.trim().split('@')[0]);
+
+                // 2. Parse TL List (Col L / Index 11)
+                const rawTL = (r[11] || "").toLowerCase();
+                const tlList = rawTL.split(';').map(e => e.trim().split('@')[0]);
+
                 return {
                     rowIndex: i + 2, 
                     id: r[0], 
                     storeNo: r[1], 
                     storeName: r[2], 
                     invoiceDate: r[3], 
-                    
-                    // NEW: Capture Both Dates
                     mgrDueDate: r[4], 
                     tlDueDate: r[5],
-
-                    articleDesc: r[7], // Shifted +1 (was 6)
-                    shortQty: r[9],    // Shifted +1 (was 8)
+                    articleDesc: r[7], 
+                    shortQty: r[9],
                     
-                    // Shifted Emails (+1)
-                    managerEmail: (r[10] || "").toLowerCase().trim(), 
-                    tlEmail: (r[11] || "").toLowerCase().trim(),
+                    mgrList: mgrList, // Store lists
+                    tlList: tlList,
                     
-                    // Shifted Inputs (+1)
                     managerInput: r[12], 
                     tlInput: r[13]
                 };
             }).filter(t => {
-                // Check Role & Assign Specific Due Date
-                const isManager = (t.managerEmail === rawUser) || (t.managerEmail.split('@')[0] === currentUsername);
-                const isTL = (t.tlEmail === rawUser) || (t.tlEmail.split('@')[0] === currentUsername);
+                // 3. Check if Current User is in Manager List
+                const isManager = t.mgrList.includes(currentUsername);
+
+                // 4. Check if Current User is in TL List
+                const isTL = t.tlList.includes(currentUsername);
                 
                 if (isManager && (!t.managerInput || t.managerInput === "")) { 
                     t.role = "Manager"; 
-                    t.dueDate = t.mgrDueDate; // <--- Set Display Date for Manager
+                    t.dueDate = t.mgrDueDate; 
                     return true; 
                 }
                 if (isTL && (!t.tlInput || t.tlInput === "")) { 
                     t.role = "TL"; 
-                    t.dueDate = t.tlDueDate; // <--- Set Display Date for TL
+                    t.dueDate = t.tlDueDate; 
                     return true; 
                 }
                 return false;
