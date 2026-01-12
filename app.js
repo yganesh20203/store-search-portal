@@ -3655,7 +3655,7 @@ window.renderDownloadOptions = function() {
     let extraFilters = "";
     let pptButton = "";
 
-    // 1. Events Specifics
+    // --- A. EVENTS CONFIG ---
     if (activeTvCategory === "Events") {
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
@@ -3671,11 +3671,25 @@ window.renderDownloadOptions = function() {
                 📊 Generate & Download PPT
             </button>`;
     }
-    // ... (Keep existing blocks for Planogram, Feature Space) ...
-    else if (activeTvCategory === "Planogram") { /* ... */ }
-    else if (activeTvCategory === "Feature Space") { /* ... */ }
 
-    // Render HTML
+    // --- B. FEATURE SPACE CONFIG (NEW) ---
+    else if (activeTvCategory === "Feature Space") {
+        extraFilters = `
+            <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-cat" placeholder="Category Name" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-item" placeholder="Item Description" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+            </div>`;
+        
+        pptButton = `
+            <button onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                📊 Generate & Download PPT
+            </button>`;
+    }
+
+    // --- RENDER VIEW ---
     container.innerHTML = `
         <div style="background:#e8eaf6; padding:20px; border-radius:8px; border:1px solid #c5cae9; max-width:500px;">
             <h3 style="margin-top:0;">📅 Export ${activeTvCategory} Report</h3>
