@@ -2858,10 +2858,29 @@ window.openTvExecuteModal = function(id, desc) {
     
     pendingPhotoBlob = null; 
     
-    // --- A. OFR AUDIT (Reason Only) ---
-    if (activeTvCategory === "OFR Audit") { /* ... existing ... */ }
+    // --- A. OFR AUDIT (Dropdown ONLY - No Camera) ---
+    if (activeTvCategory === "OFR Audit") {
+        body.innerHTML = `
+            <input type="hidden" id="tv-exec-id" value="${id}">
+            <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; border-left:4px solid #009688;">
+                ${desc}
+            </p>
+            
+            <label style="font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">Select Verification Status:</label>
+            <select id="tv-exec-input" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                <option value="">-- Select Option --</option>
+                <option value="Shortage Verified">✅ Shortage Verified</option>
+                <option value="Stock Found">📦 Stock Found (Not Short)</option>
+                <option value="Partial Shortage">⚠️ Partial Shortage</option>
+                <option value="Rejected">❌ Rejected</option>
+            </select>
+        `;
+        
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px; width:100%;">💾 Save Input</button>`;
+    }
     
-    // --- B. YES/NO + PHOTO LOGIC (Planogram, Feature Space, Offer Board, Events) ---
+    // --- B. STANDARD LOGIC (Yes/No + Camera) ---
+    // (Planogram, Feature Space, Offer Board, Events)
     else {
         let color = "#1e3c72"; 
         if (activeTvCategory === "Planogram") color = "#673ab7";
