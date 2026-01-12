@@ -2630,7 +2630,7 @@ window.handleTvImpexUpload = function(input) {
                     ]);
                 }
             }
-        }); // <--- THIS WAS MISSING: Closes the forEach loop properly
+        }); // <--- THIS WAS MISSING: Closes the forEach loop properl
 
         // Now 'await' works because it's inside the async onload, but outside the synchronous forEach
         if (newRows.length > 0) {
