@@ -2870,20 +2870,29 @@ window.openTvExecuteModal = function(id, desc) {
         if (role === "Manager") {
             dropdownOptions = `
                 <option value="">-- Manager Action --</option>
-                <option value="Approved">✅ Approved</option>
-                <option value="Rejected">❌ Rejected</option>
-                <option value="Hold">On Hold</option>
-                <option value="Escalated">⚠️ Escalate to HQ</option>
+                <option value="Overbooking">Overbooking</option>
+                <option value="Item not found at store">Item not found at store</option>
+                <option value="MRP mismatch">MRP mismatch</option>
+                <option value="Item damaged">Item damaged</option>
+                <option value="Near expiry">Near expiry</option>
+                <option value="Picker or operation miss">Picker or operation miss</option>
+                <option value="Nego">Nego</option>
+                <option value="Customer order cancellation">Customer order cancellation</option>
+                <option value="BDA-ordered by mistake">BDA-ordered by mistake</option>
+                <option value="Freebie Issue">Freebie Issue</option>
             `;
         } else {
             // Default to TL / Auditor options
             dropdownOptions = `
                 <option value="">-- Verification Status --</option>
-                <option value="Shortage Verified">✅ Shortage Verified</option>
-                <option value="Stock Found">📦 Stock Found (Not Short)</option>
-                <option value="Partial Shortage">⚠️ Partial Shortage</option>
-                <option value="Unable to Verify">❓ Unable to Verify</option>
-            `;
+                <option value="Overbooking Confirmed - System checked">Overbooking Confirmed - System checked</option>
+                <option value="Item damaged">Item damaged</option>
+                <option value="Found item">Found item</option>
+                <option value="Item not found at store">Item not found at store</option>
+                <option value="Near expiry">Near expiry</option>
+                <option value="Shrink booked">Shrink booked</option>
+                <option value="Nego">Nego</option>
+                `;
         }
 
         // 3. Render Modal HTML
