@@ -3341,26 +3341,72 @@ async function loadTvStats() {
 
         } 
         // --- OFR AUDIT LOGIC (FIXED) ---
+        // --- OFR AUDIT LOGIC (With Late Tracking) ---
         else if (activeTvCategory === "OFR Audit") {
             total = rows.length;
+            let totalLate = 0; // New Counter
 
             rows.forEach(r => {
-                // Col C (Index 2) is Store Name 
-                // (Previously this was grabbing Index 3 which is Invoice Date)
                 const storeName = r[2] ? String(r[2]).trim() : "Unknown Store";
                 
-                // Done Logic: Check if BOTH Manager Input (Col L, Idx 11) AND TL Input (Col M, Idx 12) exist
-                const mgrInput = r[11];
-                const tlInput = r[12];
+                // Inputs (Columns M & N -> Indices 12 & 13)
+                const mgrInput = r[12];
+                const tlInput = r[13];
+                
+                // Done Check: Both must be filled
                 const isDone = (mgrInput && String(mgrInput).trim().length > 0) && 
                                (tlInput && String(tlInput).trim().length > 0);
 
                 if (isDone) completed++;
 
-                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0 };
+                // --- LATE CHECK LOGIC ---
+                let isRowLate = false;
+
+                // 1. Manager Check
+                const mgrDue = r[4] ? new Date(r[4]) : null;  // Col E (Mgr Due)
+                const mgrTime = r[14] ? new Date(r[14]) : null; // Col O (Mgr Time)
+                // If input exists AND time exists AND time > due date -> LATE
+                if (mgrInput && mgrTime && mgrDue && mgrTime > mgrDue) {
+                    isRowLate = true;
+                }
+
+                // 2. TL Check
+                const tlDue = r[5] ? new Date(r[5]) : null;   // Col F (TL Due)
+                const tlTime = r[15] ? new Date(r[15]) : null; // Col P (TL Time)
+                if (tlInput && tlTime && tlDue && tlTime > tlDue) {
+                    isRowLate = true;
+                }
+
+                if (isRowLate) totalLate++;
+
+                // Update Store Stats
+                if (!storeStats[storeName]) storeStats[storeName] = { T: 0, C: 0, L: 0 };
                 storeStats[storeName].T++;
                 if (isDone) storeStats[storeName].C++;
+                if (isRowLate) storeStats[storeName].L++;
             });
+
+            // --- UI UPDATE: ADD "DELAYED" CARD ---
+            // We manually inject the extra "Delayed" card into the top stats area
+            // (Standard layout usually has 4 cards, we add/modify to show this)
+            setTimeout(() => {
+                const statContainer = document.querySelector(".tv-stats-grid"); // Ensure your HTML has this class or ID
+                if(statContainer) {
+                    // This is a quick UI hack to show the 5th metric if your CSS allows wrapping
+                    // Or we can just repurpose the "Progress" area or append it.
+                    // For now, let's just make sure the Table below shows the details.
+                }
+                
+                // Update the Top Cards (Standard IDs)
+                document.getElementById("tv-stat-total").innerText = total;
+                document.getElementById("tv-stat-pending").innerText = total - completed;
+                document.getElementById("tv-stat-completed").innerText = completed;
+                
+                // Show "Delayed" count next to percentage or in a specific element if you added one
+                // For now, let's append it to the Percent Text for visibility
+                const progressText = (total > 0 ? Math.round((completed / total) * 100) : 0) + "%";
+                document.getElementById("tv-stat-percent").innerHTML = `${progressText} <br><span style="font-size:10px; color:red;">(${totalLate} Late)</span>`;
+            }, 100);
         }
             // ... inside loadTvStats ...
         else if (activeTvCategory === "Planogram") {
@@ -3430,6 +3476,7 @@ async function loadTvStats() {
                     <th>Total</th>
                     <th>Done</th>
                     <th>Pending</th>
+                    ${activeTvCategory === "OFR Audit" ? "<th>⚠️ Late</th>" : ""}
                     <th>Progress</th>
                 </tr>
             </thead>
