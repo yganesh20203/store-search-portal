@@ -2857,30 +2857,53 @@ window.openTvExecuteModal = function(id, desc) {
     const footer = document.querySelector("#tv-execute-modal .modal-footer");
     
     pendingPhotoBlob = null; 
-    
-    // --- A. OFR AUDIT (Dropdown ONLY - No Camera) ---
+
+    // --- A. OFR AUDIT (Dynamic Dropdown by Role) ---
     if (activeTvCategory === "OFR Audit") {
+        // 1. Find the task to check the Role (Manager vs TL)
+        const task = tvDataCache.find(t => t.id === id);
+        const role = task ? task.role : "Unknown"; // "Manager" or "TL"
+
+        let dropdownOptions = "";
+
+        // 2. Set Options based on Role
+        if (role === "Manager") {
+            dropdownOptions = `
+                <option value="">-- Manager Action --</option>
+                <option value="Approved">✅ Approved</option>
+                <option value="Rejected">❌ Rejected</option>
+                <option value="Hold">On Hold</option>
+                <option value="Escalated">⚠️ Escalate to HQ</option>
+            `;
+        } else {
+            // Default to TL / Auditor options
+            dropdownOptions = `
+                <option value="">-- Verification Status --</option>
+                <option value="Shortage Verified">✅ Shortage Verified</option>
+                <option value="Stock Found">📦 Stock Found (Not Short)</option>
+                <option value="Partial Shortage">⚠️ Partial Shortage</option>
+                <option value="Unable to Verify">❓ Unable to Verify</option>
+            `;
+        }
+
+        // 3. Render Modal HTML
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
             <p style="background:#e0f2f1; padding:10px; border-radius:4px; font-weight:bold; border-left:4px solid #009688;">
                 ${desc}
             </p>
-            
-            <label style="font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">Select Verification Status:</label>
+            <div style="font-size:11px; margin-bottom:10px; color:#555;">Logged in as: <b>${role}</b></div>
+
+            <label style="font-size:12px; font-weight:bold; display:block; margin-bottom:5px;">Select Status:</label>
             <select id="tv-exec-input" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
-                <option value="">-- Select Option --</option>
-                <option value="Shortage Verified">✅ Shortage Verified</option>
-                <option value="Stock Found">📦 Stock Found (Not Short)</option>
-                <option value="Partial Shortage">⚠️ Partial Shortage</option>
-                <option value="Rejected">❌ Rejected</option>
+                ${dropdownOptions}
             </select>
         `;
         
-        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px; width:100%;">💾 Save Input</button>`;
+        footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px; width:100%;">💾 Save ${role} Input</button>`;
     }
     
     // --- B. STANDARD LOGIC (Yes/No + Camera) ---
-    // (Planogram, Feature Space, Offer Board, Events)
     else {
         let color = "#1e3c72"; 
         if (activeTvCategory === "Planogram") color = "#673ab7";
