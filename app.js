@@ -2476,7 +2476,7 @@ const TV_CONFIG_MAP = {
         folderId: "1sP-RfLzcQDgfJ6LeB5TqVLJGnMR5FSH3"
     },
     // Placeholders
-    "Hygiene Check": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Hygiene_Check", type: "standard" }
+    "Back to basics": { sheetId: CONFIG.TRUEVIEW_SHEET_ID, tabName: "TV_Back to basics", type: "standard" }
 };
 
 // 1. INITIALIZE DASHBOARD
