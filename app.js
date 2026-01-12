@@ -2482,7 +2482,7 @@ const TV_CONFIG_MAP = {
 // 1. INITIALIZE DASHBOARD
 window.loadTrueViewDashboard = function() {
     resetUI();
-    highlightSidebar("TrueView Audit");
+    highlightSidebar("TrueView");
     document.getElementById("trueview-ui").classList.remove("hidden");
     document.getElementById("tv-category-menu").classList.remove("hidden");
     document.getElementById("tv-action-container").classList.add("hidden");
