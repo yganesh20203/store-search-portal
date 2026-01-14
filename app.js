@@ -78,7 +78,7 @@ window.openTaskActionModal = openTaskActionModal;
 window.submitTaskAction = submitTaskAction;
 window.toggleTaskActionUI = toggleTaskActionUI;
 window.loadTvStats = loadTvStats;
-window.resetDashFilters = resetDashFilters;
+
 
 
 // ==========================================
