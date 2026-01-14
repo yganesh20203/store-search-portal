@@ -1970,15 +1970,6 @@ window.onclick = function(event) {
 // ==========================================
 
 
-
-// ==========================================
-// 🌍 KYB DASHBOARD (Clean Start: Metro/DMart Hidden)
-// ==========================================
-
-let kybMapLayer = null; 
-let kybRadiusLayer = null; 
-let mapLayers = {}; 
-
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
