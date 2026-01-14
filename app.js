@@ -4414,38 +4414,85 @@ function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
     mapInstance.fitBounds(kybMapLayer.getBounds());
 }
 
-// 4. ATTACH
-window.populateKybColumns = populateKybColumns;
-window.runKybAnalysis = runKybAnalysis;
-
-
-
 function renderKybCircles(data, mode, maxVal) {
     if (kybMapLayer) mapInstance.removeLayer(kybMapLayer);
     
+    console.log("--- CIRCLE RENDER DEBUG ---");
+    let validPoints = 0;
+    
     const geoJsonData = { "type": "FeatureCollection", "features": [] };
-    data.forEach(row => {
+
+    data.forEach((row, idx) => {
+        // 1. Force Number Conversion
+        const lat = parseFloat(row.Lat);
+        const lng = parseFloat(row.Lng);
+
+        // 2. Value Calculation
         let val = (mode === 'sales_a') ? row.Sales_A : 0;
-        if (mode === 'growth') val = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
-        
-        geoJsonData.features.push({
-            "type": "Feature",
-            "properties": { "pincode": row.Pincode, "value": val },
-            "geometry": { "type": "Point", "coordinates": [row.Lng, row.Lat] }
-        });
+        if (mode === 'growth') {
+            val = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
+        }
+
+        // 3. Validate Coordinates
+        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+            validPoints++;
+            
+            // Debug first 3 valid points
+            if (validPoints <= 3) console.log(`Plotting Point ${validPoints}: [${lat}, ${lng}] Val: ${val}`);
+
+            geoJsonData.features.push({
+                "type": "Feature",
+                "properties": { "pincode": row.Pincode, "value": val },
+                "geometry": { "type": "Point", "coordinates": [lng, lat] }
+            });
+        }
     });
 
+    console.log(`Total Valid Points to Draw: ${validPoints} / ${data.length}`);
+
+    if (validPoints === 0) {
+        alert("❌ No valid coordinates found!\n\nYour CSV rows have Lat/Long as 0, empty, or text.\nCheck the Console (F12) for details.");
+        return;
+    }
+
+    // 4. Draw Layer
     kybMapLayer = L.geoJSON(geoJsonData, {
         pointToLayer: function (feature, latlng) {
             const val = feature.properties.value;
-            let color = (mode === 'sales_a') ? (val/maxVal > 0.5 ? 'red' : 'green') : (val >= 0 ? 'green' : 'red');
-            return L.circleMarker(latlng, { radius: 8, fillColor: color, color: "#000", weight: 1, fillOpacity: 0.8 });
+            // Sales Mode: Green (Low) -> Red (High)
+            // Growth Mode: Red (Negative) -> Green (Positive)
+            let color = "blue";
+            if (mode === 'sales_a') {
+                color = (maxVal > 0 && val/maxVal > 0.5) ? '#d32f2f' : '#388e3c';
+            } else {
+                color = val >= 0 ? '#388e3c' : '#d32f2f';
+            }
+            
+            return L.circleMarker(latlng, { 
+                radius: 6, 
+                fillColor: color, 
+                color: "#fff", 
+                weight: 1, 
+                fillOpacity: 0.9 
+            });
         },
-        onEachFeature: function (f, l) { l.bindPopup(`<b>📍 ${f.properties.pincode}</b><br>Value: ${Math.floor(f.properties.value)}`); }
+        onEachFeature: function (f, l) { 
+            l.bindPopup(`<b>📍 ${f.properties.pincode}</b><br>Value: ${Math.floor(f.properties.value).toLocaleString()}`); 
+        }
     }).addTo(mapInstance);
 
-    if (data.length > 0) mapInstance.fitBounds(kybMapLayer.getBounds());
+    // 5. Force Zoom to Data
+    const bounds = kybMapLayer.getBounds();
+    if (bounds.isValid()) {
+        mapInstance.fitBounds(bounds, { padding: [50, 50] });
+        console.log("Zooming to bounds:", bounds);
+    } else {
+        console.warn("Bounds are invalid, cannot auto-zoom.");
+    }
 }
+
+
+
 
 async function populateKybColumns() {
     const tableName = document.getElementById("kyb-table-select").value;
