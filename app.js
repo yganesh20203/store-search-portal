@@ -2067,8 +2067,8 @@ window.populateKybColumns = async function() {
     } catch(e) { console.error(e); }
 };
 
-// 3. CORE ANALYTICS ENGINE (SQL GENERATOR)
-window.runKybAnalysis = async function() {
+
+async function runKybAnalysis() {
     const tableName = document.getElementById("kyb-table-select").value;
     const start1 = document.getElementById("kyb-col-start1").value;
     const end1 = document.getElementById("kyb-col-end1").value;
@@ -2085,27 +2085,23 @@ window.runKybAnalysis = async function() {
     status.innerHTML = "⏳ Processing 130k+ rows...";
 
     try {
-        // A. Get All Columns to determine order
+        // A. Get All Columns
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const allCols = schema.toArray().map(r => r.column_name);
         
-        // B. Helper to get list of columns between Start and End
+        // B. Helper to get valid range
         function getColsInRange(s, e) {
             const i1 = allCols.indexOf(s);
             const i2 = allCols.indexOf(e);
-            if (i1 === -1 || i2 === -1) return []; // Invalid columns
-            
-            // If user selects backwards (March to Jan), swap them to ensure valid range
-            if (i1 > i2) return allCols.slice(i2, i1 + 1);
-            
+            if (i1 === -1 || i2 === -1) return [];
+            if (i1 > i2) return allCols.slice(i2, i1 + 1); // Swap if backwards
             return allCols.slice(i1, i2 + 1);
         }
 
-        // C. Build Dynamic SQL SUM Expressions (Handling Nulls and Types)
+        // C. Build Sum Expressions
         const colsA = getColsInRange(start1, end1);
         if (colsA.length === 0) throw new Error("Invalid Column Range for Period A");
 
-        // We cast to DOUBLE to prevent type errors if CSV read numbers as VARCHAR
         const sumExpA = colsA.map(c => `COALESCE(CAST("${c}" AS DOUBLE), 0)`).join(" + ");
 
         let sumExpB = "0";
@@ -2116,20 +2112,16 @@ window.runKybAnalysis = async function() {
             }
         }
 
-        // D. Identify Key Columns (Lat/Long/Pincode)
-        // Auto-detect columns, defaulting to standard names if regex fails
+        // D. Detect Lat/Long/Pincode
         const pinCol = allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
         const latCol = allCols.find(c => c.match(/lat/i)) || "Lat";
         const lngCol = allCols.find(c => c.match(/long|lng/i)) || "Long";
 
-        // Verification Check
         if (!allCols.includes(latCol) || !allCols.includes(lngCol)) {
             throw new Error(`Missing 'Lat' or 'Long' columns. Found: ${allCols.join(", ")}`);
         }
 
-        // E. Run Aggregation Query
-        // We group by Pincode and Location. 
-        // We filter out rows with missing location data to prevent mapping errors.
+        // E. Run Query
         const query = `
             SELECT 
                 "${pinCol}" as Pincode, 
@@ -2146,8 +2138,6 @@ window.runKybAnalysis = async function() {
             HAVING Sales_A > 0 OR Sales_B > 0
         `;
 
-        // console.log("Executing Query:", query); // Debugging line
-
         const result = await conn.query(query);
         const data = result.toArray().map(r => r.toJSON());
 
@@ -2157,15 +2147,16 @@ window.runKybAnalysis = async function() {
         }
 
         status.innerHTML = `✅ Plotted ${data.length} locations.`;
-        
-        // F. Render Map Layers
         renderKybMapLayers(data, mode);
 
     } catch (e) {
         console.error(e);
         status.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
     }
-};
+}
+
+// Attach to window so HTML buttons can find it
+window.runKybAnalysis = runKybAnalysis;
 
 // 4. MAP RENDERER
 function renderKybMapLayers(data, mode) {
