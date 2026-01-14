@@ -3865,7 +3865,7 @@ window.renderDownloadOptions = function() {
     let extraFilters = "";
     let pptButton = "";
 
-    // --- A. EVENTS CONFIG ---
+    // --- A. EVENTS ---
     if (activeTvCategory === "Events") {
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
@@ -3875,27 +3875,10 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-offer" placeholder="Special Offer" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
-        
-        pptButton = `
-            <button onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
-                📊 Generate & Download PPT
-            </button>`;
+        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
-    else if (activeTvCategory === "Offer Board") {
-        extraFilters = `
-           <div style= "margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-            <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
-            </div>
-            </div>` ;
-        pptButton = `
-            <button onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
-                📊 Generate & Download PPT
-            </button>`;
-        
-    }
-        
-    // --- B. FEATURE SPACE CONFIG (NEW) ---
+
+    // --- B. FEATURE SPACE ---
     else if (activeTvCategory === "Feature Space") {
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
@@ -3905,11 +3888,31 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-item" placeholder="Item Description" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
-        
-        pptButton = `
-            <button onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
-                📊 Generate & Download PPT
-            </button>`;
+        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
+    }
+
+    // --- C. PLANOGRAM ---
+    else if (activeTvCategory === "Planogram") {
+        extraFilters = `
+            <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-cat" placeholder="Category" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-brand" placeholder="Brand" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+            </div>`;
+        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#673ab7; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
+    }
+
+    // --- D. OFFER BOARD (NEW) ---
+    else if (activeTvCategory === "Offer Board") {
+        extraFilters = `
+            <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+            </div>`;
+        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#ff9800; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
     // --- RENDER VIEW ---
@@ -3954,15 +3957,14 @@ window.generateTvPPT = async function() {
         const toDate = new Date(toInput); toDate.setHours(23,59,59,999);
 
         let filteredData = [];
-        let imageColIndex = -1; // To find where the image link is
+        let imageColIndex = -1; 
 
         // --- FILTER LOGIC ---
+        
+        // A. PLANOGRAM
         if (activeTvCategory === "Planogram") {
-            // Sheet: 0:ID, 1:StoreNo, 2:Name, 3:Start, 4:End, 5:SubDiv, 6:CatNo, 7:CatName, 8:Brand, 9:Approver, 10:Reason, 11:Image, 12:Date
             imageColIndex = 11;
-
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
-            const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase();
             const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
             const fBrand = document.getElementById("filter-brand")?.value.trim().toLowerCase();
 
@@ -3970,17 +3972,16 @@ window.generateTvPPT = async function() {
                 const d = new Date(r[3]); 
                 if (!(d >= fromDate && d <= toDate)) return false;
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
-                if (fSubDiv && String(r[4]).toLowerCase() !== fSubDiv) return false;
                 if (fCat && !String(r[7]).toLowerCase().includes(fCat)) return false; 
                 if (fBrand && !String(r[8]).toLowerCase().includes(fBrand)) return false;
                 if (!r[11] || r[11].trim() === "") return false; 
                 return true;
             });
         }
+        
+        // B. FEATURE SPACE
         else if (activeTvCategory === "Feature Space") {
-            // Sheet: 0:ID, 1:Store, 2:Name, 3:Start, 4:End, 5:Appr, 6:CatNo, 7:Div, 8:SubDiv, 9:CatName, 10:ItemNo, 11:Desc, 12:Loc, 13:Type, 14:Status, 15:Image
             imageColIndex = 15;
-
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
             const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
             const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase();
@@ -3995,37 +3996,39 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
-            // ppt generation for offer board
-            
-            else if (activeTVCategory === "Offer Board"){
-                imageColIndex = 11;
-                const fStore = document.getELementById("filter-store")?.value.trim().toLowerCase();
-                //const fCat = document.getElementById("fiter-cat")?.value.trim().toLowerCase();
-                //const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase();
-
-                filteredData = rows.filter(r => {
-                    const d = new Date(r[3]);
-                    if (!(d >= fromDate && d <= toDate)) return false;
-                    if (fStore && String(r[1]).toLowerCase() !==fStore) return false;
-                });
-            }
-                
-                        
+        
+        // C. EVENTS
         else if (activeTvCategory === "Events") {
-             // Sheet: 0:ID, 1:Store, 2:Name, 3:Start, 4:End, 5:Appr, 6:SubDiv, 7:CatNo, 8:CatName, 9:Offer, 10:Status, 11:Image
             imageColIndex = 11;
-
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
             const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
             const fOffer = document.getElementById("filter-offer")?.value.trim().toLowerCase();
 
             filteredData = rows.filter(r => {
-                const d = new Date(r[3]); 
+                let dateStr = r[3]; 
+                if (dateStr && !dateStr.match(/\d{4}/)) dateStr += "-" + new Date().getFullYear();
+                const d = new Date(dateStr); 
+                
+                if (isNaN(d.getTime())) return false;
                 if (!(d >= fromDate && d <= toDate)) return false;
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
                 if (fCat && !String(r[8]).toLowerCase().includes(fCat)) return false;
                 if (fOffer && !String(r[9]).toLowerCase().includes(fOffer)) return false;
                 if (!r[11] || r[11].trim() === "") return false;
+                return true;
+            });
+        }
+
+        // D. OFFER BOARD (NEW)
+        else if (activeTvCategory === "Offer Board") {
+            imageColIndex = 11; // Col L is Photo
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
+
+            filteredData = rows.filter(r => {
+                const d = new Date(r[3]); // Start Date
+                if (!(d >= fromDate && d <= toDate)) return false;
+                if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
+                if (!r[11] || r[11].trim() === "") return false; // Must have photo
                 return true;
             });
         }
@@ -4054,7 +4057,7 @@ window.generateTvPPT = async function() {
                     let slide = pres.addSlide();
                     let tableRows = [];
 
-                    // --- MAPPING LOGIC ---
+                    // --- SLIDE CONTENT MAPPING ---
                     if (activeTvCategory === "Planogram") {
                         tableRows = [
                             ["Store", row[1] + " - " + row[2]],
@@ -4081,6 +4084,15 @@ window.generateTvPPT = async function() {
                             ["Category", row[8]],
                             ["Offer", row[9]],
                             ["Status", row[10]]
+                        ];
+                    } else if (activeTvCategory === "Offer Board") {
+                        tableRows = [
+                            ["Store", row[1] + " - " + row[2]],
+                            ["Date Range", row[3] + " to " + row[4]],
+                            ["Posters", row[8]],
+                            ["Status", row[9]], // Executed
+                            ["Reason", row[10]], // If Not Executed
+                            ["Audit By", row[12]]
                         ];
                     }
 
