@@ -4239,6 +4239,10 @@ window.toggleInput = function(inputId, icon) {
 // 🚀 RUN ANALYSIS (Merge CSV + GeoJSON)
 // ==========================================
 
+// ==========================================
+// 🚀 RUN ANALYSIS (Fixed Pincode Matching)
+// ==========================================
+
 async function runKybAnalysis() {
     const tableName = document.getElementById("kyb-table-select").value;
     const geoInput = document.getElementById("kyb-geojson-file");
@@ -4258,14 +4262,12 @@ async function runKybAnalysis() {
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const allCols = schema.toArray().map(r => r.column_name);
         
-        // Helper: Get Columns in Range
         function getColsInRange(s, e) {
             const i1 = allCols.indexOf(s);
             const i2 = allCols.indexOf(e);
             return (i1 > i2) ? allCols.slice(i2, i1 + 1) : allCols.slice(i1, i2 + 1);
         }
 
-        // Build Sum Expressions
         const colsA = getColsInRange(start1, end1);
         const sumExpA = colsA.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
 
@@ -4275,25 +4277,27 @@ async function runKybAnalysis() {
             if (colsB.length > 0) sumExpB = colsB.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
         }
 
-        // Identify Key Columns
         const pinCol = allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
         const latCol = allCols.find(c => c.match(/lat/i));
         const lngCol = allCols.find(c => c.match(/long|lng/i));
         const hasCoords = latCol && lngCol;
 
-        // Query Construction
-        // Note: We don't need Lat/Long in GROUP BY if we are using GeoJSON
+        // ⚠️ FIX: Force Pincode to BIGINT first to remove decimals (143001.0 -> 143001)
+        let pinSelect = `CAST(CAST("${pinCol}" AS BIGINT) AS VARCHAR)`;
+
         let query = "";
         if (hasCoords) {
-             query = `SELECT CAST("${pinCol}" AS VARCHAR) as Pincode, CAST("${latCol}" AS DOUBLE) as Lat, CAST("${lngCol}" AS DOUBLE) as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}", "${latCol}", "${lngCol}"`;
+             query = `SELECT ${pinSelect} as Pincode, CAST("${latCol}" AS DOUBLE) as Lat, CAST("${lngCol}" AS DOUBLE) as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}", "${latCol}", "${lngCol}"`;
         } else {
-             query = `SELECT CAST("${pinCol}" AS VARCHAR) as Pincode, NULL as Lat, NULL as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}"`;
+             query = `SELECT ${pinSelect} as Pincode, NULL as Lat, NULL as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}"`;
         }
+
+        console.log("Generated SQL:", query); // Debugging
 
         const result = await conn.query(query);
         const salesData = result.toArray().map(r => r.toJSON());
 
-        // Create Lookup Map for Polygons
+        // Create Lookup Map
         const salesMap = {};
         let maxVal = 0;
 
@@ -4304,7 +4308,10 @@ async function runKybAnalysis() {
             }
             if (Math.abs(val) > maxVal) maxVal = Math.abs(val);
 
-            salesMap[String(row.Pincode).trim()] = {
+            // Normalize CSV Pincode (Trim whitespace)
+            const cleanPin = String(row.Pincode).trim();
+            
+            salesMap[cleanPin] = {
                 val: val,
                 salesA: row.Sales_A,
                 salesB: row.Sales_B,
@@ -4321,7 +4328,7 @@ async function runKybAnalysis() {
                 try {
                     const geoJson = JSON.parse(e.target.result);
                     renderKybPolygons(geoJson, salesMap, mode, maxVal);
-                    status.innerHTML = `✅ Drawn ${Object.keys(salesMap).length} pincodes.`;
+                    status.innerHTML = `✅ Drawn ${Object.keys(salesMap).length} pincode regions.`;
                 } catch (err) { alert("Invalid GeoJSON"); console.error(err); }
             };
             reader.readAsText(geoInput.files[0]);
