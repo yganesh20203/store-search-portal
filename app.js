@@ -3347,12 +3347,10 @@ async function loadTvStats() {
         }
 
         const rows = data.values.slice(1);
-        const now = new Date(); // Current Time for Pending Late Checks
+        const now = new Date();
         
-        // --- FILTERING ---
         let fromDate = null; 
         let toDate = null;
-        
         if (activeTvCategory === "OFR Audit") {
             const fVal = document.getElementById("dash-from")?.value;
             const tVal = document.getElementById("dash-to")?.value;
@@ -3360,11 +3358,8 @@ async function loadTvStats() {
             if (tVal) toDate = new Date(tVal);
         }
 
-        // --- COUNTERS ---
-        let grandTotalTasks = 0;
-        let grandCompleted = 0;
-        let grandLate = 0;
-
+        // Stats Logic (Same as before)
+        let grandTotalTasks = 0; let grandCompleted = 0; let grandLate = 0;
         let mgrStats = { total: 0, done: 0, late: 0 };
         let tlStats = { total: 0, done: 0, late: 0 };
         const storeStats = {};
@@ -3374,122 +3369,74 @@ async function loadTvStats() {
                 const invDate = r[3] ? new Date(r[3]) : null; 
                 if (!invDate || invDate < fromDate || invDate > toDate) return; 
             }
-
             const storeName = r[2] ? String(r[2]).trim() : "Unknown";
-
             if (!storeStats[storeName]) {
-                storeStats[storeName] = { 
-                    mgr: { t:0, d:0, l:0 }, 
-                    tl: { t:0, d:0, l:0 } 
-                };
+                storeStats[storeName] = { mgr: { t:0, d:0, l:0 }, tl: { t:0, d:0, l:0 } };
             }
 
-            // --- MANAGER LOGIC ---
-            const mgrEmail = r[10]; // Col K
+            // Manager
+            const mgrEmail = r[10];
             if (mgrEmail && mgrEmail.trim() !== "") {
-                grandTotalTasks++;
-                mgrStats.total++;
-                storeStats[storeName].mgr.t++;
-
-                const mgrInput = r[12]; // Col M
-                const mgrDone = (mgrInput && mgrInput.trim() !== "");
-                
-                // LATE CHECK
-                const mgrDue = r[4] ? new Date(r[4]) : null;   // Col E
+                grandTotalTasks++; mgrStats.total++; storeStats[storeName].mgr.t++;
+                const mgrInput = r[12]; const mgrDone = (mgrInput && mgrInput.trim() !== "");
+                const mgrDue = r[4] ? new Date(r[4]) : null;
                 let isMgrLate = false;
-
                 if (mgrDue) {
-                    if (mgrDone) {
-                        // If Done: Compare Submission Time vs Due Date
-                        const mgrTime = r[14] ? new Date(r[14]) : null;
-                        if (mgrTime && mgrTime > mgrDue) isMgrLate = true;
-                    } else {
-                        // If Pending: Compare Current Time vs Due Date
-                        if (now > mgrDue) isMgrLate = true;
-                    }
+                    if (mgrDone) { const mgrTime = r[14] ? new Date(r[14]) : null; if (mgrTime && mgrTime > mgrDue) isMgrLate = true; }
+                    else { if (now > mgrDue) isMgrLate = true; }
                 }
-
-                if (mgrDone) {
-                    grandCompleted++;
-                    mgrStats.done++;
-                    storeStats[storeName].mgr.d++;
-                }
-                
-                if (isMgrLate) {
-                    grandLate++;
-                    mgrStats.late++;
-                    storeStats[storeName].mgr.l++;
-                }
+                if (mgrDone) { grandCompleted++; mgrStats.done++; storeStats[storeName].mgr.d++; }
+                if (isMgrLate) { grandLate++; mgrStats.late++; storeStats[storeName].mgr.l++; }
             }
-
-            // --- TL LOGIC ---
-            const tlEmail = r[11]; // Col L
+            // TL
+            const tlEmail = r[11];
             if (tlEmail && tlEmail.trim() !== "") {
-                grandTotalTasks++;
-                tlStats.total++;
-                storeStats[storeName].tl.t++;
-
-                const tlInput = r[13]; // Col N
-                const tlDone = (tlInput && tlInput.trim() !== "");
-
-                // LATE CHECK
-                const tlDue = r[5] ? new Date(r[5]) : null;    // Col F
+                grandTotalTasks++; tlStats.total++; storeStats[storeName].tl.t++;
+                const tlInput = r[13]; const tlDone = (tlInput && tlInput.trim() !== "");
+                const tlDue = r[5] ? new Date(r[5]) : null;
                 let isTlLate = false;
-
                 if (tlDue) {
-                    if (tlDone) {
-                        const tlTime = r[15] ? new Date(r[15]) : null;
-                        if (tlTime && tlTime > tlDue) isTlLate = true;
-                    } else {
-                        if (now > tlDue) isTlLate = true;
-                    }
+                    if (tlDone) { const tlTime = r[15] ? new Date(r[15]) : null; if (tlTime && tlTime > tlDue) isTlLate = true; }
+                    else { if (now > tlDue) isTlLate = true; }
                 }
-
-                if (tlDone) {
-                    grandCompleted++;
-                    tlStats.done++;
-                    storeStats[storeName].tl.d++;
-                }
-
-                if (isTlLate) {
-                    grandLate++;
-                    tlStats.late++;
-                    storeStats[storeName].tl.l++;
-                }
+                if (tlDone) { grandCompleted++; tlStats.done++; storeStats[storeName].tl.d++; }
+                if (isTlLate) { grandLate++; tlStats.late++; storeStats[storeName].tl.l++; }
             }
         });
 
-        // --- UPDATE TOP CARDS ---
+        // Update Cards
         document.getElementById("tv-stat-total").innerText = grandTotalTasks;
         document.getElementById("tv-stat-pending").innerText = grandTotalTasks - grandCompleted;
         document.getElementById("tv-stat-completed").innerText = grandCompleted;
-        
         const pct = grandTotalTasks > 0 ? Math.round((grandCompleted/grandTotalTasks)*100) : 0;
         document.getElementById("tv-stat-percent").innerHTML = `${pct}% <br><span style="font-size:10px; color:red">(${grandLate} Late)</span>`;
 
-        // --- RENDER TABLE ---
+        // --- RENDER TABLE WITH FROZEN HEADERS ---
         if (activeTvCategory === "OFR Audit") {
             let html = `
             <div style="margin-bottom:10px; font-size:12px; color:#555;">
                 <b>Summary:</b> Manager (${mgrStats.done}/${mgrStats.total} - ${mgrStats.late} Late) | TL (${tlStats.done}/${tlStats.total} - ${tlStats.late} Late)
             </div>
-            <table class="data-table" style="font-size:12px;">
-                <thead>
-                    <tr style="background:#f5f5f5;">
-                        <th rowspan="2" style="text-align:left; vertical-align:middle;">Store Name</th>
-                        <th colspan="3" style="text-align:center; border-bottom:2px solid #ccc;">👨‍💼 Manager</th>
-                        <th colspan="3" style="text-align:center; border-bottom:2px solid #ccc;">👷 TL</th>
-                    </tr>
-                    <tr>
-                        <th title="Total">T</th>
-                        <th title="Done">✅</th>
-                        <th title="Late">⚠️</th>
-                        <th title="Total">T</th>
-                        <th title="Done">✅</th>
-                        <th title="Late">⚠️</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+            
+            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc; box-shadow: inset 0 0 5px rgba(0,0,0,0.1);">
+                <table class="data-table" style="font-size:12px; width:100%; border-collapse: separate; border-spacing: 0;">
+                    <thead>
+                        <tr style="background:#f5f5f5;">
+                            <th rowspan="2" style="text-align:left; vertical-align:middle; position: sticky; top: 0; background: #e0e0e0; z-index: 10; border-bottom: 1px solid #ccc;">Store Name</th>
+                            <th colspan="3" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Manager</th>
+                            <th colspan="3" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 TL</th>
+                        </tr>
+                        <tr style="background:#f5f5f5;">
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Total">T</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Done">✅</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Late">⚠️</th>
+                            
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Total">T</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Done">✅</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" title="Late">⚠️</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
             
             Object.keys(storeStats).sort().forEach(s => {
                 const d = storeStats[s];
@@ -3498,26 +3445,20 @@ async function loadTvStats() {
 
                 html += `<tr>
                     <td style="font-weight:500;">${s}</td>
-                    
                     <td style="background:${mgrColor}">${d.mgr.t}</td>
                     <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
                     <td style="color:${d.mgr.l > 0 ? 'red' : '#ccc'}; font-weight:${d.mgr.l > 0 ? 'bold' : 'normal'}">${d.mgr.l || '-'}</td>
-
                     <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
                     <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
                     <td style="color:${d.tl.l > 0 ? 'red' : '#ccc'}; font-weight:${d.tl.l > 0 ? 'bold' : 'normal'}">${d.tl.l || '-'}</td>
                 </tr>`;
             });
-            html += `</tbody></table>`;
+            html += `</tbody></table></div>`; // Close wrapper
             container.innerHTML = html;
         } else {
             container.innerHTML = "<p>Standard view logic...</p>"; 
         }
-
-    } catch (e) {
-        console.error(e);
-        container.innerHTML = "Error: " + e.message;
-    }
+    } catch (e) { console.error(e); container.innerHTML = "Error: " + e.message; }
 }
 
 // Ensure filter reset works
