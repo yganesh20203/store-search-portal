@@ -3982,6 +3982,22 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
+            // ppt generation for offer board
+            
+            else if (activeTVCategory === "Offer Board"){
+                imageColIndex = 11;
+                const fStore = document.getELementById("filter-store")?.value.trim().toLowerCase();
+                //const fCat = document.getElementById("fiter-cat")?.value.trim().toLowerCase();
+                //const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase();
+
+                filteredData = rows.filter(r => {
+                    const d = new Date(r[3]);
+                    if (!(d >= fromDate && d <= toDate)) return false;
+                    if (fStore && String(r[1]).toLowerCase() !==fStore) return false;
+                });
+            }
+                
+                        
         else if (activeTvCategory === "Events") {
              // Sheet: 0:ID, 1:Store, 2:Name, 3:Start, 4:End, 5:Appr, 6:SubDiv, 7:CatNo, 8:CatName, 9:Offer, 10:Status, 11:Image
             imageColIndex = 11;
