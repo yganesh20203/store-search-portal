@@ -3759,7 +3759,7 @@ window.generateTvReport = async function() {
         } 
         // --- 5. OFR AUDIT LOGIC ---
         else if (activeTvCategory === "OFR Audit") {
-            headers = ["ID", "Store No", "Store Name", "Invoice Date", "Due Date", "Art No", "Desc", "Short Orders", "Short Qty", "Manager Mail", "TL Mail", "Manager Input", "TL Input", "Manager Time", "TL Time"];
+            headers = ["ID", "Store No", "Store Name", "Invoice Date", "Manager Due Date","TL Due Date", "Art No", "Desc", "Short Orders", "Short Qty", "Manager Mail", "TL Mail", "Manager Input", "TL Input", "Manager Time", "TL Time"];
             filteredData = rows.filter(r => {
                 const d = new Date(r[3]); // Invoice Date
                 return d >= fromDate && d <= toDate;
