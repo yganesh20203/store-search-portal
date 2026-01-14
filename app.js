@@ -11,7 +11,7 @@ let activePaneId = "pane-0";
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
 let currentArrowData = [];
-let currentChartInstance = nullgen;
+let currentChartInstance = null;
 let chartState = { x: null, y: [] };
 let allTasksCache = [];
 // Excel & Pivot Globals
