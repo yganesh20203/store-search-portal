@@ -25,6 +25,7 @@ let activeTvCategory = "";
 let tvDataCache = [];
 let pendingPhotoBlob = null;
 let kybMapLayer = null;
+let kybRadiusLayer = null;
 // Map Global
 let mapInstance = null;
 let mapLayers = {
@@ -1964,12 +1965,20 @@ window.onclick = function(event) {
 // 🌍 KYB DASHBOARD (MERGED: Static Stores + Analytics)
 // ==========================================
 
+// ==========================================
+// 🌍 KYB DASHBOARD (With Radius, Filters & Fullscreen)
+// ==========================================
+
+let kybMapLayer = null; 
+let kybRadiusLayer = null; // Stores the 10/30/60km circles
+let mapLayers = {}; 
+
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
     document.getElementById("business-ui").classList.remove("hidden");
 
-    // 1. Initialize Map
+    // 1. Initialize Map (If not exists)
     if (!mapInstance) {
         const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
         const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' });
@@ -1980,37 +1989,20 @@ async function loadBusinessDashboard() {
             layers: [streets]
         });
 
-        // Icons
-        const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-        const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-        const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-
-        // Layer Groups
+        // Initialize Layer Groups
         mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
         mapLayers.metro = L.layerGroup().addTo(mapInstance);
         mapLayers.dmart = L.layerGroup().addTo(mapInstance);
-
-        // Plot Static Config Data
-        if (CONFIG.WAREHOUSE_GROUPS) {
-            if (CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
-                CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: blueIcon }).bindPopup(`<b>🏢 Flipkart</b><br>${wh.name}`).addTo(mapLayers.flipkart));
-            }
-            if (CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
-                CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro</b><br>${wh.name}`).addTo(mapLayers.metro));
-            }
-            if (CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
-                CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart));
-            }
-        }
+        kybRadiusLayer = L.layerGroup().addTo(mapInstance); // For Radius Circles
 
         // Layer Control
         L.control.layers(
             { "🗺️ Streets": streets, "🛰️ Satellite": satellite }, 
-            { "🟦 Flipkart": mapLayers.flipkart, "🟥 Metro": mapLayers.metro, "🟩 DMart": mapLayers.dmart }
+            { "🟦 Flipkart": mapLayers.flipkart, "⭕ Radius (10/30/60)": kybRadiusLayer, "🟥 Metro": mapLayers.metro, "🟩 DMart": mapLayers.dmart }
         ).addTo(mapInstance);
     }
     
-    // 2. Inject Analytics Controls
+    // 2. Inject Controls (Analytics + Store Filter + Fullscreen)
     const mapContainer = document.getElementById("business-ui");
     let controls = document.getElementById("kyb-controls");
     
@@ -2020,22 +2012,30 @@ async function loadBusinessDashboard() {
         controls.style.cssText = "background:white; padding:15px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); margin-bottom:15px;";
         
         controls.innerHTML = `
-            <h3 style="margin-top:0;">🗺️ Pincode Sales Analytics</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                <h3 style="margin:0;">🗺️ Pincode Sales & Store Map</h3>
+                <div style="display:flex; gap:10px;">
+                    <select id="kyb-store-filter" onchange="filterKybStores()" style="padding:5px 10px; border:1px solid #ccc; border-radius:4px; font-weight:bold;">
+                        <option value="ALL">🏢 All Flipkart Stores</option>
+                    </select>
+                    <button onclick="toggleKybFullscreen()" style="background:#424242; color:white; border:none; padding:5px 15px; border-radius:4px; cursor:pointer;">
+                        ⛶ Big Screen
+                    </button>
+                </div>
+            </div>
+
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:15px; align-items:end;">
-                
                 <div>
                     <label style="font-size:12px; font-weight:bold;">1. Sales Data (CSV):</label>
                     <select id="kyb-table-select" onchange="window.populateKybColumns()" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
                         <option value="">-- Load CSV first --</option>
                     </select>
                 </div>
-
                 <div>
                     <label style="font-size:12px; font-weight:bold;">2. Boundaries (GeoJSON):</label>
                     <input type="file" id="kyb-geojson-file" accept=".json,.geojson" style="font-size:11px; width:100%;">
                     <div style="font-size:9px; color:#666; margin-top:2px;">*Optional. Upload for shapes.</div>
                 </div>
-
                 <div>
                     <label style="font-size:12px; font-weight:bold;">3. Period A (Sum):</label>
                     <div style="display:flex; gap:5px;">
@@ -2043,7 +2043,6 @@ async function loadBusinessDashboard() {
                         <select id="kyb-col-end1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                     </div>
                 </div>
-
                 <div>
                     <label style="font-size:12px; font-weight:bold;">4. Period B (Compare):</label>
                     <div style="display:flex; gap:5px;">
@@ -2069,18 +2068,127 @@ async function loadBusinessDashboard() {
         `;
         mapContainer.insertBefore(controls, mapContainer.firstChild);
     }
-    
-    // Initial Table Load
-    await window.populateKybColumns(); 
-    // Also re-populate table list just in case
-    const select = document.getElementById("kyb-table-select");
+
+    // 3. Populate Store Dropdown & Initial Plot
+    const storeSelect = document.getElementById("kyb-store-filter");
+    if (storeSelect.options.length === 1 && CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
+        CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
+            storeSelect.innerHTML += `<option value="${wh.name}">${wh.name}</option>`;
+        });
+    }
+
+    // Plot initial stores
+    filterKybStores();
+
+    // 4. Populate CSV Tables
+    await window.populateKybColumns();
+    const tableSelect = document.getElementById("kyb-table-select");
     try {
         const result = await conn.query("SHOW TABLES");
-        const tables = result.toArray().map(r => r.name);
-        select.innerHTML = '<option value="">-- Select Table --</option>';
-        tables.forEach(t => select.innerHTML += `<option value="${t}">${t}</option>`);
+        tableSelect.innerHTML = '<option value="">-- Select Table --</option>';
+        result.toArray().forEach(r => tableSelect.innerHTML += `<option value="${r.name}">${r.name}</option>`);
     } catch (e) {}
 }
+
+// ==========================================
+// 🎯 HELPER: FILTER STORES & DRAW RADIUS
+// ==========================================
+window.filterKybStores = function() {
+    const selectedStore = document.getElementById("kyb-store-filter").value;
+    
+    // Clear existing layers
+    mapLayers.flipkart.clearLayers();
+    kybRadiusLayer.clearLayers();
+    
+    const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+    if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
+        let storesToPlot = CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"];
+
+        // If specific store selected, filter the list
+        if (selectedStore !== "ALL") {
+            storesToPlot = storesToPlot.filter(wh => wh.name === selectedStore);
+        }
+
+        storesToPlot.forEach(wh => {
+            // 1. Draw Marker
+            const marker = L.marker([wh.lat, wh.lng], { icon: blueIcon })
+                .bindPopup(`<b>🏢 ${wh.name}</b><br>Lat: ${wh.lat}<br>Lng: ${wh.lng}`)
+                .addTo(mapLayers.flipkart);
+
+            // 2. Draw Radius Circles (10km, 30km, 60km)
+            // 10km (Green Dashed)
+            L.circle([wh.lat, wh.lng], { radius: 10000, color: 'green', dashArray: '5, 5', fill: false, weight: 2 }).addTo(kybRadiusLayer);
+            
+            // 30km (Orange Dashed)
+            L.circle([wh.lat, wh.lng], { radius: 30000, color: 'orange', dashArray: '10, 10', fill: false, weight: 2 }).addTo(kybRadiusLayer);
+            
+            // 60km (Red Dashed)
+            L.circle([wh.lat, wh.lng], { radius: 60000, color: 'red', dashArray: '20, 20', fill: false, weight: 2 }).addTo(kybRadiusLayer);
+
+            // If single store, zoom to it
+            if (selectedStore !== "ALL") {
+                mapInstance.setView([wh.lat, wh.lng], 9);
+                marker.openPopup();
+            }
+        });
+
+        // If "ALL", fit bounds to show all stores
+        if (selectedStore === "ALL" && storesToPlot.length > 0) {
+            // Optional: Recenter map to India or fit bounds of all markers
+             mapInstance.setView([20.5937, 78.9629], 5);
+        }
+    }
+};
+
+// ==========================================
+// ⛶ HELPER: TOGGLE FULLSCREEN
+// ==========================================
+window.toggleKybFullscreen = function() {
+    const mapDiv = document.getElementById("business-map");
+    const container = document.getElementById("business-ui"); // The parent container
+
+    if (!document.fullscreenElement) {
+        // Enter Fullscreen
+        if (mapDiv.requestFullscreen) {
+            mapDiv.requestFullscreen();
+        } else if (mapDiv.webkitRequestFullscreen) { /* Safari */
+            mapDiv.webkitRequestFullscreen();
+        } else if (mapDiv.msRequestFullscreen) { /* IE11 */
+            mapDiv.msRequestFullscreen();
+        }
+        
+        // Add a specialized class for styling if needed, though native fullscreen handles most
+        mapDiv.style.height = "100vh";
+        mapDiv.style.width = "100vw";
+    } else {
+        // Exit Fullscreen
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) { /* Safari */
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) { /* IE11 */
+            document.msExitFullscreen();
+        }
+        
+        // Reset styles (Assuming original height was 600px or defined in CSS)
+        mapDiv.style.height = "600px"; 
+        mapDiv.style.width = "100%";
+    }
+
+    // Crucial: Leaflet needs to know the size changed to render tiles correctly
+    setTimeout(() => { mapInstance.invalidateSize(); }, 200);
+};
+
+// Listen for ESC key to reset styles if user exits via keyboard
+document.addEventListener('fullscreenchange', (event) => {
+    const mapDiv = document.getElementById("business-map");
+    if (!document.fullscreenElement) {
+        mapDiv.style.height = "600px"; // Restore original height
+        mapDiv.style.width = "100%";
+        setTimeout(() => { mapInstance.invalidateSize(); }, 200);
+    }
+});
 
 // 2. HELPER: POPULATE COLUMNS (JAN_2025, etc.)
 
