@@ -11,7 +11,7 @@ let activePaneId = "pane-0";
 let hourlyFilesCache = []; 
 let walkinHistoryStack = []; 
 let currentArrowData = [];
-let currentChartInstance = null;
+let currentChartInstance = nullgen;
 let chartState = { x: null, y: [] };
 let allTasksCache = [];
 // Excel & Pivot Globals
@@ -3881,7 +3881,20 @@ window.renderDownloadOptions = function() {
                 📊 Generate & Download PPT
             </button>`;
     }
-
+    else if (activeTvCategory === "Offer Board") {
+        extraFilters = `
+           <div style= "margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            </div>` ;
+        pptButton = `
+            <button onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                📊 Generate & Download PPT
+            </button>`;
+        
+    }
+        
     // --- B. FEATURE SPACE CONFIG (NEW) ---
     else if (activeTvCategory === "Feature Space") {
         extraFilters = `
