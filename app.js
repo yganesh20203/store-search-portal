@@ -1969,9 +1969,7 @@ window.onclick = function(event) {
 // 🌍 KYB DASHBOARD (With Radius, Filters & Fullscreen)
 // ==========================================
 
-let kybMapLayer = null; 
-let kybRadiusLayer = null; // Stores the 10/30/60km circles
-let mapLayers = {}; 
+
 
 async function loadBusinessDashboard() {
     resetUI();
