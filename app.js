@@ -4242,6 +4242,9 @@ window.toggleInput = function(inputId, icon) {
 // ==========================================
 // 🛠️ KYB ANALYTICS (Safe Mode: No BigInts)
 // ==========================================
+// ==========================================
+// 🛠️ KYB ANALYTICS (Nuclear Safe Mode)
+// ==========================================
 
 async function runKybAnalysis() {
     const tableName = document.getElementById("kyb-table-select").value;
@@ -4255,14 +4258,15 @@ async function runKybAnalysis() {
 
     if (!tableName || !start1 || !end1) { alert("Please select a table and columns."); return; }
 
-    status.innerHTML = "⏳ Processing Data (Safe Mode)...";
+    status.innerHTML = "⏳ Processing Data (Nuclear Mode)...";
     console.clear();
-    console.log("🚀 STARTING ANALYSIS (Safe Mode)...");
+    console.log("🚀 STARTING ANALYSIS (Nuclear Mode)...");
 
     try {
-        // --- 1. SQL QUERY CONSTRUCTION ---
+        // 1. GET SCHEMA (To find columns)
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const allCols = schema.toArray().map(r => r.column_name);
+        console.log("Found Columns:", allCols);
         
         function getColsInRange(s, e) {
             const i1 = allCols.indexOf(s);
@@ -4270,7 +4274,7 @@ async function runKybAnalysis() {
             return (i1 > i2) ? allCols.slice(i2, i1 + 1) : allCols.slice(i1, i2 + 1);
         }
 
-        // Force all Sales columns to DOUBLE (Decimal Numbers), treat null/empty as 0.0
+        // 2. CONSTRUCT SUM EXPRESSIONS
         const colsA = getColsInRange(start1, end1);
         const sumExpA = colsA.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
 
@@ -4283,45 +4287,40 @@ async function runKybAnalysis() {
         const pinCol = allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
         const latCol = allCols.find(c => c.match(/lat/i));
         const lngCol = allCols.find(c => c.match(/long|lng/i));
+
+        if (!latCol || !lngCol) {
+            alert("❌ Missing 'Lat' or 'Long' columns in your CSV.");
+            return;
+        }
         
-        // --- 2. THE FIX: FORCE TYPES IN SQL ---
-        // Pincode -> VARCHAR (Text). Prevents "BigInt" errors.
-        // Lat/Long -> DOUBLE (Decimal).
-        // Sales -> DOUBLE (Decimal).
-        
-        let query = `
+        // 3. NUCLEAR QUERY
+        // - CAST Pincode to VARCHAR immediately (Prevents BigInt crash)
+        // - GROUP BY 1 (The Pincode String)
+        // - MAX(Lat) (Gets valid coordinate without grouping by it)
+        const query = `
             SELECT 
                 CAST("${pinCol}" AS VARCHAR) as Pincode, 
+                MAX(TRY_CAST("${latCol}" AS DOUBLE)) as Lat, 
+                MAX(TRY_CAST("${lngCol}" AS DOUBLE)) as Lng,
                 CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, 
                 CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B
+            FROM ${tableName} 
+            GROUP BY 1
+            HAVING Sales_A > 0 OR Sales_B > 0
         `;
-
-        if (latCol && lngCol) {
-            query += `, 
-                CAST("${latCol}" AS DOUBLE) as Lat, 
-                CAST("${lngCol}" AS DOUBLE) as Lng 
-            FROM ${tableName} 
-            GROUP BY "${pinCol}", "${latCol}", "${lngCol}"`;
-        } else {
-            query += `, 
-                NULL as Lat, 
-                NULL as Lng 
-            FROM ${tableName} 
-            GROUP BY "${pinCol}"`;
-        }
 
         console.log("Generated SQL:", query);
 
         const result = await conn.query(query);
         const salesData = result.toArray().map(r => r.toJSON());
 
-        // --- 3. CREATE LOOKUP MAP ---
+        // 4. PROCESS RESULT
         const salesMap = {};
         let maxVal = 0;
         let validRows = 0;
 
         salesData.forEach(row => {
-            // Safe Value Calculation
+            // Values
             let val = (mode === 'sales_a') ? (row.Sales_A || 0) : 0;
             if (mode === 'growth') {
                 const sA = row.Sales_A || 0;
@@ -4330,8 +4329,7 @@ async function runKybAnalysis() {
             }
             if (Math.abs(val) > maxVal) maxVal = Math.abs(val);
 
-            // Clean Pincode: Force to String -> Remove dots -> Trim
-            // This handles "143001.0" becoming "143001"
+            // Clean Pincode (Trim whitespace/decimals)
             let cleanPin = "Unknown";
             if (row.Pincode) {
                 cleanPin = String(row.Pincode).split('.')[0].trim();
@@ -4347,10 +4345,15 @@ async function runKybAnalysis() {
             validRows++;
         });
 
-        console.log(`✅ Processed ${validRows} rows from CSV.`);
-        console.log("Sample Pincodes:", Object.keys(salesMap).slice(0, 5));
+        console.log(`✅ Successfully Processed ${validRows} Pincodes.`);
+        console.log("Sample Data:", Object.keys(salesMap).slice(0, 3));
 
-        // --- 4. RENDER MAP ---
+        if (validRows === 0) {
+            alert("❌ Database returned 0 rows.\nCheck if your selected columns actually contain numbers.");
+            return;
+        }
+
+        // 5. RENDER
         if (geoInput.files.length > 0) {
             status.innerHTML = "⏳ Reading Boundary File...";
             const reader = new FileReader();
@@ -4363,11 +4366,9 @@ async function runKybAnalysis() {
             };
             reader.readAsText(geoInput.files[0]);
         } 
-        else if (latCol && lngCol) {
+        else {
             renderKybCircles(salesData, mode, maxVal);
-            status.innerHTML = `✅ Drawn circles (No Boundary File).`;
-        } else {
-            alert("❌ No boundary file uploaded AND no Lat/Long columns found in CSV.");
+            status.innerHTML = `✅ Drawn circles (${validRows} locations).`;
         }
 
     } catch (e) {
