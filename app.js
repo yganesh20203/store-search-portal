@@ -77,6 +77,8 @@ window.filterTasks = filterTasks;
 window.openTaskActionModal = openTaskActionModal;
 window.submitTaskAction = submitTaskAction;
 window.toggleTaskActionUI = toggleTaskActionUI;
+window.loadTvStats = loadTvStats;
+window.resetDashFilters = resetDashFilters;
 
 
 // ==========================================
@@ -3302,8 +3304,6 @@ async function loadTvStats() {
     // --- 1. INJECT DATE FILTER UI (Only for OFR Audit) ---
     if (activeTvCategory === "OFR Audit") {
         const filterContainer = document.getElementById("tv-dash-filters");
-        
-        // If filters don't exist yet, create them
         if (!filterContainer) {
             const filterDiv = document.createElement("div");
             filterDiv.id = "tv-dash-filters";
@@ -3321,17 +3321,14 @@ async function loadTvStats() {
                     <button onclick="window.resetDashFilters()" style="background:#78909c; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">❌ Clear</button>
                 </div>
             `;
-            // Insert before the table container
             container.parentNode.insertBefore(filterDiv, container);
             
-            // Set defaults (First of current month to Today)
             const today = new Date();
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             document.getElementById("dash-from").valueAsDate = firstDay;
             document.getElementById("dash-to").valueAsDate = today;
         }
     } else {
-        // Remove filters if switching to other categories
         const existing = document.getElementById("tv-dash-filters");
         if(existing) existing.remove();
     }
@@ -3350,6 +3347,7 @@ async function loadTvStats() {
         }
 
         const rows = data.values.slice(1);
+        const now = new Date(); // Current Time for Pending Late Checks
         
         // --- FILTERING ---
         let fromDate = null; 
@@ -3363,23 +3361,18 @@ async function loadTvStats() {
         }
 
         // --- COUNTERS ---
-        // Global Stats
         let grandTotalTasks = 0;
         let grandCompleted = 0;
         let grandLate = 0;
 
-        // Role-Based Stats (for Summary)
         let mgrStats = { total: 0, done: 0, late: 0 };
         let tlStats = { total: 0, done: 0, late: 0 };
-
-        // Store-Based Stats
         const storeStats = {};
 
         rows.forEach(r => {
-            // 1. DATE FILTER CHECK
             if (fromDate && toDate) {
-                const invDate = r[3] ? new Date(r[3]) : null; // Col D (Invoice Date)
-                if (!invDate || invDate < fromDate || invDate > toDate) return; // Skip row
+                const invDate = r[3] ? new Date(r[3]) : null; 
+                if (!invDate || invDate < fromDate || invDate > toDate) return; 
             }
 
             const storeName = r[2] ? String(r[2]).trim() : "Unknown";
@@ -3391,10 +3384,9 @@ async function loadTvStats() {
                 };
             }
 
-            // --- MANAGER TASK LOGIC ---
+            // --- MANAGER LOGIC ---
             const mgrEmail = r[10]; // Col K
             if (mgrEmail && mgrEmail.trim() !== "") {
-                // It's a valid task for Manager
                 grandTotalTasks++;
                 mgrStats.total++;
                 storeStats[storeName].mgr.t++;
@@ -3402,26 +3394,37 @@ async function loadTvStats() {
                 const mgrInput = r[12]; // Col M
                 const mgrDone = (mgrInput && mgrInput.trim() !== "");
                 
+                // LATE CHECK
+                const mgrDue = r[4] ? new Date(r[4]) : null;   // Col E
+                let isMgrLate = false;
+
+                if (mgrDue) {
+                    if (mgrDone) {
+                        // If Done: Compare Submission Time vs Due Date
+                        const mgrTime = r[14] ? new Date(r[14]) : null;
+                        if (mgrTime && mgrTime > mgrDue) isMgrLate = true;
+                    } else {
+                        // If Pending: Compare Current Time vs Due Date
+                        if (now > mgrDue) isMgrLate = true;
+                    }
+                }
+
                 if (mgrDone) {
                     grandCompleted++;
                     mgrStats.done++;
                     storeStats[storeName].mgr.d++;
-
-                    // Late Check
-                    const mgrDue = r[4] ? new Date(r[4]) : null;   // Col E
-                    const mgrTime = r[14] ? new Date(r[14]) : null;// Col O
-                    if (mgrDue && mgrTime && mgrTime > mgrDue) {
-                        grandLate++;
-                        mgrStats.late++;
-                        storeStats[storeName].mgr.l++;
-                    }
+                }
+                
+                if (isMgrLate) {
+                    grandLate++;
+                    mgrStats.late++;
+                    storeStats[storeName].mgr.l++;
                 }
             }
 
-            // --- TL TASK LOGIC ---
+            // --- TL LOGIC ---
             const tlEmail = r[11]; // Col L
             if (tlEmail && tlEmail.trim() !== "") {
-                // It's a valid task for TL
                 grandTotalTasks++;
                 tlStats.total++;
                 storeStats[storeName].tl.t++;
@@ -3429,19 +3432,29 @@ async function loadTvStats() {
                 const tlInput = r[13]; // Col N
                 const tlDone = (tlInput && tlInput.trim() !== "");
 
+                // LATE CHECK
+                const tlDue = r[5] ? new Date(r[5]) : null;    // Col F
+                let isTlLate = false;
+
+                if (tlDue) {
+                    if (tlDone) {
+                        const tlTime = r[15] ? new Date(r[15]) : null;
+                        if (tlTime && tlTime > tlDue) isTlLate = true;
+                    } else {
+                        if (now > tlDue) isTlLate = true;
+                    }
+                }
+
                 if (tlDone) {
                     grandCompleted++;
                     tlStats.done++;
                     storeStats[storeName].tl.d++;
+                }
 
-                    // Late Check
-                    const tlDue = r[5] ? new Date(r[5]) : null;    // Col F
-                    const tlTime = r[15] ? new Date(r[15]) : null; // Col P
-                    if (tlDue && tlTime && tlTime > tlDue) {
-                        grandLate++;
-                        tlStats.late++;
-                        storeStats[storeName].tl.l++;
-                    }
+                if (isTlLate) {
+                    grandLate++;
+                    tlStats.late++;
+                    storeStats[storeName].tl.l++;
                 }
             }
         });
@@ -3456,10 +3469,9 @@ async function loadTvStats() {
 
         // --- RENDER TABLE ---
         if (activeTvCategory === "OFR Audit") {
-            // Detailed Split Table
             let html = `
             <div style="margin-bottom:10px; font-size:12px; color:#555;">
-                <b>Summary:</b> Manager (${mgrStats.done}/${mgrStats.total}) | TL (${tlStats.done}/${tlStats.total})
+                <b>Summary:</b> Manager (${mgrStats.done}/${mgrStats.total} - ${mgrStats.late} Late) | TL (${tlStats.done}/${tlStats.total} - ${tlStats.late} Late)
             </div>
             <table class="data-table" style="font-size:12px;">
                 <thead>
@@ -3481,7 +3493,6 @@ async function loadTvStats() {
             
             Object.keys(storeStats).sort().forEach(s => {
                 const d = storeStats[s];
-                // Color code logic
                 const mgrColor = d.mgr.t > 0 && d.mgr.t === d.mgr.d ? '#e8f5e9' : '';
                 const tlColor = d.tl.t > 0 && d.tl.t === d.tl.d ? '#e8f5e9' : '';
 
@@ -3490,18 +3501,16 @@ async function loadTvStats() {
                     
                     <td style="background:${mgrColor}">${d.mgr.t}</td>
                     <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
-                    <td style="color:${d.mgr.l > 0 ? 'red' : '#ccc'}">${d.mgr.l || '-'}</td>
+                    <td style="color:${d.mgr.l > 0 ? 'red' : '#ccc'}; font-weight:${d.mgr.l > 0 ? 'bold' : 'normal'}">${d.mgr.l || '-'}</td>
 
                     <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
                     <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
-                    <td style="color:${d.tl.l > 0 ? 'red' : '#ccc'}">${d.tl.l || '-'}</td>
+                    <td style="color:${d.tl.l > 0 ? 'red' : '#ccc'}; font-weight:${d.tl.l > 0 ? 'bold' : 'normal'}">${d.tl.l || '-'}</td>
                 </tr>`;
             });
             html += `</tbody></table>`;
             container.innerHTML = html;
         } else {
-            // Fallback for other categories (Standard Table)
-            // ... (You can keep your old generic table logic here if you wish) ...
             container.innerHTML = "<p>Standard view logic...</p>"; 
         }
 
@@ -3510,6 +3519,13 @@ async function loadTvStats() {
         container.innerHTML = "Error: " + e.message;
     }
 }
+
+// Ensure filter reset works
+window.resetDashFilters = function() {
+    document.getElementById("dash-from").value = "";
+    document.getElementById("dash-to").value = "";
+    window.loadTvStats();
+};
 
 // Helper to reset filter inputs
 window.resetDashFilters = function() {
