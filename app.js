@@ -3332,7 +3332,7 @@ async function loadTvStats() {
         if(existing) existing.remove();
     }
 
-    container.innerHTML = "⏳ Calculating stats...";
+    container.innerHTML = "⏳ Calculating split stats...";
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
@@ -3359,78 +3359,121 @@ async function loadTvStats() {
             if (fVal) fromDate = new Date(fVal);
             if (tVal) toDate = new Date(tVal);
 
-            let grandTotalTasks = 0; let grandCompleted = 0; let grandLate = 0;
-            let mgrStats = { total: 0, done: 0, late: 0 };
-            let tlStats = { total: 0, done: 0, late: 0 };
+            // Stats Objects
+            let grandTotalTasks = 0; 
+            let grandCompleted = 0; 
+            let grandLateDone = 0;    
+            let grandLatePending = 0; 
+
+            let mgrStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
+            let tlStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
             const storeStats = {};
 
             rows.forEach(r => {
+                // Date Filtering
                 if (fromDate && toDate) {
                     const invDate = r[3] ? new Date(r[3]) : null; 
                     if (!invDate || invDate < fromDate || invDate > toDate) return; 
                 }
+
                 const storeName = r[2] ? String(r[2]).trim() : "Unknown";
                 if (!storeStats[storeName]) {
-                    storeStats[storeName] = { mgr: { t:0, d:0, l:0 }, tl: { t:0, d:0, l:0 } };
+                    storeStats[storeName] = { 
+                        mgr: { t:0, d:0, ld:0, lp:0 }, 
+                        tl: { t:0, d:0, ld:0, lp:0 } 
+                    };
                 }
 
-                // Manager
+                // --- MANAGER LOGIC ---
                 const mgrEmail = r[10];
                 if (mgrEmail && mgrEmail.trim() !== "") {
                     grandTotalTasks++; mgrStats.total++; storeStats[storeName].mgr.t++;
-                    const mgrInput = r[12]; const mgrDone = (mgrInput && mgrInput.trim() !== "");
+                    
+                    const mgrInput = r[12]; 
+                    const mgrDone = (mgrInput && mgrInput.trim() !== "");
                     const mgrDue = r[4] ? new Date(r[4]) : null;
-                    let isMgrLate = false;
-                    if (mgrDue) {
-                        if (mgrDone) { const mgrTime = r[14] ? new Date(r[14]) : null; if (mgrTime && mgrTime > mgrDue) isMgrLate = true; }
-                        else { if (now > mgrDue) isMgrLate = true; }
+                    
+                    if (mgrDone) {
+                        grandCompleted++; mgrStats.done++; storeStats[storeName].mgr.d++;
+                        // Late Completed Check
+                        const mgrTime = r[14] ? new Date(r[14]) : null;
+                        if (mgrDue && mgrTime && mgrTime > mgrDue) {
+                            grandLateDone++; mgrStats.lateDone++; storeStats[storeName].mgr.ld++;
+                        }
+                    } else {
+                        // Late Pending Check (Overdue)
+                        if (mgrDue && now > mgrDue) {
+                            grandLatePending++; mgrStats.latePending++; storeStats[storeName].mgr.lp++;
+                        }
                     }
-                    if (mgrDone) { grandCompleted++; mgrStats.done++; storeStats[storeName].mgr.d++; }
-                    if (isMgrLate) { grandLate++; mgrStats.late++; storeStats[storeName].mgr.l++; }
                 }
-                // TL
+
+                // --- TL LOGIC ---
                 const tlEmail = r[11];
                 if (tlEmail && tlEmail.trim() !== "") {
                     grandTotalTasks++; tlStats.total++; storeStats[storeName].tl.t++;
-                    const tlInput = r[13]; const tlDone = (tlInput && tlInput.trim() !== "");
+                    
+                    const tlInput = r[13]; 
+                    const tlDone = (tlInput && tlInput.trim() !== "");
                     const tlDue = r[5] ? new Date(r[5]) : null;
-                    let isTlLate = false;
-                    if (tlDue) {
-                        if (tlDone) { const tlTime = r[15] ? new Date(r[15]) : null; if (tlTime && tlTime > tlDue) isTlLate = true; }
-                        else { if (now > tlDue) isTlLate = true; }
+                    
+                    if (tlDone) {
+                        grandCompleted++; tlStats.done++; storeStats[storeName].tl.d++;
+                        // Late Completed Check
+                        const tlTime = r[15] ? new Date(r[15]) : null;
+                        if (tlDue && tlTime && tlTime > tlDue) {
+                            grandLateDone++; tlStats.lateDone++; storeStats[storeName].tl.ld++;
+                        }
+                    } else {
+                        // Late Pending Check (Overdue)
+                        if (tlDue && now > tlDue) {
+                            grandLatePending++; tlStats.latePending++; storeStats[storeName].tl.lp++;
+                        }
                     }
-                    if (tlDone) { grandCompleted++; tlStats.done++; storeStats[storeName].tl.d++; }
-                    if (isTlLate) { grandLate++; tlStats.late++; storeStats[storeName].tl.l++; }
                 }
             });
 
             // Update Cards (OFR)
+            const pct = grandTotalTasks > 0 ? Math.round((grandCompleted/grandTotalTasks)*100) : 0;
             document.getElementById("tv-stat-total").innerText = grandTotalTasks;
             document.getElementById("tv-stat-pending").innerText = grandTotalTasks - grandCompleted;
             document.getElementById("tv-stat-completed").innerText = grandCompleted;
-            const pct = grandTotalTasks > 0 ? Math.round((grandCompleted/grandTotalTasks)*100) : 0;
-            document.getElementById("tv-stat-percent").innerHTML = `${pct}% <br><span style="font-size:10px; color:red">(${grandLate} Late)</span>`;
+            
+            // Detailed Percent Label
+            document.getElementById("tv-stat-percent").innerHTML = `
+                ${pct}% 
+                <div style="font-size:9px; margin-top:2px;">
+                    <span style="color:#f57c00;">⚠️ Done: ${grandLateDone}</span> | 
+                    <span style="color:#d32f2f;">⏳ Due: ${grandLatePending}</span>
+                </div>
+            `;
 
             // Render OFR Table
             let html = `
             <div style="margin-bottom:10px; font-size:12px; color:#555;">
-                <b>Summary:</b> Manager (${mgrStats.done}/${mgrStats.total}) | TL (${tlStats.done}/${tlStats.total})
+                <b>Summary:</b> 
+                Mgr (LateDone: ${mgrStats.lateDone}, Overdue: ${mgrStats.latePending}) | 
+                TL (LateDone: ${tlStats.lateDone}, Overdue: ${tlStats.latePending})
             </div>
-            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;">
+            
+            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc; box-shadow: inset 0 0 5px rgba(0,0,0,0.1);">
                 <table class="data-table" style="font-size:12px; width:100%; border-collapse: separate; border-spacing: 0;">
                     <thead>
                         <tr style="background:#f5f5f5;">
                             <th rowspan="2" style="text-align:left; vertical-align:middle; position: sticky; top: 0; background: #e0e0e0; z-index: 10; border-bottom: 1px solid #ccc;">Store Name</th>
-                            <th colspan="3" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Manager</th>
-                            <th colspan="3" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 TL</th>
+                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Manager</th>
+                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 TL</th>
                         </tr>
                         <tr style="background:#f5f5f5;">
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5;" title="Total">T</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5;" title="Done">✅</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5;" title="Late">⚠️</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5;" title="Total">T</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5;" title="Done">✅</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5;" title="Late">⚠️</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed">✅</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed Late">⚠️✅</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Overdue (Pending Late)">⏳⚠️</th>
+
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed">✅</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed Late">⚠️✅</th>
+                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Overdue (Pending Late)">⏳⚠️</th>
                         </tr>
                     </thead>
                     <tbody>`;
@@ -3442,12 +3485,16 @@ async function loadTvStats() {
 
                 html += `<tr>
                     <td style="font-weight:500;">${s}</td>
+                    
                     <td style="background:${mgrColor}">${d.mgr.t}</td>
                     <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
-                    <td style="color:${d.mgr.l > 0 ? 'red' : '#ccc'}">${d.mgr.l || '-'}</td>
+                    <td style="color:${d.mgr.ld > 0 ? '#f57c00' : '#ccc'};">${d.mgr.ld || '-'}</td>
+                    <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.mgr.lp > 0 ? 'bold' : 'normal'}">${d.mgr.lp || '-'}</td>
+
                     <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
                     <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
-                    <td style="color:${d.tl.l > 0 ? 'red' : '#ccc'}">${d.tl.l || '-'}</td>
+                    <td style="color:${d.tl.ld > 0 ? '#f57c00' : '#ccc'};">${d.tl.ld || '-'}</td>
+                    <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.tl.lp > 0 ? 'bold' : 'normal'}">${d.tl.lp || '-'}</td>
                 </tr>`;
             });
             html += `</tbody></table></div>`;
@@ -3508,7 +3555,7 @@ async function loadTvStats() {
 
             // Render Standard Table
             let html = `
-            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;">
+            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc; box-shadow: inset 0 0 5px rgba(0,0,0,0.1);">
                 <table class="data-table" style="width:100%; border-collapse: separate; border-spacing: 0;">
                     <thead>
                         <tr>
