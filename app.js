@@ -1957,7 +1957,7 @@ window.onclick = function(event) {
 // 🌍 KYB MAP ANALYTICS (Latest Version)
 // ==========================================
 
-let kybMapLayer = null; 
+
 
 // 1. MAIN DASHBOARD LOADER
 async function loadBusinessDashboard() {
