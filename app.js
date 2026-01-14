@@ -3461,8 +3461,8 @@ async function loadTvStats() {
                     <thead>
                         <tr style="background:#f5f5f5;">
                             <th rowspan="2" style="text-align:left; vertical-align:middle; position: sticky; top: 0; background: #e0e0e0; z-index: 10; border-bottom: 1px solid #ccc;">Store Name</th>
-                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Manager</th>
-                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 TL</th>
+                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Merch Manager</th>
+                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 Audit TL</th>
                         </tr>
                         <tr style="background:#f5f5f5;">
                             <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
