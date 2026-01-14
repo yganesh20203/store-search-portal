@@ -2083,27 +2083,6 @@ async function loadBusinessDashboard() {
 }
 
 // 2. HELPER: POPULATE COLUMNS (JAN_2025, etc.)
-window.populateKybColumns = async function() {
-    const tableName = document.getElementById("kyb-table-select").value;
-    if(!tableName) return;
-
-    try {
-        const schema = await conn.query(`DESCRIBE ${tableName}`);
-        // Filter columns that look like dates/months
-        const cols = schema.toArray().map(r => r.column_name).filter(c => 
-            c.match(/JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|202/i)
-        );
-
-        const dropdowns = ["kyb-col-start1", "kyb-col-end1", "kyb-col-start2", "kyb-col-end2"];
-        dropdowns.forEach(id => {
-            const sel = document.getElementById(id);
-            sel.innerHTML = '<option value="">- Select -</option>';
-            cols.forEach(c => {
-                sel.innerHTML += `<option value="${c}">${c}</option>`;
-            });
-        });
-    } catch(e) { console.error(e); }
-};
 
 
 
@@ -4253,29 +4232,7 @@ window.toggleInput = function(inputId, icon) {
 
 
 // 1. POPULATE COLUMNS
-async function populateKybColumns() {
-    const tableName = document.getElementById("kyb-table-select").value;
-    if(!tableName) return;
 
-    try {
-        const schema = await conn.query(`DESCRIBE ${tableName}`);
-        // Filter columns (JAN, FEB, 2025, etc.)
-        const cols = schema.toArray().map(r => r.column_name).filter(c => 
-            c.match(/JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|202/i)
-        );
-
-        const dropdowns = ["kyb-col-start1", "kyb-col-end1", "kyb-col-start2", "kyb-col-end2"];
-        dropdowns.forEach(id => {
-            const sel = document.getElementById(id);
-            if(sel) {
-                sel.innerHTML = '<option value="">- Select -</option>';
-                cols.forEach(c => {
-                    sel.innerHTML += `<option value="${c}">${c}</option>`;
-                });
-            }
-        });
-    } catch(e) { console.error("Error populating columns:", e); }
-}
 
 // 2. RUN ANALYSIS (With Explicit Double Casting)
 // ==========================================
@@ -4477,6 +4434,4 @@ async function populateKybColumns() {
 // ATTACH TO WINDOW
 window.populateKybColumns = populateKybColumns;
 window.runKybAnalysis = runKybAnalysis;
-// 3. ATTACH TO WINDOW
-window.populateKybColumns = populateKybColumns;
-window.runKybAnalysis = runKybAnalysis;
+
