@@ -4243,6 +4243,10 @@ window.toggleInput = function(inputId, icon) {
 // 🚀 RUN ANALYSIS (Fixed Pincode Matching)
 // ==========================================
 
+// ==========================================
+// 🛠️ KYB ANALYTICS (Aggressive Matching Fix)
+// ==========================================
+
 async function runKybAnalysis() {
     const tableName = document.getElementById("kyb-table-select").value;
     const geoInput = document.getElementById("kyb-geojson-file");
@@ -4258,7 +4262,7 @@ async function runKybAnalysis() {
     status.innerHTML = "⏳ Aggregating Data...";
 
     try {
-        // --- A. GET DATA FROM DUCKDB ---
+        // --- 1. GET DATA FROM DUCKDB ---
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const allCols = schema.toArray().map(r => r.column_name);
         
@@ -4282,35 +4286,36 @@ async function runKybAnalysis() {
         const lngCol = allCols.find(c => c.match(/long|lng/i));
         const hasCoords = latCol && lngCol;
 
-        // ⚠️ FIX: Force Pincode to BIGINT first to remove decimals (143001.0 -> 143001)
-        let pinSelect = `CAST(CAST("${pinCol}" AS BIGINT) AS VARCHAR)`;
-
+        // ⚠️ FIX: Select Pincode AS IS (No casting yet, we do it in JS)
         let query = "";
         if (hasCoords) {
-             query = `SELECT ${pinSelect} as Pincode, CAST("${latCol}" AS DOUBLE) as Lat, CAST("${lngCol}" AS DOUBLE) as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}", "${latCol}", "${lngCol}"`;
+             query = `SELECT "${pinCol}" as Pincode, CAST("${latCol}" AS DOUBLE) as Lat, CAST("${lngCol}" AS DOUBLE) as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}", "${latCol}", "${lngCol}"`;
         } else {
-             query = `SELECT ${pinSelect} as Pincode, NULL as Lat, NULL as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}"`;
+             query = `SELECT "${pinCol}" as Pincode, NULL as Lat, NULL as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}"`;
         }
 
-        console.log("Generated SQL:", query); // Debugging
+        console.log("SQL Query:", query);
 
         const result = await conn.query(query);
         const salesData = result.toArray().map(r => r.toJSON());
 
-        // Create Lookup Map
+        // --- 2. CREATE LOOKUP MAP (With Strict Cleaning) ---
         const salesMap = {};
         let maxVal = 0;
 
-        salesData.forEach(row => {
+        console.log("--- CSV DATA DEBUG ---");
+        salesData.forEach((row, idx) => {
             let val = (mode === 'sales_a') ? row.Sales_A : 0;
-            if (mode === 'growth') {
-                val = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
-            }
+            if (mode === 'growth') val = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
             if (Math.abs(val) > maxVal) maxVal = Math.abs(val);
 
-            // Normalize CSV Pincode (Trim whitespace)
-            const cleanPin = String(row.Pincode).trim();
+            // ⚠️ CLEANING: Convert to String -> Remove Decimals -> Trim
+            // Example: 143001.0 -> "143001"
+            // Example: " 143001 " -> "143001"
+            const cleanPin = String(row.Pincode).split(".")[0].trim();
             
+            if (idx < 3) console.log(`Row ${idx}: Raw='${row.Pincode}' -> Clean='${cleanPin}'`); // Debug print
+
             salesMap[cleanPin] = {
                 val: val,
                 salesA: row.Sales_A,
@@ -4320,7 +4325,7 @@ async function runKybAnalysis() {
             };
         });
 
-        // --- B. RENDER MAP ---
+        // --- 3. RENDER MAP ---
         if (geoInput.files.length > 0) {
             status.innerHTML = "⏳ Reading Boundary File...";
             const reader = new FileReader();
@@ -4328,7 +4333,10 @@ async function runKybAnalysis() {
                 try {
                     const geoJson = JSON.parse(e.target.result);
                     renderKybPolygons(geoJson, salesMap, mode, maxVal);
-                    status.innerHTML = `✅ Drawn ${Object.keys(salesMap).length} pincode regions.`;
+                    
+                    // Count successful matches
+                    const matchCount = Object.keys(salesMap).filter(k => kybMapLayer && kybMapLayer._layers).length; // approximate
+                    status.innerHTML = `✅ Plotting complete.`;
                 } catch (err) { alert("Invalid GeoJSON"); console.error(err); }
             };
             reader.readAsText(geoInput.files[0]);
@@ -4342,27 +4350,39 @@ async function runKybAnalysis() {
 
     } catch (e) { console.error(e); status.innerHTML = `<span style="color:red">Error: ${e.message}</span>`; }
 }
-// ==========================================
-// 🛠️ RENDERERS & HELPERS
-// ==========================================
 
 function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
     if (kybMapLayer) mapInstance.removeLayer(kybMapLayer);
 
-    const filteredFeatures = geoJson.features.filter(f => {
+    console.log("--- GEOJSON DEBUG ---");
+    if (geoJson.features.length > 0) {
+        console.log("Example Feature Props:", geoJson.features[0].properties);
+    }
+
+    let matchCount = 0;
+    const filteredFeatures = geoJson.features.filter((f, idx) => {
         const p = f.properties;
-        // Match JSON pincode keys with our Sales Data keys
-        const geoPin = String(p.pincode || p.pin || p.zip || p.PINCODE || p.Name || p.name || "").trim();
+        // 1. Try finding the pincode key
+        const rawGeoPin = p.pincode || p.PINCODE || p.Pincode || p.pin || p.PIN || p.zip || p.ZIP || p.Name || p.name || "";
         
-        if (salesMap[geoPin]) {
-            f.properties._salesData = salesMap[geoPin];
+        // 2. Strict Clean (Same as CSV)
+        const cleanGeoPin = String(rawGeoPin).split(".")[0].trim();
+
+        // Debug first few rows
+        if (idx < 3) console.log(`GeoJSON Feature ${idx}: Raw='${rawGeoPin}' -> Clean='${cleanGeoPin}'`);
+
+        if (salesMap[cleanGeoPin]) {
+            f.properties._salesData = salesMap[cleanGeoPin];
+            matchCount++;
             return true;
         }
         return false;
     });
 
+    console.log(`Total Matches Found: ${matchCount}`);
+
     if (filteredFeatures.length === 0) {
-        alert("0 Pincode matches found. Check if GeoJSON has 'pincode' property.");
+        alert("0 Matches Found! \n\nCheck Console (F12) to see 'CSV Data Debug' vs 'GeoJSON Debug'.\nYour Pincodes might be different numbers.");
         return;
     }
 
@@ -4377,7 +4397,7 @@ function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
                 const intensity = maxVal > 0 ? val / maxVal : 0;
                 color = intensity > 0.7 ? '#800026' : (intensity > 0.5 ? '#BD0026' : (intensity > 0.3 ? '#FEB24C' : '#FFEDA0'));
             } else {
-                color = val >= 0 ? '#1a9850' : '#d73027'; // Green/Red
+                color = val >= 0 ? '#1a9850' : '#d73027'; 
                 opacity = 0.7;
             }
 
@@ -4385,9 +4405,9 @@ function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
         },
         onEachFeature: function(feature, layer) {
             const d = feature.properties._salesData;
-            const pin = feature.properties.pincode || feature.properties.pin || "Unknown";
+            const p = feature.properties;
+            const pin = p.pincode || p.PINCODE || p.pin || "Unknown";
             let tooltip = (mode === 'sales_a') ? `Sales: ₹${Math.floor(d.salesA).toLocaleString()}` : `Growth: ${d.val.toFixed(1)}%`;
-            
             layer.bindPopup(`<div style="text-align:center;"><b>📍 ${pin}</b><br>${tooltip}</div>`);
         }
     }).addTo(mapInstance);
