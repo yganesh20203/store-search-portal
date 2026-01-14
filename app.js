@@ -1960,20 +1960,76 @@ window.onclick = function(event) {
 
 
 // 1. MAIN DASHBOARD LOADER
+// ==========================================
+// 🌍 KYB DASHBOARD (MERGED: Static Stores + Analytics)
+// ==========================================
+
+let kybMapLayer = null; 
+let mapLayers = {}; // Store layer references
+
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
     document.getElementById("business-ui").classList.remove("hidden");
 
-    // Initialize Map if needed
+    // 1. Initialize Map (If not exists)
     if (!mapInstance) {
-        mapInstance = L.map('business-map', { center: [20.5937, 78.9629], zoom: 5 });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-            attribution: '© OpenStreetMap' 
-        }).addTo(mapInstance);
+        // Tile Layers
+        const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' });
+
+        mapInstance = L.map('business-map', {
+            center: [20.5937, 78.9629], // India Center
+            zoom: 5,
+            layers: [streets] // Default layer
+        });
+
+        // 2. Define Icons for Static Stores
+        const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+        const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+        const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+        // 3. Create Layer Groups
+        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
+        mapLayers.metro = L.layerGroup().addTo(mapInstance);
+        mapLayers.dmart = L.layerGroup().addTo(mapInstance);
+
+        // 4. Plot Static Stores from CONFIG
+        if (CONFIG.WAREHOUSE_GROUPS) {
+            if (CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
+                CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
+                    L.marker([wh.lat, wh.lng], { icon: blueIcon })
+                     .bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`)
+                     .addTo(mapLayers.flipkart);
+                });
+            }
+            if (CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
+                CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
+                    L.marker([wh.lat, wh.lng], { icon: redIcon })
+                     .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
+                     .addTo(mapLayers.metro);
+                });
+            }
+            if (CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
+                CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
+                    L.marker([wh.lat, wh.lng], { icon: greenIcon })
+                     .bindPopup(`<b>🛒 DMart</b><br>${wh.name}`)
+                     .addTo(mapLayers.dmart);
+                });
+            }
+        }
+
+        // 5. Add Layer Control (To Toggle Views)
+        const baseMaps = { "🗺️ Streets": streets, "🛰️ Satellite": satellite };
+        const overlayMaps = { 
+            "🟦 Flipkart": mapLayers.flipkart, 
+            "🟥 Metro": mapLayers.metro, 
+            "🟩 DMart": mapLayers.dmart 
+        };
+        L.control.layers(baseMaps, overlayMaps).addTo(mapInstance);
     }
     
-    // Inject Analysis Controls
+    // 6. Inject Analytics Controls (The New Feature)
     const mapContainer = document.getElementById("business-ui");
     let controls = document.getElementById("kyb-controls");
     
@@ -1987,14 +2043,14 @@ async function loadBusinessDashboard() {
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; align-items:end;">
                 
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">1. Select Data Source:</label>
+                    <label style="font-size:12px; font-weight:bold;">1. Data Source:</label>
                     <select id="kyb-table-select" onchange="window.populateKybColumns()" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
                         <option value="">-- Load CSV first --</option>
                     </select>
                 </div>
 
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">2. Period A (Sum Columns):</label>
+                    <label style="font-size:12px; font-weight:bold;">2. Period A (Sum):</label>
                     <div style="display:flex; gap:5px; align-items:center;">
                         <select id="kyb-col-start1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                         <span>⮕</span>
@@ -2003,7 +2059,7 @@ async function loadBusinessDashboard() {
                 </div>
 
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">3. Period B (Optional):</label>
+                    <label style="font-size:12px; font-weight:bold;">3. Period B (Compare):</label>
                     <div style="display:flex; gap:5px; align-items:center;">
                         <select id="kyb-col-start2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                         <span>⮕</span>
@@ -2029,7 +2085,7 @@ async function loadBusinessDashboard() {
         mapContainer.insertBefore(controls, mapContainer.firstChild);
     }
 
-    // Refresh Table List
+    // 7. Refresh Table List
     const select = document.getElementById("kyb-table-select");
     select.innerHTML = '<option value="">-- Select Table --</option>';
     try {
