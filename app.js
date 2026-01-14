@@ -4212,22 +4212,16 @@ window.toggleInput = function(inputId, icon) {
     }
 };
 
-// ==========================================
-// 🛠️ HELPER FUNCTIONS (Place at bottom of app.js)
-// ==========================================
 
-// ==========================================
-// 🛠️ KYB ANALYTICS ENGINE (Final Fix)
-// ==========================================
 
-// 1. POPULATE COLUMNS (Handles JAN_2025, Apr_2025 mixed cases)
+// 1. POPULATE COLUMNS
 async function populateKybColumns() {
     const tableName = document.getElementById("kyb-table-select").value;
     if(!tableName) return;
 
     try {
         const schema = await conn.query(`DESCRIBE ${tableName}`);
-        // Filter columns that look like dates (Matches JAN, Apr, Sep, 2025, etc.)
+        // Filter columns (JAN, FEB, 2025, etc.)
         const cols = schema.toArray().map(r => r.column_name).filter(c => 
             c.match(/JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|202/i)
         );
@@ -4245,7 +4239,7 @@ async function populateKybColumns() {
     } catch(e) { console.error("Error populating columns:", e); }
 }
 
-// 2. RUN ANALYSIS (With Safer Coordinate Checks)
+// 2. RUN ANALYSIS (With Explicit Double Casting)
 async function runKybAnalysis() {
     const tableName = document.getElementById("kyb-table-select").value;
     const start1 = document.getElementById("kyb-col-start1").value;
@@ -4261,13 +4255,11 @@ async function runKybAnalysis() {
     }
 
     status.innerHTML = "⏳ Processing data...";
-    console.log("--- Starting Analysis ---");
 
     try {
-        // A. Get Schema to find exact column names
+        // A. Get Schema
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const allCols = schema.toArray().map(r => r.column_name);
-        console.log("Available Columns:", allCols);
         
         // B. Helper to get columns in range
         function getColsInRange(s, e) {
@@ -4277,39 +4269,38 @@ async function runKybAnalysis() {
             return (i1 > i2) ? allCols.slice(i2, i1 + 1) : allCols.slice(i1, i2 + 1);
         }
 
-        // C. Build Sum Expressions (Use TRY_CAST for safety)
+        // C. Build Sum Expressions
+        // FIX: We use 0.0 (Double) instead of 0 (Integer) to prevent BigInt inference
         const colsA = getColsInRange(start1, end1);
-        const sumExpA = colsA.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0)`).join(" + ");
+        const sumExpA = colsA.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
 
-        let sumExpB = "0";
+        let sumExpB = "0.0";
         if (start2 && end2) {
             const colsB = getColsInRange(start2, end2);
             if (colsB.length > 0) {
-                sumExpB = colsB.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0)`).join(" + ");
+                sumExpB = colsB.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
             }
         }
 
-        // D. Detect Key Columns (Exact Match First, then Regex)
-        // This handles cases where column is "Lat" vs "lat"
+        // D. Detect Key Columns
         const pinCol = allCols.find(c => c === "Pincode") || allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
         const latCol = allCols.find(c => c === "Lat") || allCols.find(c => c.match(/lat/i)) || "Lat";
         const lngCol = allCols.find(c => c === "Long") || allCols.find(c => c.match(/long|lng/i)) || "Long";
-
-        console.log("Mapped Columns:", { pinCol, latCol, lngCol });
 
         if (!allCols.includes(latCol) || !allCols.includes(lngCol)) {
             throw new Error(`Missing coordinates. Looked for 'Lat'/'Long' but found: ${allCols.join(", ")}`);
         }
 
-        // E. Run Query (Aggressive Null Filtering)
-        // We use TRY_CAST in the WHERE clause to ensure we only get valid numbers
+        // E. Run Query
+        // FIX: explicitly CAST the final SUM to DOUBLE and Pincode to VARCHAR
+        // This ensures Javascript receives standard Numbers and Strings, never BigInts.
         const query = `
             SELECT 
-                "${pinCol}" as Pincode, 
-                TRY_CAST("${latCol}" AS DOUBLE) as Lat, 
-                TRY_CAST("${lngCol}" AS DOUBLE) as Lng,
-                SUM(${sumExpA}) as Sales_A,
-                SUM(${sumExpB}) as Sales_B
+                CAST("${pinCol}" AS VARCHAR) as Pincode, 
+                CAST("${latCol}" AS DOUBLE) as Lat, 
+                CAST("${lngCol}" AS DOUBLE) as Lng,
+                CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A,
+                CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B
             FROM ${tableName}
             WHERE TRY_CAST("${latCol}" AS DOUBLE) IS NOT NULL 
               AND TRY_CAST("${lngCol}" AS DOUBLE) IS NOT NULL
@@ -4317,23 +4308,16 @@ async function runKybAnalysis() {
             HAVING Sales_A > 0 OR Sales_B > 0
         `;
 
-        console.log("Generated SQL:", query);
-
         const result = await conn.query(query);
         const data = result.toArray().map(r => r.toJSON());
 
         if (data.length === 0) {
-            status.innerHTML = "⚠️ No valid data found. Check console for SQL query.";
-            console.warn("Query returned 0 rows.");
+            status.innerHTML = "⚠️ No valid data found. Check Lat/Long columns.";
             return;
         }
 
         status.innerHTML = `✅ Plotted ${data.length} locations.`;
         renderKybMapLayers(data, mode);
-
-        // Hide the old dashboard table if it exists to avoid confusion
-        const oldTable = document.getElementById("pincode-table-container");
-        if(oldTable) oldTable.innerHTML = "";
 
     } catch (e) {
         console.error("Analysis Failed:", e);
@@ -4341,6 +4325,6 @@ async function runKybAnalysis() {
     }
 }
 
-// 3. ATTACH TO WINDOW (Crucial Step)
+// 3. ATTACH TO WINDOW
 window.populateKybColumns = populateKybColumns;
 window.runKybAnalysis = runKybAnalysis;
