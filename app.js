@@ -1964,8 +1964,8 @@ window.onclick = function(event) {
 // 🌍 KYB DASHBOARD (MERGED: Static Stores + Analytics)
 // ==========================================
 
-let kybMapLayer = null; 
-let mapLayers = {}; // Store layer references
+
+
 
 async function loadBusinessDashboard() {
     resetUI();
