@@ -1964,72 +1964,53 @@ window.onclick = function(event) {
 // 🌍 KYB DASHBOARD (MERGED: Static Stores + Analytics)
 // ==========================================
 
-
-
-
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
     document.getElementById("business-ui").classList.remove("hidden");
 
-    // 1. Initialize Map (If not exists)
+    // 1. Initialize Map
     if (!mapInstance) {
-        // Tile Layers
         const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
         const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' });
 
         mapInstance = L.map('business-map', {
             center: [20.5937, 78.9629], // India Center
             zoom: 5,
-            layers: [streets] // Default layer
+            layers: [streets]
         });
 
-        // 2. Define Icons for Static Stores
+        // Icons
         const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
         const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
         const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 
-        // 3. Create Layer Groups
+        // Layer Groups
         mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
         mapLayers.metro = L.layerGroup().addTo(mapInstance);
         mapLayers.dmart = L.layerGroup().addTo(mapInstance);
 
-        // 4. Plot Static Stores from CONFIG
+        // Plot Static Config Data
         if (CONFIG.WAREHOUSE_GROUPS) {
             if (CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
-                CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
-                    L.marker([wh.lat, wh.lng], { icon: blueIcon })
-                     .bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`)
-                     .addTo(mapLayers.flipkart);
-                });
+                CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: blueIcon }).bindPopup(`<b>🏢 Flipkart</b><br>${wh.name}`).addTo(mapLayers.flipkart));
             }
             if (CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
-                CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
-                    L.marker([wh.lat, wh.lng], { icon: redIcon })
-                     .bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`)
-                     .addTo(mapLayers.metro);
-                });
+                CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro</b><br>${wh.name}`).addTo(mapLayers.metro));
             }
             if (CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
-                CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
-                    L.marker([wh.lat, wh.lng], { icon: greenIcon })
-                     .bindPopup(`<b>🛒 DMart</b><br>${wh.name}`)
-                     .addTo(mapLayers.dmart);
-                });
+                CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart));
             }
         }
 
-        // 5. Add Layer Control (To Toggle Views)
-        const baseMaps = { "🗺️ Streets": streets, "🛰️ Satellite": satellite };
-        const overlayMaps = { 
-            "🟦 Flipkart": mapLayers.flipkart, 
-            "🟥 Metro": mapLayers.metro, 
-            "🟩 DMart": mapLayers.dmart 
-        };
-        L.control.layers(baseMaps, overlayMaps).addTo(mapInstance);
+        // Layer Control
+        L.control.layers(
+            { "🗺️ Streets": streets, "🛰️ Satellite": satellite }, 
+            { "🟦 Flipkart": mapLayers.flipkart, "🟥 Metro": mapLayers.metro, "🟩 DMart": mapLayers.dmart }
+        ).addTo(mapInstance);
     }
     
-    // 6. Inject Analytics Controls (The New Feature)
+    // 2. Inject Analytics Controls
     const mapContainer = document.getElementById("business-ui");
     let controls = document.getElementById("kyb-controls");
     
@@ -2040,29 +2021,33 @@ async function loadBusinessDashboard() {
         
         controls.innerHTML = `
             <h3 style="margin-top:0;">🗺️ Pincode Sales Analytics</h3>
-            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; align-items:end;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:15px; align-items:end;">
                 
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">1. Data Source:</label>
+                    <label style="font-size:12px; font-weight:bold;">1. Sales Data (CSV):</label>
                     <select id="kyb-table-select" onchange="window.populateKybColumns()" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
                         <option value="">-- Load CSV first --</option>
                     </select>
                 </div>
 
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">2. Period A (Sum):</label>
-                    <div style="display:flex; gap:5px; align-items:center;">
+                    <label style="font-size:12px; font-weight:bold;">2. Boundaries (GeoJSON):</label>
+                    <input type="file" id="kyb-geojson-file" accept=".json,.geojson" style="font-size:11px; width:100%;">
+                    <div style="font-size:9px; color:#666; margin-top:2px;">*Optional. Upload for shapes.</div>
+                </div>
+
+                <div>
+                    <label style="font-size:12px; font-weight:bold;">3. Period A (Sum):</label>
+                    <div style="display:flex; gap:5px;">
                         <select id="kyb-col-start1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
-                        <span>⮕</span>
                         <select id="kyb-col-end1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                     </div>
                 </div>
 
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">3. Period B (Compare):</label>
-                    <div style="display:flex; gap:5px; align-items:center;">
+                    <label style="font-size:12px; font-weight:bold;">4. Period B (Compare):</label>
+                    <div style="display:flex; gap:5px;">
                         <select id="kyb-col-start2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
-                        <span>⮕</span>
                         <select id="kyb-col-end2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                     </div>
                 </div>
@@ -2070,7 +2055,7 @@ async function loadBusinessDashboard() {
 
             <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <label style="font-size:12px;">Map Visualization:</label>
+                    <label style="font-size:12px;">Mode:</label>
                     <select id="kyb-viz-mode" style="padding:5px; border:1px solid #ccc; border-radius:4px;">
                         <option value="sales_a">Show Period A Sales</option>
                         <option value="growth">Show Growth (A vs B)</option>
@@ -2084,20 +2069,17 @@ async function loadBusinessDashboard() {
         `;
         mapContainer.insertBefore(controls, mapContainer.firstChild);
     }
-
-    // 7. Refresh Table List
+    
+    // Initial Table Load
+    await window.populateKybColumns(); 
+    // Also re-populate table list just in case
     const select = document.getElementById("kyb-table-select");
-    select.innerHTML = '<option value="">-- Select Table --</option>';
     try {
         const result = await conn.query("SHOW TABLES");
         const tables = result.toArray().map(r => r.name);
-        tables.forEach(t => {
-            const opt = document.createElement("option");
-            opt.value = t;
-            opt.innerText = t;
-            select.appendChild(opt);
-        });
-    } catch (e) { console.warn("No tables found yet"); }
+        select.innerHTML = '<option value="">-- Select Table --</option>';
+        tables.forEach(t => select.innerHTML += `<option value="${t}">${t}</option>`);
+    } catch (e) {}
 }
 
 // 2. HELPER: POPULATE COLUMNS (JAN_2025, etc.)
@@ -4296,8 +4278,13 @@ async function populateKybColumns() {
 }
 
 // 2. RUN ANALYSIS (With Explicit Double Casting)
+// ==========================================
+// 🚀 RUN ANALYSIS (Merge CSV + GeoJSON)
+// ==========================================
+
 async function runKybAnalysis() {
     const tableName = document.getElementById("kyb-table-select").value;
+    const geoInput = document.getElementById("kyb-geojson-file");
     const start1 = document.getElementById("kyb-col-start1").value;
     const end1 = document.getElementById("kyb-col-end1").value;
     const start2 = document.getElementById("kyb-col-start2").value;
@@ -4305,82 +4292,191 @@ async function runKybAnalysis() {
     const mode = document.getElementById("kyb-viz-mode").value;
     const status = document.getElementById("kyb-status");
 
-    if (!tableName || !start1 || !end1) { 
-        alert("Please select a table and Period A columns."); 
-        return; 
-    }
+    if (!tableName || !start1 || !end1) { alert("Please select a table and columns."); return; }
 
-    status.innerHTML = "⏳ Processing data...";
+    status.innerHTML = "⏳ Aggregating Data...";
 
     try {
-        // A. Get Schema
+        // --- A. GET DATA FROM DUCKDB ---
         const schema = await conn.query(`DESCRIBE ${tableName}`);
         const allCols = schema.toArray().map(r => r.column_name);
         
-        // B. Helper to get columns in range
+        // Helper: Get Columns in Range
         function getColsInRange(s, e) {
             const i1 = allCols.indexOf(s);
             const i2 = allCols.indexOf(e);
-            if (i1 === -1 || i2 === -1) return [];
             return (i1 > i2) ? allCols.slice(i2, i1 + 1) : allCols.slice(i1, i2 + 1);
         }
 
-        // C. Build Sum Expressions
-        // FIX: We use 0.0 (Double) instead of 0 (Integer) to prevent BigInt inference
+        // Build Sum Expressions
         const colsA = getColsInRange(start1, end1);
         const sumExpA = colsA.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
 
         let sumExpB = "0.0";
         if (start2 && end2) {
             const colsB = getColsInRange(start2, end2);
-            if (colsB.length > 0) {
-                sumExpB = colsB.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
-            }
+            if (colsB.length > 0) sumExpB = colsB.map(c => `COALESCE(TRY_CAST("${c}" AS DOUBLE), 0.0)`).join(" + ");
         }
 
-        // D. Detect Key Columns
-        const pinCol = allCols.find(c => c === "Pincode") || allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
-        const latCol = allCols.find(c => c === "Lat") || allCols.find(c => c.match(/lat/i)) || "Lat";
-        const lngCol = allCols.find(c => c === "Long") || allCols.find(c => c.match(/long|lng/i)) || "Long";
+        // Identify Key Columns
+        const pinCol = allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
+        const latCol = allCols.find(c => c.match(/lat/i));
+        const lngCol = allCols.find(c => c.match(/long|lng/i));
+        const hasCoords = latCol && lngCol;
 
-        if (!allCols.includes(latCol) || !allCols.includes(lngCol)) {
-            throw new Error(`Missing coordinates. Looked for 'Lat'/'Long' but found: ${allCols.join(", ")}`);
+        // Query Construction
+        // Note: We don't need Lat/Long in GROUP BY if we are using GeoJSON
+        let query = "";
+        if (hasCoords) {
+             query = `SELECT CAST("${pinCol}" AS VARCHAR) as Pincode, CAST("${latCol}" AS DOUBLE) as Lat, CAST("${lngCol}" AS DOUBLE) as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}", "${latCol}", "${lngCol}"`;
+        } else {
+             query = `SELECT CAST("${pinCol}" AS VARCHAR) as Pincode, NULL as Lat, NULL as Lng, CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A, CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B FROM ${tableName} GROUP BY "${pinCol}"`;
         }
-
-        // E. Run Query
-        // FIX: explicitly CAST the final SUM to DOUBLE and Pincode to VARCHAR
-        // This ensures Javascript receives standard Numbers and Strings, never BigInts.
-        const query = `
-            SELECT 
-                CAST("${pinCol}" AS VARCHAR) as Pincode, 
-                CAST("${latCol}" AS DOUBLE) as Lat, 
-                CAST("${lngCol}" AS DOUBLE) as Lng,
-                CAST(SUM(${sumExpA}) AS DOUBLE) as Sales_A,
-                CAST(SUM(${sumExpB}) AS DOUBLE) as Sales_B
-            FROM ${tableName}
-            WHERE TRY_CAST("${latCol}" AS DOUBLE) IS NOT NULL 
-              AND TRY_CAST("${lngCol}" AS DOUBLE) IS NOT NULL
-            GROUP BY "${pinCol}", "${latCol}", "${lngCol}"
-            HAVING Sales_A > 0 OR Sales_B > 0
-        `;
 
         const result = await conn.query(query);
-        const data = result.toArray().map(r => r.toJSON());
+        const salesData = result.toArray().map(r => r.toJSON());
 
-        if (data.length === 0) {
-            status.innerHTML = "⚠️ No valid data found. Check Lat/Long columns.";
-            return;
+        // Create Lookup Map for Polygons
+        const salesMap = {};
+        let maxVal = 0;
+
+        salesData.forEach(row => {
+            let val = (mode === 'sales_a') ? row.Sales_A : 0;
+            if (mode === 'growth') {
+                val = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
+            }
+            if (Math.abs(val) > maxVal) maxVal = Math.abs(val);
+
+            salesMap[String(row.Pincode).trim()] = {
+                val: val,
+                salesA: row.Sales_A,
+                salesB: row.Sales_B,
+                lat: row.Lat,
+                lng: row.Lng
+            };
+        });
+
+        // --- B. RENDER MAP ---
+        if (geoInput.files.length > 0) {
+            status.innerHTML = "⏳ Reading Boundary File...";
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const geoJson = JSON.parse(e.target.result);
+                    renderKybPolygons(geoJson, salesMap, mode, maxVal);
+                    status.innerHTML = `✅ Drawn ${Object.keys(salesMap).length} pincodes.`;
+                } catch (err) { alert("Invalid GeoJSON"); console.error(err); }
+            };
+            reader.readAsText(geoInput.files[0]);
+        } 
+        else if (hasCoords) {
+            renderKybCircles(salesData, mode, maxVal);
+            status.innerHTML = `✅ Drawn circles (No Boundary File).`;
+        } else {
+            alert("❌ No boundary file uploaded AND no Lat/Long in CSV.");
         }
 
-        status.innerHTML = `✅ Plotted ${data.length} locations.`;
-        renderKybMapLayers(data, mode);
+    } catch (e) { console.error(e); status.innerHTML = `<span style="color:red">Error: ${e.message}</span>`; }
+}
+// ==========================================
+// 🛠️ RENDERERS & HELPERS
+// ==========================================
 
-    } catch (e) {
-        console.error("Analysis Failed:", e);
-        status.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
+function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
+    if (kybMapLayer) mapInstance.removeLayer(kybMapLayer);
+
+    const filteredFeatures = geoJson.features.filter(f => {
+        const p = f.properties;
+        // Match JSON pincode keys with our Sales Data keys
+        const geoPin = String(p.pincode || p.pin || p.zip || p.PINCODE || p.Name || p.name || "").trim();
+        
+        if (salesMap[geoPin]) {
+            f.properties._salesData = salesMap[geoPin];
+            return true;
+        }
+        return false;
+    });
+
+    if (filteredFeatures.length === 0) {
+        alert("0 Pincode matches found. Check if GeoJSON has 'pincode' property.");
+        return;
     }
+
+    kybMapLayer = L.geoJSON({ type: "FeatureCollection", features: filteredFeatures }, {
+        style: function(feature) {
+            const data = feature.properties._salesData;
+            const val = data.val;
+            let color = "#ccc";
+            let opacity = 0.6;
+
+            if (mode === 'sales_a') {
+                const intensity = maxVal > 0 ? val / maxVal : 0;
+                color = intensity > 0.7 ? '#800026' : (intensity > 0.5 ? '#BD0026' : (intensity > 0.3 ? '#FEB24C' : '#FFEDA0'));
+            } else {
+                color = val >= 0 ? '#1a9850' : '#d73027'; // Green/Red
+                opacity = 0.7;
+            }
+
+            return { fillColor: color, weight: 1, opacity: 1, color: 'white', fillOpacity: opacity };
+        },
+        onEachFeature: function(feature, layer) {
+            const d = feature.properties._salesData;
+            const pin = feature.properties.pincode || feature.properties.pin || "Unknown";
+            let tooltip = (mode === 'sales_a') ? `Sales: ₹${Math.floor(d.salesA).toLocaleString()}` : `Growth: ${d.val.toFixed(1)}%`;
+            
+            layer.bindPopup(`<div style="text-align:center;"><b>📍 ${pin}</b><br>${tooltip}</div>`);
+        }
+    }).addTo(mapInstance);
+
+    mapInstance.fitBounds(kybMapLayer.getBounds());
 }
 
+function renderKybCircles(data, mode, maxVal) {
+    if (kybMapLayer) mapInstance.removeLayer(kybMapLayer);
+    
+    const geoJsonData = { "type": "FeatureCollection", "features": [] };
+    data.forEach(row => {
+        let val = (mode === 'sales_a') ? row.Sales_A : 0;
+        if (mode === 'growth') val = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
+        
+        geoJsonData.features.push({
+            "type": "Feature",
+            "properties": { "pincode": row.Pincode, "value": val },
+            "geometry": { "type": "Point", "coordinates": [row.Lng, row.Lat] }
+        });
+    });
+
+    kybMapLayer = L.geoJSON(geoJsonData, {
+        pointToLayer: function (feature, latlng) {
+            const val = feature.properties.value;
+            let color = (mode === 'sales_a') ? (val/maxVal > 0.5 ? 'red' : 'green') : (val >= 0 ? 'green' : 'red');
+            return L.circleMarker(latlng, { radius: 8, fillColor: color, color: "#000", weight: 1, fillOpacity: 0.8 });
+        },
+        onEachFeature: function (f, l) { l.bindPopup(`<b>📍 ${f.properties.pincode}</b><br>Value: ${Math.floor(f.properties.value)}`); }
+    }).addTo(mapInstance);
+
+    if (data.length > 0) mapInstance.fitBounds(kybMapLayer.getBounds());
+}
+
+async function populateKybColumns() {
+    const tableName = document.getElementById("kyb-table-select").value;
+    if(!tableName) return;
+    try {
+        const schema = await conn.query(`DESCRIBE ${tableName}`);
+        const cols = schema.toArray().map(r => r.column_name).filter(c => c.match(/JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|202/i));
+        ["kyb-col-start1", "kyb-col-end1", "kyb-col-start2", "kyb-col-end2"].forEach(id => {
+            const sel = document.getElementById(id);
+            if(sel) {
+                sel.innerHTML = '<option value="">- Select -</option>';
+                cols.forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
+            }
+        });
+    } catch(e) {}
+}
+
+// ATTACH TO WINDOW
+window.populateKybColumns = populateKybColumns;
+window.runKybAnalysis = runKybAnalysis;
 // 3. ATTACH TO WINDOW
 window.populateKybColumns = populateKybColumns;
 window.runKybAnalysis = runKybAnalysis;
