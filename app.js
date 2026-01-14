@@ -1971,6 +1971,14 @@ window.onclick = function(event) {
 
 
 
+// ==========================================
+// 🌍 KYB DASHBOARD (Clean Start: Metro/DMart Hidden)
+// ==========================================
+
+let kybMapLayer = null; 
+let kybRadiusLayer = null; 
+let mapLayers = {}; 
+
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
@@ -1988,19 +1996,35 @@ async function loadBusinessDashboard() {
         });
 
         // Initialize Layer Groups
-        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
-        mapLayers.metro = L.layerGroup().addTo(mapInstance);
-        mapLayers.dmart = L.layerGroup().addTo(mapInstance);
-        kybRadiusLayer = L.layerGroup().addTo(mapInstance); // For Radius Circles
+        mapLayers.flipkart = L.layerGroup().addTo(mapInstance); // Show by default
+        kybRadiusLayer = L.layerGroup().addTo(mapInstance);     // Show by default
+        
+        // ⚠️ CHANGE: Do NOT add Metro/DMart to mapInstance by default (Hidden start)
+        mapLayers.metro = L.layerGroup(); 
+        mapLayers.dmart = L.layerGroup(); 
 
-        // Layer Control
+        // Icons
+        const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+        const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+        // Populate Hidden Layers
+        if (CONFIG.WAREHOUSE_GROUPS) {
+            if (CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
+                CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro</b><br>${wh.name}`).addTo(mapLayers.metro));
+            }
+            if (CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
+                CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart));
+            }
+        }
+
+        // Layer Control (User can toggle them ON here)
         L.control.layers(
             { "🗺️ Streets": streets, "🛰️ Satellite": satellite }, 
-            { "🟦 Flipkart": mapLayers.flipkart, "⭕ Radius (10/30/60)": kybRadiusLayer, "🟥 Metro": mapLayers.metro, "🟩 DMart": mapLayers.dmart }
+            { "🟦 Flipkart": mapLayers.flipkart, "⭕ Radius": kybRadiusLayer, "🟥 Metro": mapLayers.metro, "🟩 DMart": mapLayers.dmart }
         ).addTo(mapInstance);
     }
     
-    // 2. Inject Controls (Analytics + Store Filter + Fullscreen)
+    // 2. Inject Controls
     const mapContainer = document.getElementById("business-ui");
     let controls = document.getElementById("kyb-controls");
     
@@ -2016,9 +2040,7 @@ async function loadBusinessDashboard() {
                     <select id="kyb-store-filter" onchange="filterKybStores()" style="padding:5px 10px; border:1px solid #ccc; border-radius:4px; font-weight:bold;">
                         <option value="ALL">🏢 All Flipkart Stores</option>
                     </select>
-                    <button onclick="toggleKybFullscreen()" style="background:#424242; color:white; border:none; padding:5px 15px; border-radius:4px; cursor:pointer;">
-                        ⛶ Big Screen
-                    </button>
+                    <button onclick="toggleKybFullscreen()" style="background:#424242; color:white; border:none; padding:5px 15px; border-radius:4px; cursor:pointer;">⛶ Big Screen</button>
                 </div>
             </div>
 
