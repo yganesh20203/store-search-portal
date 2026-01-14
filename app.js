@@ -24,6 +24,7 @@ let selectedGroupCol = "";
 let activeTvCategory = "";
 let tvDataCache = [];
 let pendingPhotoBlob = null;
+let kybMapLayer = null;
 // Map Global
 let mapInstance = null;
 let mapLayers = {
@@ -78,7 +79,8 @@ window.openTaskActionModal = openTaskActionModal;
 window.submitTaskAction = submitTaskAction;
 window.toggleTaskActionUI = toggleTaskActionUI;
 window.loadTvStats = loadTvStats;
-
+window.populateKybColumns = populateKybColumns;
+window.runKybAnalysis = runKybAnalysis;
 
 
 // ==========================================
@@ -1951,127 +1953,276 @@ window.onclick = function(event) {
     const modal = document.getElementById("detail-modal");
     if (event.target == modal) closeModal();
 }
+// ==========================================
+// 🌍 KYB MAP ANALYTICS (Latest Version)
+// ==========================================
 
+let kybMapLayer = null; 
+
+// 1. MAIN DASHBOARD LOADER
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
     document.getElementById("business-ui").classList.remove("hidden");
-    
+
+    // Initialize Map if needed
     if (!mapInstance) {
-        const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' });
-        const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap' });
-        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' });
-
-        mapInstance = L.map('business-map', {
-            center: [20.5937, 78.9629],
-            zoom: 5,
-            layers: [streets]
-        });
-
-        const baseMaps = { "🗺️ Streets": streets, "🏔️ Terrain": terrain, "🛰️ Satellite": satellite };
-        L.control.layers(baseMaps).addTo(mapInstance);
-
-        const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-        const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-        const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
-
-        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
-        mapLayers.metro = L.layerGroup().addTo(mapInstance);
-        mapLayers.dmart = L.layerGroup().addTo(mapInstance);
-
-        if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
-            CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: blueIcon }).bindPopup(`<b>🏢 Flipkart Wholesale</b><br>${wh.name}`).addTo(mapLayers.flipkart);
-            });
-        }
-
-        if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
-            CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro Store</b><br>${wh.name}`).addTo(mapLayers.metro);
-            });
-        }
-
-        if (CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
-            CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => {
-                L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart);
-            });
-        }
+        mapInstance = L.map('business-map', { center: [20.5937, 78.9629], zoom: 5 });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            attribution: '© OpenStreetMap' 
+        }).addTo(mapInstance);
     }
     
-    setTimeout(() => {
-        mapInstance.invalidateSize();
-    }, 200);
+    // Inject Analysis Controls
+    const mapContainer = document.getElementById("business-ui");
+    let controls = document.getElementById("kyb-controls");
+    
+    if (!controls) {
+        controls = document.createElement("div");
+        controls.id = "kyb-controls";
+        controls.style.cssText = "background:white; padding:15px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); margin-bottom:15px;";
+        
+        controls.innerHTML = `
+            <h3 style="margin-top:0;">🗺️ Pincode Sales Analytics</h3>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; align-items:end;">
+                
+                <div>
+                    <label style="font-size:12px; font-weight:bold;">1. Select Data Source:</label>
+                    <select id="kyb-table-select" onchange="window.populateKybColumns()" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                        <option value="">-- Load CSV first --</option>
+                    </select>
+                </div>
 
-    const tableName = currentPivotTableName || `table_${activePaneId.replace('-', '_')}`;
-    const container = document.getElementById("pincode-table-container");
+                <div>
+                    <label style="font-size:12px; font-weight:bold;">2. Period A (Sum Columns):</label>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <select id="kyb-col-start1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
+                        <span>⮕</span>
+                        <select id="kyb-col-end1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size:12px; font-weight:bold;">3. Period B (Optional):</label>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <select id="kyb-col-start2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
+                        <span>⮕</span>
+                        <select id="kyb-col-end2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <label style="font-size:12px;">Map Visualization:</label>
+                    <select id="kyb-viz-mode" style="padding:5px; border:1px solid #ccc; border-radius:4px;">
+                        <option value="sales_a">Show Period A Sales</option>
+                        <option value="growth">Show Growth (A vs B)</option>
+                    </select>
+                </div>
+                <button onclick="window.runKybAnalysis()" style="background:#1e88e5; color:white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">
+                    🚀 Plot Analysis
+                </button>
+            </div>
+            <div id="kyb-status" style="margin-top:10px; font-size:12px; color:#666;"></div>
+        `;
+        mapContainer.insertBefore(controls, mapContainer.firstChild);
+    }
+
+    // Refresh Table List
+    const select = document.getElementById("kyb-table-select");
+    select.innerHTML = '<option value="">-- Select Table --</option>';
+    try {
+        const result = await conn.query("SHOW TABLES");
+        const tables = result.toArray().map(r => r.name);
+        tables.forEach(t => {
+            const opt = document.createElement("option");
+            opt.value = t;
+            opt.innerText = t;
+            select.appendChild(opt);
+        });
+    } catch (e) { console.warn("No tables found yet"); }
+}
+
+// 2. HELPER: POPULATE COLUMNS (JAN_2025, etc.)
+window.populateKybColumns = async function() {
+    const tableName = document.getElementById("kyb-table-select").value;
+    if(!tableName) return;
 
     try {
-        const check = await conn.query(`SHOW TABLES`);
-        const tables = check.toArray().map(r => r.name);
-        if (!tables.includes(tableName)) {
-            container.innerHTML = "<p>⚠️ No sales data loaded. Please load a Sales Report in 'Work on Reports' first.</p>";
-            return;
-        }
-
         const schema = await conn.query(`DESCRIBE ${tableName}`);
-        const cols = schema.toArray().map(r => r.column_name.toLowerCase());
-        
-        const pinCol = cols.find(c => c.includes("pin") || c.includes("zip")) || cols[0];
-        const salesCol = cols.find(c => c.includes("amount") || c.includes("price") || c.includes("value") || c.includes("sales"));
-        const statusCol = cols.find(c => c.includes("status") || c.includes("delivery"));
+        // Filter columns that look like dates/months
+        const cols = schema.toArray().map(r => r.column_name).filter(c => 
+            c.match(/JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|202/i)
+        );
 
-        if (!salesCol) {
-            container.innerHTML = "<p>⚠️ Could not identify Sales/Amount column for aggregation.</p>";
-            return;
+        const dropdowns = ["kyb-col-start1", "kyb-col-end1", "kyb-col-start2", "kyb-col-end2"];
+        dropdowns.forEach(id => {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="">- Select -</option>';
+            cols.forEach(c => {
+                sel.innerHTML += `<option value="${c}">${c}</option>`;
+            });
+        });
+    } catch(e) { console.error(e); }
+};
+
+// 3. CORE ANALYTICS ENGINE (SQL GENERATOR)
+window.runKybAnalysis = async function() {
+    const tableName = document.getElementById("kyb-table-select").value;
+    const start1 = document.getElementById("kyb-col-start1").value;
+    const end1 = document.getElementById("kyb-col-end1").value;
+    const start2 = document.getElementById("kyb-col-start2").value;
+    const end2 = document.getElementById("kyb-col-end2").value;
+    const mode = document.getElementById("kyb-viz-mode").value;
+    const status = document.getElementById("kyb-status");
+
+    if (!tableName || !start1 || !end1) { 
+        alert("Please select a table and Period A columns."); 
+        return; 
+    }
+
+    status.innerHTML = "⏳ Processing 130k+ rows...";
+
+    try {
+        // A. Get All Columns to determine order
+        const schema = await conn.query(`DESCRIBE ${tableName}`);
+        const allCols = schema.toArray().map(r => r.column_name);
+        
+        // B. Helper to get list of columns between Start and End
+        function getColsInRange(s, e) {
+            const i1 = allCols.indexOf(s);
+            const i2 = allCols.indexOf(e);
+            if (i1 === -1 || i2 === -1) return []; // Invalid columns
+            
+            // If user selects backwards (March to Jan), swap them to ensure valid range
+            if (i1 > i2) return allCols.slice(i2, i1 + 1);
+            
+            return allCols.slice(i1, i2 + 1);
         }
 
+        // C. Build Dynamic SQL SUM Expressions (Handling Nulls and Types)
+        const colsA = getColsInRange(start1, end1);
+        if (colsA.length === 0) throw new Error("Invalid Column Range for Period A");
+
+        // We cast to DOUBLE to prevent type errors if CSV read numbers as VARCHAR
+        const sumExpA = colsA.map(c => `COALESCE(CAST("${c}" AS DOUBLE), 0)`).join(" + ");
+
+        let sumExpB = "0";
+        if (start2 && end2) {
+            const colsB = getColsInRange(start2, end2);
+            if (colsB.length > 0) {
+                sumExpB = colsB.map(c => `COALESCE(CAST("${c}" AS DOUBLE), 0)`).join(" + ");
+            }
+        }
+
+        // D. Identify Key Columns (Lat/Long/Pincode)
+        // Auto-detect columns, defaulting to standard names if regex fails
+        const pinCol = allCols.find(c => c.match(/pin|zip/i)) || "Pincode";
+        const latCol = allCols.find(c => c.match(/lat/i)) || "Lat";
+        const lngCol = allCols.find(c => c.match(/long|lng/i)) || "Long";
+
+        // Verification Check
+        if (!allCols.includes(latCol) || !allCols.includes(lngCol)) {
+            throw new Error(`Missing 'Lat' or 'Long' columns. Found: ${allCols.join(", ")}`);
+        }
+
+        // E. Run Aggregation Query
+        // We group by Pincode and Location. 
+        // We filter out rows with missing location data to prevent mapping errors.
         const query = `
             SELECT 
-                "${pinCol}" as Pincode,
-                COUNT(*) as Total_Orders,
-                SUM("${salesCol}") as Total_Sales,
-                ${statusCol ? `ROUND(COUNT(CASE WHEN "${statusCol}" ILIKE '%Delivered%' THEN 1 END) * 100.0 / COUNT(*), 1)` : '0'} as Delivery_Percent
+                "${pinCol}" as Pincode, 
+                CAST("${latCol}" AS DOUBLE) as Lat, 
+                CAST("${lngCol}" AS DOUBLE) as Lng,
+                SUM(${sumExpA}) as Sales_A,
+                SUM(${sumExpB}) as Sales_B
             FROM ${tableName}
-            GROUP BY 1
-            ORDER BY Total_Sales DESC
-            LIMIT 50
+            WHERE "${latCol}" IS NOT NULL 
+              AND "${lngCol}" IS NOT NULL
+              AND CAST("${latCol}" AS VARCHAR) != '' 
+              AND CAST("${lngCol}" AS VARCHAR) != ''
+            GROUP BY "${pinCol}", "${latCol}", "${lngCol}"
+            HAVING Sales_A > 0 OR Sales_B > 0
         `;
 
+        // console.log("Executing Query:", query); // Debugging line
+
         const result = await conn.query(query);
-        const rows = result.toArray().map(r => r.toJSON());
+        const data = result.toArray().map(r => r.toJSON());
 
-        const totalSales = rows.reduce((acc, r) => acc + (r.Total_Sales || 0), 0);
-        const totalCust = rows.reduce((acc, r) => acc + (r.Total_Orders || 0), 0);
-        const avgDel = rows.length > 0 ? (rows.reduce((acc, r) => acc + (r.Delivery_Percent || 0), 0) / rows.length) : 0;
+        if (data.length === 0) {
+            status.innerHTML = "⚠️ No data found with valid Lat/Long coordinates.";
+            return;
+        }
 
-        document.getElementById("kyb-total-cust").innerText = totalCust.toLocaleString();
-        document.getElementById("kyb-total-sales").innerText = "₹" + Math.floor(totalSales).toLocaleString();
-        document.getElementById("kyb-avg-del").innerText = Math.floor(avgDel) + "%";
-
-        let html = `<table class="data-table">
-            <thead><tr><th>Pincode</th><th>Orders/Cust</th><th>Sales (₹)</th><th>Delivery %</th></tr></thead>
-            <tbody>`;
+        status.innerHTML = `✅ Plotted ${data.length} locations.`;
         
-        rows.forEach(r => {
-            html += `<tr>
-                <td>📍 ${r.Pincode}</td>
-                <td>${r.Total_Orders}</td>
-                <td>${Math.floor(r.Total_Sales).toLocaleString()}</td>
-                <td>
-                    <div style="background:#eee; border-radius:4px; width:100%; height:10px;">
-                        <div style="background:${r.Delivery_Percent > 80 ? 'green' : 'orange'}; width:${r.Delivery_Percent}%; height:100%; border-radius:4px;"></div>
-                    </div>
-                    <div style="font-size:10px; text-align:center;">${r.Delivery_Percent}%</div>
-                </td>
-            </tr>`;
-        });
-        html += `</tbody></table>`;
-        container.innerHTML = html;
+        // F. Render Map Layers
+        renderKybMapLayers(data, mode);
 
     } catch (e) {
         console.error(e);
-        container.innerHTML = `<p style="color:red">Error aggregating data: ${e.message}<br>Ensure a file is loaded in 'Work on Reports' view.</p>`;
+        status.innerHTML = `<span style="color:red">Error: ${e.message}</span>`;
     }
+};
+
+// 4. MAP RENDERER
+function renderKybMapLayers(data, mode) {
+    if (kybMapLayer) mapInstance.removeLayer(kybMapLayer);
+    
+    const geoJsonData = { "type": "FeatureCollection", "features": [] };
+    let maxVal = 0;
+    
+    data.forEach(row => {
+        let val = (mode === 'sales_a') ? row.Sales_A : 0;
+        let tooltip = `Sales: ₹${Math.floor(val).toLocaleString()}`;
+
+        if (mode === 'growth') {
+            const growth = row.Sales_A > 0 ? ((row.Sales_B - row.Sales_A) / row.Sales_A) * 100 : 0;
+            val = growth; 
+            tooltip = `Growth: ${growth.toFixed(1)}% <br>(A: ${Math.floor(row.Sales_A)} ⮕ B: ${Math.floor(row.Sales_B)})`;
+        }
+
+        if (Math.abs(val) > maxVal) maxVal = Math.abs(val);
+
+        geoJsonData.features.push({
+            "type": "Feature",
+            "properties": { "pincode": row.Pincode, "value": val, "tooltip": tooltip },
+            "geometry": { "type": "Point", "coordinates": [row.Lng, row.Lat] }
+        });
+    });
+
+    kybMapLayer = L.geoJSON(geoJsonData, {
+        pointToLayer: function (feature, latlng) {
+            const val = feature.properties.value;
+            let color = "blue";
+            let radius = 5;
+
+            if (mode === 'sales_a') {
+                const intensity = maxVal > 0 ? val / maxVal : 0;
+                color = intensity > 0.7 ? '#d32f2f' : (intensity > 0.3 ? '#fbc02d' : '#388e3c'); // Red-Yellow-Green (Heat)
+                radius = 5 + (intensity * 15);
+            } else {
+                color = val >= 0 ? '#4caf50' : '#f44336'; // Green (Growth), Red (Decline)
+                radius = 8;
+            }
+
+            return L.circleMarker(latlng, {
+                radius: radius,
+                fillColor: color,
+                color: "#000",
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.7
+            });
+        },
+        onEachFeature: function (feature, layer) {
+            layer.bindPopup(`<b>📍 Pincode: ${feature.properties.pincode}</b><br>${feature.properties.tooltip}`);
+        }
+    }).addTo(mapInstance);
+
+    if (data.length > 0) mapInstance.fitBounds(kybMapLayer.getBounds());
 }
 
 function toggleMapLayer(layerKey) {
