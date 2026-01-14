@@ -2780,6 +2780,7 @@ async function loadTvTasks() {
                     invoiceDate: r[3], 
                     mgrDueDate: r[4], 
                     tlDueDate: r[5],
+                    articleNo: r[6],
                     articleDesc: r[7], 
                     shortQty: r[9],
                     
