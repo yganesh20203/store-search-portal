@@ -4355,21 +4355,22 @@ function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
     if (kybMapLayer) mapInstance.removeLayer(kybMapLayer);
 
     console.log("--- GEOJSON DEBUG ---");
-    if (geoJson.features.length > 0) {
-        console.log("Example Feature Props:", geoJson.features[0].properties);
-    }
+    
+    // 1. Get List of Pincodes from CSV (Sales Data)
+    const csvPincodes = Object.keys(salesMap);
+    console.log("CSV First 5 Pincodes:", csvPincodes.slice(0, 5));
+
+    // 2. Get List of Pincodes from GeoJSON (Map Data)
+    let mapPincodesSample = [];
 
     let matchCount = 0;
     const filteredFeatures = geoJson.features.filter((f, idx) => {
         const p = f.properties;
-        // 1. Try finding the pincode key
         const rawGeoPin = p.pincode || p.PINCODE || p.Pincode || p.pin || p.PIN || p.zip || p.ZIP || p.Name || p.name || "";
-        
-        // 2. Strict Clean (Same as CSV)
         const cleanGeoPin = String(rawGeoPin).split(".")[0].trim();
 
-        // Debug first few rows
-        if (idx < 3) console.log(`GeoJSON Feature ${idx}: Raw='${rawGeoPin}' -> Clean='${cleanGeoPin}'`);
+        // Capture first 5 for debugging
+        if (idx < 5) mapPincodesSample.push(cleanGeoPin);
 
         if (salesMap[cleanGeoPin]) {
             f.properties._salesData = salesMap[cleanGeoPin];
@@ -4382,7 +4383,11 @@ function renderKybPolygons(geoJson, salesMap, mode, maxVal) {
     console.log(`Total Matches Found: ${matchCount}`);
 
     if (filteredFeatures.length === 0) {
-        alert("0 Matches Found! \n\nCheck Console (F12) to see 'CSV Data Debug' vs 'GeoJSON Debug'.\nYour Pincodes might be different numbers.");
+        // ⚠️ NEW: DIAGNOSTIC ALERT
+        const csvSample = csvPincodes.slice(0, 5).join(", ");
+        const mapSample = mapPincodesSample.join(", ");
+        
+        alert(`❌ DATA MISMATCH DETECTED!\n\nYour Sales CSV has pincodes like:\n[ ${csvSample} ... ]\n\nBUT your Map File has pincodes like:\n[ ${mapSample} ... ]\n\nThere is NO overlap. Please upload an "All India" GeoJSON file.`);
         return;
     }
 
