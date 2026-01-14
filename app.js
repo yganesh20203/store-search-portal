@@ -4309,3 +4309,36 @@ window.toggleInput = function(inputId, icon) {
         icon.innerText = "👁️"; // Change icon back to 'Show'
     }
 };
+
+// ==========================================
+// 🛠️ HELPER FUNCTIONS (Place at bottom of app.js)
+// ==========================================
+
+// 1. Define the function properly
+async function populateKybColumns() {
+    const tableName = document.getElementById("kyb-table-select").value;
+    if(!tableName) return;
+
+    try {
+        const schema = await conn.query(`DESCRIBE ${tableName}`);
+        
+        // Filter columns that look like dates/months (JAN, FEB, 2025, etc.)
+        const cols = schema.toArray().map(r => r.column_name).filter(c => 
+            c.match(/JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|202/i)
+        );
+
+        const dropdowns = ["kyb-col-start1", "kyb-col-end1", "kyb-col-start2", "kyb-col-end2"];
+        dropdowns.forEach(id => {
+            const sel = document.getElementById(id);
+            if(sel) {
+                sel.innerHTML = '<option value="">- Select -</option>';
+                cols.forEach(c => {
+                    sel.innerHTML += `<option value="${c}">${c}</option>`;
+                });
+            }
+        });
+    } catch(e) { console.error("Error populating columns:", e); }
+}
+
+// 2. Explicitly attach it to window so HTML onchange="" can see it
+window.populateKybColumns = populateKybColumns;
