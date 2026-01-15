@@ -3128,25 +3128,33 @@ async function loadTvTasks() {
                 </div>
             `).join("");
         }
-        else if (activeTvCategory === "OFR Audit") {
-            container.innerHTML = myPendingTasks.map(t => `
-                <div class="tv-task-card" style="border-left: 5px solid #009688;">
-                    <div>
-                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                            <span>Invoice: ${t.invoiceDate}</span>
-                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.dueDate}</span>
-                        </div>
-                        <h4 style="margin:5px 0; color:#00695c;">${t.storeName} (${t.storeNo})</h4>
-                        <div style="font-size:12px; margin-bottom:5px; font-weight:bold;">${t.articleDesc}</div>
-                        <div style="display:flex; gap:10px;">
-                            <span style="background:#ffebee; padding:4px 8px; border-radius:4px; font-size:11px; color:#c62828;">Short Qty: ${t.shortQty}</span>
-                        </div>
-                        <div style="margin-top:8px; font-size:11px; color:#555;"> Role: <b>${t.role}</b></div>
-                    </div>
-                    <button onclick="window.openTvExecuteModal('${t.id}', 'Short Qty: ${t.shortQty}')" style="margin-top:15px; width:100%; background:#009688; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">✏️ Input</button>
+        // ... inside loadTvTasks function ...
+
+else if (activeTvCategory === "OFR Audit") {
+    container.innerHTML = myPendingTasks.map(t => `
+        <div class="tv-task-card" style="border-left: 5px solid #009688;">
+            <div>
+                <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                    <span>Invoice: ${t.invoiceDate}</span>
+                    <span style="color:#d32f2f; font-weight:bold;">Due: ${t.dueDate}</span>
                 </div>
-            `).join("");
-        }
+                <h4 style="margin:5px 0; color:#00695c;">${t.storeName} (${t.storeNo})</h4>
+                
+                <div style="font-size:12px; margin-bottom:5px;">
+                    <span style="background:#e0f2f1; color:#00695c; padding:2px 6px; border-radius:4px; font-weight:bold; font-family:monospace;">
+                        #${t.articleNo}
+                    </span>
+                    <span style="font-weight:bold; margin-left:5px;">${t.articleDesc}</span>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <span style="background:#ffebee; padding:4px 8px; border-radius:4px; font-size:11px; color:#c62828;">Short Qty: ${t.shortQty}</span>
+                </div>
+                <div style="margin-top:8px; font-size:11px; color:#555;"> Role: <b>${t.role}</b></div>
+            </div>
+            <button onclick="window.openTvExecuteModal('${t.id}', 'Short Qty: ${t.shortQty}')" style="margin-top:15px; width:100%; background:#009688; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">✏️ Input</button>
+        </div>
+    `).join("");
+}
         else if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
             let color = activeTvCategory === "Planogram" ? "#673ab7" : "#2196f3";
             let btnTxt = "📸 Execute";
