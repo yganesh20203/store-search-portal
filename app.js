@@ -1961,57 +1961,51 @@ window.onclick = function(event) {
 
 
 // 1. MAIN DASHBOARD LOADER
-// ==========================================
-// 🌍 KYB DASHBOARD (MERGED: Static Stores + Analytics)
-// ==========================================
-
-// ==========================================
-// 🌍 KYB DASHBOARD (With Radius, Filters & Fullscreen)
-// ==========================================
-
+; 
 
 async function loadBusinessDashboard() {
     resetUI();
     highlightSidebar("KYB Map");
     document.getElementById("business-ui").classList.remove("hidden");
 
-    // 1. Initialize Map (If not exists)
+    // 1. Initialize Map
     if (!mapInstance) {
         const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
         const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri' });
 
         mapInstance = L.map('business-map', {
-            center: [20.5937, 78.9629], // India Center
+            center: [20.5937, 78.9629], 
             zoom: 5,
             layers: [streets]
         });
 
-        // Initialize Layer Groups
-        mapLayers.flipkart = L.layerGroup().addTo(mapInstance); // Show by default
-        kybRadiusLayer = L.layerGroup().addTo(mapInstance);     // Show by default
-        
-        // ⚠️ CHANGE: Do NOT add Metro/DMart to mapInstance by default (Hidden start)
-        mapLayers.metro = L.layerGroup(); 
-        mapLayers.dmart = L.layerGroup(); 
+        // Create Layer Groups
+        mapLayers.flipkart = L.layerGroup().addTo(mapInstance);
+        kybRadiusLayer = L.layerGroup().addTo(mapInstance);
+        mapLayers.metro = L.layerGroup(); // Hidden by default
+        mapLayers.dmart = L.layerGroup(); // Hidden by default
+        mapLayers.serviceable = L.layerGroup().addTo(mapInstance); // New Serviceable Layer
 
         // Icons
         const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
         const greenIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
 
-        // Populate Hidden Layers
+        // Load Static Stores
         if (CONFIG.WAREHOUSE_GROUPS) {
-            if (CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) {
-                CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro</b><br>${wh.name}`).addTo(mapLayers.metro));
-            }
-            if (CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) {
-                CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart));
-            }
+            if (CONFIG.WAREHOUSE_GROUPS["Metro Stores"]) CONFIG.WAREHOUSE_GROUPS["Metro Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: redIcon }).bindPopup(`<b>🏬 Metro</b><br>${wh.name}`).addTo(mapLayers.metro));
+            if (CONFIG.WAREHOUSE_GROUPS["DMart Stores"]) CONFIG.WAREHOUSE_GROUPS["DMart Stores"].forEach(wh => L.marker([wh.lat, wh.lng], { icon: greenIcon }).bindPopup(`<b>🛒 DMart</b><br>${wh.name}`).addTo(mapLayers.dmart));
         }
 
-        // Layer Control (User can toggle them ON here)
+        // Layer Control
         L.control.layers(
             { "🗺️ Streets": streets, "🛰️ Satellite": satellite }, 
-            { "🟦 Flipkart": mapLayers.flipkart, "⭕ Radius": kybRadiusLayer, "🟥 Metro": mapLayers.metro, "🟩 DMart": mapLayers.dmart }
+            { 
+                "🟦 Flipkart Stores": mapLayers.flipkart, 
+                "⭕ Radius Rings": kybRadiusLayer, 
+                "🛡️ Serviceable Areas": mapLayers.serviceable, // NEW
+                "🟥 Metro": mapLayers.metro, 
+                "🟩 DMart": mapLayers.dmart 
+            }
         ).addTo(mapInstance);
     }
     
@@ -2045,22 +2039,29 @@ async function loadBusinessDashboard() {
                 <div>
                     <label style="font-size:12px; font-weight:bold;">2. Boundaries (GeoJSON):</label>
                     <input type="file" id="kyb-geojson-file" accept=".json,.geojson" style="font-size:11px; width:100%;">
-                    <div style="font-size:9px; color:#666; margin-top:2px;">*Optional. Upload for shapes.</div>
                 </div>
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">3. Period A (Sum):</label>
+                    <label style="font-size:12px; font-weight:bold;">3. Period A:</label>
                     <div style="display:flex; gap:5px;">
                         <select id="kyb-col-start1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                         <select id="kyb-col-end1" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                     </div>
                 </div>
                 <div>
-                    <label style="font-size:12px; font-weight:bold;">4. Period B (Compare):</label>
+                    <label style="font-size:12px; font-weight:bold;">4. Period B:</label>
                     <div style="display:flex; gap:5px;">
                         <select id="kyb-col-start2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                         <select id="kyb-col-end2" style="width:50%; padding:5px; border:1px solid #ccc; border-radius:4px;"></select>
                     </div>
                 </div>
+            </div>
+
+            <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #eee; display:flex; gap:15px; align-items:center;">
+                <label style="font-size:12px; font-weight:bold; white-space:nowrap;">Optional Reference:</label>
+                <input type="file" id="kyb-serviceable-csv" accept=".csv" style="font-size:11px;">
+                <button onclick="loadServiceableLayer()" style="padding:4px 10px; background:#666; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">
+                    Load Serviceable Pincodes
+                </button>
             </div>
 
             <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
@@ -2080,26 +2081,92 @@ async function loadBusinessDashboard() {
         mapContainer.insertBefore(controls, mapContainer.firstChild);
     }
 
-    // 3. Populate Store Dropdown & Initial Plot
-    const storeSelect = document.getElementById("kyb-store-filter");
-    if (storeSelect.options.length === 1 && CONFIG.WAREHOUSE_GROUPS && CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"]) {
-        CONFIG.WAREHOUSE_GROUPS["Flipkart Wholesale"].forEach(wh => {
-            storeSelect.innerHTML += `<option value="${wh.name}">${wh.name}</option>`;
-        });
-    }
-
-    // Plot initial stores
+    // Populate Initial Data
     filterKybStores();
-
-    // 4. Populate CSV Tables
     await window.populateKybColumns();
-    const tableSelect = document.getElementById("kyb-table-select");
+    
+    // Refresh Table List
     try {
+        const tableSelect = document.getElementById("kyb-table-select");
         const result = await conn.query("SHOW TABLES");
         tableSelect.innerHTML = '<option value="">-- Select Table --</option>';
         result.toArray().forEach(r => tableSelect.innerHTML += `<option value="${r.name}">${r.name}</option>`);
     } catch (e) {}
 }
+
+// ==========================================
+// 🛡️ HELPER: LOAD SERVICEABLE LAYER
+// ==========================================
+window.loadServiceableLayer = async function() {
+    const csvInput = document.getElementById("kyb-serviceable-csv");
+    const geoInput = document.getElementById("kyb-geojson-file");
+    const status = document.getElementById("kyb-status");
+
+    if (csvInput.files.length === 0 || geoInput.files.length === 0) {
+        alert("⚠️ To load this layer, please upload BOTH:\n1. Boundaries (GeoJSON)\n2. Serviceable Pincodes (CSV)");
+        return;
+    }
+
+    status.innerHTML = "⏳ Generating Serviceable Layer...";
+    
+    // 1. Read Serviceable CSV
+    const csvFile = csvInput.files[0];
+    const csvText = await csvFile.text();
+    
+    // Simple CSV Parse (Expects Pincode in first column)
+    const serviceableSet = new Set();
+    const lines = csvText.split(/\r?\n/);
+    lines.forEach(line => {
+        const pin = line.split(',')[0].trim();
+        if (pin && !isNaN(pin)) serviceableSet.add(pin);
+    });
+
+    console.log(`Found ${serviceableSet.size} serviceable pincodes in CSV.`);
+
+    // 2. Read GeoJSON
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const geoJson = JSON.parse(e.target.result);
+            
+            // 3. Filter GeoJSON matches
+            const matchedFeatures = geoJson.features.filter(f => {
+                const p = f.properties;
+                const rawPin = p.pincode || p.PINCODE || p.pin || p.zip || "";
+                const cleanPin = String(rawPin).replace(/[^0-9]/g, '');
+                return serviceableSet.has(cleanPin);
+            });
+
+            if (matchedFeatures.length === 0) {
+                alert("❌ No matches found between Serviceable CSV and GeoJSON boundaries.");
+                status.innerHTML = "";
+                return;
+            }
+
+            // 4. Draw Layer (Blue Outline, Transparent Fill)
+            mapLayers.serviceable.clearLayers();
+            L.geoJSON({ type: "FeatureCollection", features: matchedFeatures }, {
+                style: {
+                    color: "#3388ff",       // Blue Border
+                    weight: 1,
+                    dashArray: '4, 4',      // Dashed Line
+                    fillColor: "#3388ff", 
+                    fillOpacity: 0.1        // Very faint blue fill
+                },
+                onEachFeature: function(f, l) {
+                    l.bindPopup(`<b>🛡️ Serviceable Area</b><br>Pincode: ${f.properties.pincode || "Unknown"}`);
+                }
+            }).addTo(mapLayers.serviceable);
+
+            status.innerHTML = `✅ Added ${matchedFeatures.length} serviceable zones.`;
+            
+        } catch (err) {
+            console.error(err);
+            alert("Error reading GeoJSON.");
+        }
+    };
+    reader.readAsText(geoInput.files[0]);
+};
 
 // ==========================================
 // 🎯 HELPER: FILTER STORES & DRAW RADIUS
