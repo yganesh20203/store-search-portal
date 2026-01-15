@@ -3128,10 +3128,32 @@ async function loadTvTasks() {
                 </div>
             `).join("");
         }
-        // ... inside loadTvTasks function ...
+      
 
 else if (activeTvCategory === "OFR Audit") {
-    container.innerHTML = myPendingTasks.map(t => `
+    container.innerHTML = myPendingTasks.map(t => {
+        
+        // 1. LOGIC: Determine what the TL should see regarding Manager's Input
+        let merchRcaHtml = "";
+        
+        if (t.role === "TL") {
+            // Check if Manager has given input (Col M / Index 12)
+            const hasManagerResponse = t.managerInput && t.managerInput.trim() !== "";
+            
+            const rcaText = hasManagerResponse 
+                ? `<span style="color:#2e7d32; font-weight:bold;">${t.managerInput}</span>` 
+                : `<span style="color:#e65100; font-style:italic;">⏳ No RCA by Merch yet</span>`;
+
+            merchRcaHtml = `
+                <div style="margin-top:8px; padding:6px; background:#fff3e0; border-radius:4px; font-size:11px; border-left:3px solid #ff9800;">
+                    <strong>Merch Manager Response:</strong><br>
+                    ${rcaText}
+                </div>
+            `;
+        }
+
+        // 2. RENDER CARD
+        return `
         <div class="tv-task-card" style="border-left: 5px solid #009688;">
             <div>
                 <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
@@ -3146,14 +3168,19 @@ else if (activeTvCategory === "OFR Audit") {
                     </span>
                     <span style="font-weight:bold; margin-left:5px;">${t.articleDesc}</span>
                 </div>
+
                 <div style="display:flex; gap:10px;">
                     <span style="background:#ffebee; padding:4px 8px; border-radius:4px; font-size:11px; color:#c62828;">Short Qty: ${t.shortQty}</span>
                 </div>
+
+                ${merchRcaHtml}
+
                 <div style="margin-top:8px; font-size:11px; color:#555;"> Role: <b>${t.role}</b></div>
             </div>
             <button onclick="window.openTvExecuteModal('${t.id}', 'Short Qty: ${t.shortQty}')" style="margin-top:15px; width:100%; background:#009688; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">✏️ Input</button>
         </div>
-    `).join("");
+        `;
+    }).join("");
 }
         else if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
             let color = activeTvCategory === "Planogram" ? "#673ab7" : "#2196f3";
