@@ -3642,155 +3642,183 @@ async function loadTvStats() {
         // ============================================================
         // 🅰️ LOGIC FOR OFR AUDIT (Complex Split View)
         // ============================================================
-        if (activeTvCategory === "OFR Audit") {
-            let fromDate = null; 
-            let toDate = null;
-            const fVal = document.getElementById("dash-from")?.value;
-            const tVal = document.getElementById("dash-to")?.value;
-            if (fVal) fromDate = new Date(fVal);
-            if (tVal) toDate = new Date(tVal);
+        // ... inside loadTvStats function ...
 
-            // Stats Objects
-            let grandTotalTasks = 0; 
-            let grandCompleted = 0; 
-            let grandLateDone = 0;    
-            let grandLatePending = 0; 
+if (activeTvCategory === "OFR Audit") {
+    let fromDate = null; 
+    let toDate = null;
+    const fVal = document.getElementById("dash-from")?.value;
+    const tVal = document.getElementById("dash-to")?.value;
+    
+    // Set dates to start/end of day for accurate comparison
+    if (fVal) { fromDate = new Date(fVal); fromDate.setHours(0,0,0,0); }
+    if (tVal) { toDate = new Date(tVal); toDate.setHours(23,59,59,999); }
 
-            let mgrStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
-            let tlStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
-            const storeStats = {};
+    // Stats Objects
+    let grandTotalTasks = 0; 
+    let grandCompleted = 0; 
+    let grandLateDone = 0;    
+    let grandLatePending = 0; 
 
-            rows.forEach(r => {
-                // Date Filtering
-                if (fromDate && toDate) {
-                    const invDate = r[3] ? new Date(r[3]) : null; 
-                    if (!invDate || invDate < fromDate || invDate > toDate) return; 
-                }
+    let mgrStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
+    let tlStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
+    const storeStats = {};
 
-                const storeName = r[2] ? String(r[2]).trim() : "Unknown";
-                if (!storeStats[storeName]) {
-                    storeStats[storeName] = { 
-                        mgr: { t:0, d:0, ld:0, lp:0 }, 
-                        tl: { t:0, d:0, ld:0, lp:0 } 
-                    };
-                }
+    rows.forEach(r => {
+        // --- ✅ ROBUST DATE FILTERING ---
+        if (fromDate && toDate) {
+            let rawDate = r[3] ? String(r[3]).trim() : "";
+            let invDate = new Date(rawDate); // Try standard JS parsing first
 
-                // --- MANAGER LOGIC ---
-                const mgrEmail = r[10];
-                if (mgrEmail && mgrEmail.trim() !== "") {
-                    grandTotalTasks++; mgrStats.total++; storeStats[storeName].mgr.t++;
-                    
-                    const mgrInput = r[12]; 
-                    const mgrDone = (mgrInput && mgrInput.trim() !== "");
-                    const mgrDue = r[4] ? new Date(r[4]) : null;
-                    
-                    if (mgrDone) {
-                        grandCompleted++; mgrStats.done++; storeStats[storeName].mgr.d++;
-                        // Late Completed Check
-                        const mgrTime = r[14] ? new Date(r[14]) : null;
-                        if (mgrDue && mgrTime && mgrTime > mgrDue) {
-                            grandLateDone++; mgrStats.lateDone++; storeStats[storeName].mgr.ld++;
-                        }
-                    } else {
-                        // Late Pending Check (Overdue)
-                        if (mgrDue && now > mgrDue) {
-                            grandLatePending++; mgrStats.latePending++; storeStats[storeName].mgr.lp++;
-                        }
+            // If standard parsing fails (Invalid Date), try manual split
+            if (isNaN(invDate.getTime()) && rawDate) {
+                const parts = rawDate.split(/[-/.]/); // Handle - or / or . separators
+                if (parts.length === 3) {
+                    // Case 1: yyyy-mm-dd (Year is first)
+                    if (parts[0].length === 4) {
+                        invDate = new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
+                    } 
+                    // Case 2: mm-dd-yyyy (Year is last)
+                    else if (parts[2].length === 4) {
+                        invDate = new Date(parts[2], parseInt(parts[0]) - 1, parts[1]);
                     }
                 }
+            }
 
-                // --- TL LOGIC ---
-                const tlEmail = r[11];
-                if (tlEmail && tlEmail.trim() !== "") {
-                    grandTotalTasks++; tlStats.total++; storeStats[storeName].tl.t++;
-                    
-                    const tlInput = r[13]; 
-                    const tlDone = (tlInput && tlInput.trim() !== "");
-                    const tlDue = r[5] ? new Date(r[5]) : null;
-                    
-                    if (tlDone) {
-                        grandCompleted++; tlStats.done++; storeStats[storeName].tl.d++;
-                        // Late Completed Check
-                        const tlTime = r[15] ? new Date(r[15]) : null;
-                        if (tlDue && tlTime && tlTime > tlDue) {
-                            grandLateDone++; tlStats.lateDone++; storeStats[storeName].tl.ld++;
-                        }
-                    } else {
-                        // Late Pending Check (Overdue)
-                        if (tlDue && now > tlDue) {
-                            grandLatePending++; tlStats.latePending++; storeStats[storeName].tl.lp++;
-                        }
-                    }
+            // Normalize time and check range
+            if (!isNaN(invDate.getTime())) {
+                invDate.setHours(0,0,0,0);
+                if (invDate < fromDate || invDate > toDate) return; // Skip row if outside range
+            } else {
+                return; // Skip row if date is completely invalid
+            }
+        }
+        // --- END DATE FILTERING ---
+
+        const storeName = r[2] ? String(r[2]).trim() : "Unknown";
+        if (!storeStats[storeName]) {
+            storeStats[storeName] = { 
+                mgr: { t:0, d:0, ld:0, lp:0 }, 
+                tl: { t:0, d:0, ld:0, lp:0 } 
+            };
+        }
+
+        // --- MANAGER LOGIC ---
+        const mgrEmail = r[10];
+        if (mgrEmail && mgrEmail.trim() !== "") {
+            grandTotalTasks++; mgrStats.total++; storeStats[storeName].mgr.t++;
+            
+            const mgrInput = r[12]; 
+            const mgrDone = (mgrInput && mgrInput.trim() !== "");
+            const mgrDue = r[4] ? new Date(r[4]) : null;
+            
+            if (mgrDone) {
+                grandCompleted++; mgrStats.done++; storeStats[storeName].mgr.d++;
+                // Late Completed Check
+                const mgrTime = r[14] ? new Date(r[14]) : null;
+                if (mgrDue && mgrTime && mgrTime > mgrDue) {
+                    grandLateDone++; mgrStats.lateDone++; storeStats[storeName].mgr.ld++;
                 }
-            });
+            } else {
+                // Late Pending Check (Overdue)
+                if (mgrDue && now > mgrDue) {
+                    grandLatePending++; mgrStats.latePending++; storeStats[storeName].mgr.lp++;
+                }
+            }
+        }
 
-            // Update Cards (OFR)
-            const pct = grandTotalTasks > 0 ? Math.round((grandCompleted/grandTotalTasks)*100) : 0;
-            document.getElementById("tv-stat-total").innerText = grandTotalTasks;
-            document.getElementById("tv-stat-pending").innerText = grandTotalTasks - grandCompleted;
-            document.getElementById("tv-stat-completed").innerText = grandCompleted;
+        // --- TL LOGIC ---
+        const tlEmail = r[11];
+        if (tlEmail && tlEmail.trim() !== "") {
+            grandTotalTasks++; tlStats.total++; storeStats[storeName].tl.t++;
             
-            // Detailed Percent Label
-            document.getElementById("tv-stat-percent").innerHTML = `
-                ${pct}% 
-                <div style="font-size:9px; margin-top:2px;">
-                    <span style="color:#f57c00;">⚠️ Done: ${grandLateDone}</span> | 
-                    <span style="color:#d32f2f;">⏳ Due: ${grandLatePending}</span>
-                </div>
-            `;
-
-            // Render OFR Table
-            let html = `
-            <div style="margin-bottom:10px; font-size:12px; color:#555;">
-                <b>Summary:</b> 
-                Mgr (LateDone: ${mgrStats.lateDone}, Overdue: ${mgrStats.latePending}) | 
-                TL (LateDone: ${tlStats.lateDone}, Overdue: ${tlStats.latePending})
-            </div>
+            const tlInput = r[13]; 
+            const tlDone = (tlInput && tlInput.trim() !== "");
+            const tlDue = r[5] ? new Date(r[5]) : null;
             
-            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc; box-shadow: inset 0 0 5px rgba(0,0,0,0.1);">
-                <table class="data-table" style="font-size:12px; width:100%; border-collapse: separate; border-spacing: 0;">
-                    <thead>
-                        <tr style="background:#f5f5f5;">
-                            <th rowspan="2" style="text-align:left; vertical-align:middle; position: sticky; top: 0; background: #e0e0e0; z-index: 10; border-bottom: 1px solid #ccc;">Store Name</th>
-                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Merch Manager</th>
-                            <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 Audit TL</th>
-                        </tr>
-                        <tr style="background:#f5f5f5;">
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed">✅</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed Late">⚠️✅</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Overdue (Pending Late)">⏳⚠️</th>
+            if (tlDone) {
+                grandCompleted++; tlStats.done++; storeStats[storeName].tl.d++;
+                // Late Completed Check
+                const tlTime = r[15] ? new Date(r[15]) : null;
+                if (tlDue && tlTime && tlTime > tlDue) {
+                    grandLateDone++; tlStats.lateDone++; storeStats[storeName].tl.ld++;
+                }
+            } else {
+                // Late Pending Check (Overdue)
+                if (tlDue && now > tlDue) {
+                    grandLatePending++; tlStats.latePending++; storeStats[storeName].tl.lp++;
+                }
+            }
+        }
+    });
 
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed">✅</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed Late">⚠️✅</th>
-                            <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Overdue (Pending Late)">⏳⚠️</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+    // Update Cards (OFR)
+    const pct = grandTotalTasks > 0 ? Math.round((grandCompleted/grandTotalTasks)*100) : 0;
+    document.getElementById("tv-stat-total").innerText = grandTotalTasks;
+    document.getElementById("tv-stat-pending").innerText = grandTotalTasks - grandCompleted;
+    document.getElementById("tv-stat-completed").innerText = grandCompleted;
+    
+    // Detailed Percent Label
+    document.getElementById("tv-stat-percent").innerHTML = `
+        ${pct}% 
+        <div style="font-size:9px; margin-top:2px;">
+            <span style="color:#f57c00;">⚠️ Done: ${grandLateDone}</span> | 
+            <span style="color:#d32f2f;">⏳ Due: ${grandLatePending}</span>
+        </div>
+    `;
+
+    // Render OFR Table
+    let html = `
+    <div style="margin-bottom:10px; font-size:12px; color:#555;">
+        <b>Summary:</b> 
+        Mgr (LateDone: ${mgrStats.lateDone}, Overdue: ${mgrStats.latePending}) | 
+        TL (LateDone: ${tlStats.lateDone}, Overdue: ${tlStats.latePending})
+    </div>
+    
+    <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc; box-shadow: inset 0 0 5px rgba(0,0,0,0.1);">
+        <table class="data-table" style="font-size:12px; width:100%; border-collapse: separate; border-spacing: 0;">
+            <thead>
+                <tr style="background:#f5f5f5;">
+                    <th rowspan="2" style="text-align:left; vertical-align:middle; position: sticky; top: 0; background: #e0e0e0; z-index: 10; border-bottom: 1px solid #ccc;">Store Name</th>
+                    <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👨‍💼 Merch Manager</th>
+                    <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top: 0; background: #e0e0e0; z-index: 10;">👷 Audit TL</th>
+                </tr>
+                <tr style="background:#f5f5f5;">
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed">✅</th>
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed Late">⚠️✅</th>
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Overdue (Pending Late)">⏳⚠️</th>
+
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Total Tasks">T</th>
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed">✅</th>
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Completed Late">⚠️✅</th>
+                    <th style="position: sticky; top: 35px; background: #f5f5f5; z-index: 5; border-bottom: 1px solid #ddd;" title="Overdue (Pending Late)">⏳⚠️</th>
+                </tr>
+            </thead>
+            <tbody>`;
+    
+    Object.keys(storeStats).sort().forEach(s => {
+        const d = storeStats[s];
+        const mgrColor = d.mgr.t > 0 && d.mgr.t === d.mgr.d ? '#e8f5e9' : '';
+        const tlColor = d.tl.t > 0 && d.tl.t === d.tl.d ? '#e8f5e9' : '';
+
+        html += `<tr>
+            <td style="font-weight:500;">${s}</td>
             
-            Object.keys(storeStats).sort().forEach(s => {
-                const d = storeStats[s];
-                const mgrColor = d.mgr.t > 0 && d.mgr.t === d.mgr.d ? '#e8f5e9' : '';
-                const tlColor = d.tl.t > 0 && d.tl.t === d.tl.d ? '#e8f5e9' : '';
+            <td style="background:${mgrColor}">${d.mgr.t}</td>
+            <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
+            <td style="color:${d.mgr.ld > 0 ? '#f57c00' : '#ccc'};">${d.mgr.ld || '-'}</td>
+            <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.mgr.lp > 0 ? 'bold' : 'normal'}">${d.mgr.lp || '-'}</td>
 
-                html += `<tr>
-                    <td style="font-weight:500;">${s}</td>
-                    
-                    <td style="background:${mgrColor}">${d.mgr.t}</td>
-                    <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
-                    <td style="color:${d.mgr.ld > 0 ? '#f57c00' : '#ccc'};">${d.mgr.ld || '-'}</td>
-                    <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.mgr.lp > 0 ? 'bold' : 'normal'}">${d.mgr.lp || '-'}</td>
-
-                    <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
-                    <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
-                    <td style="color:${d.tl.ld > 0 ? '#f57c00' : '#ccc'};">${d.tl.ld || '-'}</td>
-                    <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.tl.lp > 0 ? 'bold' : 'normal'}">${d.tl.lp || '-'}</td>
-                </tr>`;
-            });
-            html += `</tbody></table></div>`;
-            container.innerHTML = html;
-        } 
+            <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
+            <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
+            <td style="color:${d.tl.ld > 0 ? '#f57c00' : '#ccc'};">${d.tl.ld || '-'}</td>
+            <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.tl.lp > 0 ? 'bold' : 'normal'}">${d.tl.lp || '-'}</td>
+        </tr>`;
+    });
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+} 
         
         // ============================================================
         // 🅱️ LOGIC FOR ALL OTHER CATEGORIES (Events, Offer Board, etc.)
