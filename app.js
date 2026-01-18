@@ -26,6 +26,8 @@ let tvDataCache = [];
 let pendingPhotoBlob = null;
 let kybMapLayer = null;
 let kybRadiusLayer = null;
+let activeSessionCreds = null; 
+let tokenExpirationTime = 0;
 // Map Global
 let mapInstance = null;
 let mapLayers = {
@@ -146,7 +148,9 @@ async function unlockAndLogin() {
         if (!decryptedString) throw new Error("Incorrect Access Key");
 
         const creds = JSON.parse(decryptedString);
+        activeSessionCreds = creds;
         accessToken = await generateAccessToken(creds);
+        startTokenMonitor();
 
         // 2. CHECK USER DB
         btn.innerText = "🔍 Checking User DB...";
@@ -4801,3 +4805,64 @@ async function populateKybColumns() {
 window.populateKybColumns = populateKybColumns;
 window.runKybAnalysis = runKybAnalysis;
 
+// ==========================================
+// 🔄 AUTO-TOKEN REFRESHER
+// ==========================================
+
+function startTokenMonitor() {
+    // Check every 60 seconds
+    setInterval(async () => {
+        if (!activeSessionCreds || !tokenExpirationTime) return;
+
+        // Calculate time remaining (in milliseconds)
+        const timeLeft = tokenExpirationTime - Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        // If less than 5 minutes remaining, Refresh!
+        if (timeLeft < fiveMinutes) {
+            console.log("🔄 Token expiring soon. Auto-refreshing...");
+            try {
+                // Generate new token using stored creds
+                const newToken = await generateAccessToken(activeSessionCreds);
+                if (newToken) {
+                    accessToken = newToken;
+                    console.log("✅ Access Token Refreshed Silently!");
+                }
+            } catch (e) {
+                console.error("❌ Auto-Refresh Failed:", e);
+            }
+        }
+    }, 60000); // Run check every 1 minute
+}
+
+// ==========================================
+// 🔐 UPDATE: generateAccessToken
+// ==========================================
+// Replace your existing generateAccessToken with this updated version
+async function generateAccessToken(creds) {
+    const header = { alg: "RS256", typ: "JWT" };
+    const now = Math.floor(Date.now() / 1000);
+    
+    // ✅ UPDATE GLOBAL EXPIRATION (1 Hour from now)
+    tokenExpirationTime = (now + 3600) * 1000; 
+
+    const claim = {
+        iss: creds.client_email,
+        scope: "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets",
+        aud: "https://oauth2.googleapis.com/token",
+        exp: now + 3600,
+        iat: now
+    };
+
+    const sHeader = JSON.stringify(header);
+    const sClaim = JSON.stringify(claim);
+    const sJWS = KJUR.jws.JWS.sign(null, sHeader, sClaim, creds.private_key);
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${sJWS}`
+    });
+    const data = await response.json();
+    return data.access_token;
+}
