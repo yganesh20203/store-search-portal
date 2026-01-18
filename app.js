@@ -2798,7 +2798,7 @@ window.downloadTvTemplate = function() {
     let filename = "";
 
     if (activeTvCategory === "Offer Board") {
-        headers = ["Store No.", "Store Name", "Start Date (yyyy-mm-dd)", "End Date (yyyy-mm-dd)", "Approver LoginId", "Escalation L1", "Escalation L2", "No. of Posters"];
+        headers = ["Store No.", "Store Name", "Start Date (yyyy-mm-dd)", "End Date (yyyy-mm-dd)", "Approver LoginId", "Escalation L1", "Escalation L2", "Article Name"];
         filename = "OfferBoard_Template.csv";
     } 
     else if (activeTvCategory === "OFR Audit") {
@@ -2999,7 +2999,7 @@ async function loadTvTasks() {
                     assigneeList: assigneeList, // Store list instead of single string
                     escL1List: escL1List,
                     
-                    posters: r[8], 
+                    articleName: r[8],
                     completedDate: r[13]
                 };
             }).filter(t => {
@@ -3119,18 +3119,22 @@ async function loadTvTasks() {
         }
         else if (activeTvCategory === "Offer Board") {
             container.innerHTML = myPendingTasks.map(t => `
-                <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
-                    <div>
-                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                            <span>Store: ${t.storeNo}</span>
-                            <span style="color:${t.isEscalated ? '#d32f2f' : '#e65100'}; font-weight:bold;">${t.endDateStr}</span>
-                        </div>
-                        <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
-                        <div style="font-size:12px; background:#fff3e0; padding:6px; border-radius:4px;">Posters: <b>${t.posters}</b></div>
-                    </div>
-                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName}')" style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">▶️ Audit</button>
+        <div class="tv-task-card" style="${t.isEscalated ? 'border-left: 5px solid #d32f2f; background:#ffebee;' : ''}">
+            <div>
+                <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                    <span>Store: ${t.storeNo}</span>
+                    <span style="color:${t.isEscalated ? '#d32f2f' : '#e65100'}; font-weight:bold;">${t.endDateStr}</span>
                 </div>
-            `).join("");
+                
+                <h4 style="margin:8px 0; color:#1e3c72;">${t.storeName}</h4>
+                
+                <div style="font-size:13px; background:#e3f2fd; color:#1565c0; padding:6px; border-radius:4px; font-weight:bold; border:1px solid #bbdefb;">
+                    📦 ${t.articleName || "Unknown Article"}
+                </div>
+            </div>
+            <button onclick="window.openTvExecuteModal('${t.id}', '${t.storeName} - ${t.articleName}')" style="margin-top:15px; width:100%; background:#ff9800; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">▶️ Audit</button>
+        </div>
+    `).join("");
         }
       
 
