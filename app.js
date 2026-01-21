@@ -3051,7 +3051,7 @@ async function loadTvTasks() {
         // --- PLANOGRAM & FEATURE SPACE (Existing) ---
         else if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
             const isPlano = activeTvCategory === "Planogram";
-            const approverIdx = isPlano ? 9 : 4; 
+            const approverIdx = isPlano ? 9 : 5; 
             const statusIdx = isPlano ? 12 : 14; 
 
             myPendingTasks = data.values.slice(1).map((r, i) => {
