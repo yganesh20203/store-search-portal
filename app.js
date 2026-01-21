@@ -3225,7 +3225,14 @@ window.openTvExecuteModal = function(id, desc) {
              
              `; // (Shortened for brevity, keep your full list)
         } else {
-             dropdownOptions = `<option value="Found item">Found item</option><option value="Item damaged">Item damaged</option>`;
+             dropdownOptions = `<option value="Found item">Found item</option>
+             <option value="Item damaged">Item damaged</option>
+             <option value="Overbooking Confirmed - System checked">Overbooking Confirmed - System checked</option>
+             <option value="Item not found at store">Item not found at store</option>
+             <option value="Near expiry">Near expiry</option>
+             <option value="Shrink booked">Shrink booked</option>
+             <option value="Nego">Nego</option>
+             `;
         }
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
