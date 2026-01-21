@@ -3225,7 +3225,7 @@ window.openTvExecuteModal = function(id, desc) {
         footer.innerHTML = `<button onclick="window.submitTvTask()" style="background:#009688; color:white; padding:10px; border:none; border-radius:4px; width:100%;">💾 Save ${role} Input</button>`;
     }
     
-    // --- B. FEATURE SPACE (✅ NEW CUSTOM OPTIONS) ---
+   
     else if (activeTvCategory === "Feature Space") {
         body.innerHTML = `
             <input type="hidden" id="tv-exec-id" value="${id}">
@@ -3237,21 +3237,19 @@ window.openTvExecuteModal = function(id, desc) {
             <select id="tv-exec-response" onchange="window.toggleReasonInput(this.value)" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
                 <option value="">-- Select Status --</option>
                 <option value="Executed">Executed</option>
-               
                 <option value="Executed with Alternate Item Number">Executed with Alternate Item Number</option>
                 <option value="Not Executed (Dual MRP Issues)">Not Executed (Dual MRP Issues)</option>
                 <option value="Not Executed (Required quantity not available)">Not Executed (Required quantity not available)</option>
-      
             </select>
             
             <div id="tv-reason-container" class="hidden">
-                <label style="font-size:12px; font-weight:bold; color:#d32f2f;">Add Details / Remarks:</label>
-                <input type="text" id="tv-exec-reason" placeholder="Type specific details..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                <label style="font-size:12px; font-weight:bold; color:#555;">Additional Remarks (Optional):</label>
+                <input type="text" id="tv-exec-reason" placeholder="Enter alternate item number or other details..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
             </div>
 
             <div id="tv-camera-container" class="hidden">
-                <label style="font-size:12px; font-weight:bold;">Visual Proof:</label>
-                <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#555;">📸 Photo required for verification.</div>
+                <label style="font-size:12px; font-weight:bold;">Visual Proof (Required):</label>
+                <div id="tv-photo-status" style="margin-bottom:10px; font-size:12px; color:#555;">📸 Photo required for all status options.</div>
                 <button onclick="window.openCameraModal()" style="width:100%; padding:10px; background:#2196f3; color:white; border:none; border-radius:4px; cursor:pointer;">📸 Open Camera</button>
             </div>
         `;
@@ -3294,18 +3292,26 @@ window.toggleReasonInput = function(val) {
     
     if (!reasonDiv || !cameraDiv) return;
 
-    // Positive Cases (Show Camera, Hide Reason)
-    if (val === "Yes" || val === "Executed") {
+    // --- FEATURE SPACE LOGIC (Image Required for ALL options) ---
+    if (activeTvCategory === "Feature Space") {
+        if (val && val !== "") {
+            cameraDiv.classList.remove("hidden"); 
+            reasonDiv.classList.remove("hidden");
+        } else {
+            cameraDiv.classList.add("hidden");
+            reasonDiv.classList.add("hidden");
+        }
+        return; // Exit here, do not run standard logic below
+    }
+
+    // --- STANDARD LOGIC (Original Yes/No) ---
+    if (val === "Yes") {
         reasonDiv.classList.add("hidden");
         cameraDiv.classList.remove("hidden");
-    } 
-    // Negative/Other Cases (Show Reason, Hide Camera)
-    else if (val && val !== "") {
+    } else if (val === "No") {
         reasonDiv.classList.remove("hidden");
         cameraDiv.classList.add("hidden");
-    } 
-    // Reset (Hide Both)
-    else {
+    } else {
         reasonDiv.classList.add("hidden");
         cameraDiv.classList.add("hidden");
     }
@@ -3354,6 +3360,9 @@ window.submitTvTask = async function() {
         }
 
         // --- 2. GET INPUTS (Feature Space & Others) ---
+        // ... inside submitTvTask ...
+
+        // --- 2. GET INPUTS ---
         const responseVal = document.getElementById("tv-exec-response").value;
         const reasonVal = document.getElementById("tv-exec-reason")?.value || ""; 
 
@@ -3363,20 +3372,40 @@ window.submitTvTask = async function() {
         let photoLink = "-";
 
         // --- 3. HANDLE PHOTO & STATUS ---
-        // Positive Case (Yes OR Executed)
-        if (responseVal === "Yes" || responseVal === "Executed") {
-            if (!pendingPhotoBlob) throw new Error("📸 Photo is required for Execution.");
-            const fileName = `${activeTvCategory.substring(0,3)}_${taskId}_${Date.now()}.jpg`;
+        
+        // CASE A: FEATURE SPACE (Photo Mandatory for ALL statuses)
+        if (activeTvCategory === "Feature Space") {
+            if (!pendingPhotoBlob) throw new Error("📸 Photo is required for ALL Feature Space statuses.");
+            
+            const fileName = `FS_${taskId}_${Date.now()}.jpg`; 
             const targetFolder = config.folderId || CONFIG.TRUEVIEW_FOLDER_ID;
+            
+            // Upload Photo
             photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName, targetFolder);
-        } 
-        // Negative Case
+            
+            // Append optional notes to status cell
+            if (reasonVal) statusCell += ` | Note: ${reasonVal}`;
+        }
+        
+        // CASE B: STANDARD LOGIC (Yes = Photo, No = Reason)
         else {
-            // Append reason to status if reason text exists
-            if (reasonVal) {
-                statusCell = `${responseVal}: ${reasonVal}`;
+            if (responseVal === "Yes") {
+                if (!pendingPhotoBlob) throw new Error("📸 Photo is required.");
+                const fileName = `${activeTvCategory.substring(0,3)}_${taskId}_${Date.now()}.jpg`;
+                const targetFolder = config.folderId || CONFIG.TRUEVIEW_FOLDER_ID;
+                photoLink = await uploadBlobToDrive(pendingPhotoBlob, fileName, targetFolder);
+            } else {
+                // For No, reason is mandatory (except Offer Board which has specific logic)
+                if (!reasonVal && activeTvCategory !== "Offer Board") throw new Error("Reason required.");
+                
+                if (activeTvCategory !== "Offer Board") {
+                    statusCell = `${responseVal}: ${reasonVal}`;
+                }
             }
         }
+
+        // --- 4. MAP RANGES ---
+        // ... (Rest of your range mapping code remains the same) ...
 
         // --- 4. MAP RANGES ---
         if (activeTvCategory === "Offer Board") {
