@@ -3618,9 +3618,9 @@ async function loadTvStats() {
     if (!config) { console.error("Config missing"); return; }
 
     // ============================================================
-    // 1. INJECT SHARED DATE FILTER UI (For OFR Audit & Offer Board)
+    // 1. INJECT DATE FILTER UI (Shared for All 3 Complex Dashboards)
     // ============================================================
-    if (activeTvCategory === "OFR Audit" || activeTvCategory === "Offer Board") {
+    if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
         const filterContainer = document.getElementById("tv-dash-filters");
         if (!filterContainer) {
             const filterDiv = document.createElement("div");
@@ -3669,9 +3669,9 @@ async function loadTvStats() {
         const now = new Date();
 
         // ============================================================
-        // 🅰️ DETAILED ANALYTICS (OFR Audit OR Offer Board)
+        // 🅰️ DETAILED ANALYTICS (OFR Audit / Offer Board / Feature Space)
         // ============================================================
-        if (activeTvCategory === "OFR Audit" || activeTvCategory === "Offer Board") {
+        if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
             
             // --- 1. SETUP DATES ---
             let fromDate = null; 
@@ -3684,17 +3684,19 @@ async function loadTvStats() {
             // --- 2. DEFINE CONFIG MAPS ---
             let colMap = {};
             if (activeTvCategory === "Offer Board") {
-                // Based on standard template columns
                 colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 13 }; 
+            } else if (activeTvCategory === "Feature Space") {
+                // Feature Space Map: StartDate(Col D), Store(Col C), Approver(Col F), EndDate(Col E), Timestamp(Col Q)
+                colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16 }; 
             } else {
-                // OFR Audit
+                // OFR Audit Map
                 colMap = { date: 3, store: 2 }; 
             }
 
             // --- 3. INIT STATS CONTAINERS ---
             let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
             
-            // OFR Specific Stats
+            // OFR Specific Stats (Only used for OFR)
             let mgrStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
             let tlStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
             
@@ -3724,15 +3726,16 @@ async function loadTvStats() {
                 // [B] INIT STORE STATS
                 const storeName = r[colMap.store] ? String(r[colMap.store]).trim() : "Unknown";
                 if (!storeStats[storeName]) {
-                    if (activeTvCategory === "Offer Board") {
-                        storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
-                    } else {
+                    if (activeTvCategory === "OFR Audit") {
                         storeStats[storeName] = { mgr: { t:0, d:0, ld:0, lp:0 }, tl: { t:0, d:0, ld:0, lp:0 } };
+                    } else {
+                        // Standard structure for Offer Board & Feature Space
+                        storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
                     }
                 }
 
-                // [C] OFFER BOARD CALCULATION
-                if (activeTvCategory === "Offer Board") {
+                // [C] FEATURE SPACE & OFFER BOARD (Unified Logic)
+                if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
                     const assignee = r[colMap.assignee];
                     if (assignee && assignee.trim() !== "") {
                         gTotal++;
@@ -3748,7 +3751,7 @@ async function loadTvStats() {
                             // Late Check
                             if (dueObj) {
                                 const doneObj = new Date(doneTimeStr);
-                                dueObj.setHours(23,59,59,999); // Due date is end of day
+                                dueObj.setHours(23,59,59,999); 
                                 if (doneObj > dueObj) {
                                     gLateDone++;
                                     storeStats[storeName].ld++;
@@ -3767,7 +3770,7 @@ async function loadTvStats() {
                     }
                 }
 
-                // [D] OFR AUDIT CALCULATION (Your existing logic preserved)
+                // [D] OFR AUDIT CALCULATION (Existing Logic)
                 else if (activeTvCategory === "OFR Audit") {
                     // Manager Logic
                     const mgrEmail = r[10];
@@ -3822,9 +3825,8 @@ async function loadTvStats() {
             let tableRows = "";
             const sortedStores = Object.keys(storeStats).sort();
 
-            if (activeTvCategory === "Offer Board") {
-                // 
-                // Simple Header
+            if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
+                // Standard Header for Feature Space / Offer Board
                 tableHeader = `
                     <tr style="background:#f5f5f5;">
                         <th style="text-align:left; position: sticky; top:0; background:#e0e0e0; z-index:10;">Store Name</th>
@@ -3835,7 +3837,7 @@ async function loadTvStats() {
                         <th style="position: sticky; top:0; background:#e0e0e0; z-index:10;">Progress</th>
                     </tr>`;
                 
-                // Simple Rows
+                // Standard Rows
                 sortedStores.forEach(s => {
                     const d = storeStats[s];
                     const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
@@ -3907,7 +3909,7 @@ async function loadTvStats() {
         } 
         
         // ============================================================
-        // 🅱️ FALLBACK FOR OTHER CATEGORIES
+        // 🅱️ FALLBACK FOR OTHER CATEGORIES (Events / Planogram)
         // ============================================================
         else {
             let total = 0, completed = 0;
@@ -3919,7 +3921,6 @@ async function loadTvStats() {
 
                 if (activeTvCategory === "Events") isDone = (r[10] && r[10].length > 0);
                 else if (activeTvCategory === "Planogram") isDone = (r[12] && r[12].length > 0);
-                else if (activeTvCategory === "Feature Space") isDone = (r[14] && r[14].length > 0);
 
                 total++;
                 if (isDone) completed++;
