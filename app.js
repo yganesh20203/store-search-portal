@@ -3618,7 +3618,7 @@ async function loadTvStats() {
     if (!config) { console.error("Config missing"); return; }
 
     // ============================================================
-    // 1. INJECT DATE FILTER UI (Shared for All 3 Complex Dashboards)
+    // 1. INJECT FILTERS (Shared for Complex Dashboards)
     // ============================================================
     if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
         const filterContainer = document.getElementById("tv-dash-filters");
@@ -3629,23 +3629,34 @@ async function loadTvStats() {
             filterDiv.style.padding = "15px";
             filterDiv.style.background = "#e0f2f1";
             filterDiv.style.borderRadius = "8px";
+            
+            // Show Sub-Division input only for Feature Space? (Or keep generic but usable)
+            const subDivDisplay = activeTvCategory === "Feature Space" ? "inline-block" : "none";
+
             filterDiv.innerHTML = `
                 <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
-                    <strong>📅 Filter Date Range:</strong>
+                    <strong>📅 Date:</strong>
                     <input type="date" id="dash-from" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
                     <span>to</span>
                     <input type="date" id="dash-to" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
+                    
+                    <input type="text" id="dash-subdiv" placeholder="Filter Sub-Div..." style="display:${subDivDisplay}; padding:5px; border-radius:4px; border:1px solid #ccc; width:120px;">
+                    
                     <button onclick="window.loadTvStats()" style="background:#009688; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">🔄 Refresh</button>
                     <button onclick="window.resetDashFilters()" style="background:#78909c; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">❌ Clear</button>
                 </div>
             `;
             container.parentNode.insertBefore(filterDiv, container);
             
-            // Set Default Dates (Current Month)
+            // Default Dates
             const today = new Date();
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             document.getElementById("dash-from").valueAsDate = firstDay;
             document.getElementById("dash-to").valueAsDate = today;
+        } else {
+            // Toggle visibility of sub-div input dynamically if switching tabs without reload
+            const subDivInput = document.getElementById("dash-subdiv");
+            if(subDivInput) subDivInput.style.display = (activeTvCategory === "Feature Space" ? "inline-block" : "none");
         }
     } else {
         const existing = document.getElementById("tv-dash-filters");
@@ -3669,46 +3680,45 @@ async function loadTvStats() {
         const now = new Date();
 
         // ============================================================
-        // 🅰️ DETAILED ANALYTICS (OFR Audit / Offer Board / Feature Space)
+        // 🅰️ DETAILED ANALYTICS LOGIC
         // ============================================================
         if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
             
-            // --- 1. SETUP DATES ---
+            // --- 1. PARSE FILTERS ---
             let fromDate = null; 
             let toDate = null;
             const fVal = document.getElementById("dash-from")?.value;
             const tVal = document.getElementById("dash-to")?.value;
+            const subDivFilter = document.getElementById("dash-subdiv")?.value.toLowerCase().trim();
+
             if (fVal) { fromDate = new Date(fVal); fromDate.setHours(0,0,0,0); }
             if (tVal) { toDate = new Date(tVal); toDate.setHours(23,59,59,999); }
 
-            // --- 2. DEFINE CONFIG MAPS ---
+            // --- 2. MAP COLUMNS ---
             let colMap = {};
             if (activeTvCategory === "Offer Board") {
                 colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 13 }; 
             } else if (activeTvCategory === "Feature Space") {
-                // Feature Space Map: StartDate(Col D), Store(Col C), Approver(Col F), EndDate(Col E), Timestamp(Col Q)
-                colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16 }; 
-            } else {
-                // OFR Audit Map
+                colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16, subdiv: 8 }; 
+            } else { // OFR Audit
                 colMap = { date: 3, store: 2 }; 
             }
 
-            // --- 3. INIT STATS CONTAINERS ---
+            // --- 3. INIT STATS ---
             let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
-            
-            // OFR Specific Stats (Only used for OFR)
+            // Separate stats for OFR Audit roles
             let mgrStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
             let tlStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
-            
             const storeStats = {}; 
 
-            // --- 4. PROCESS ROWS ---
+            // --- 4. PROCESS DATA ---
             rows.forEach(r => {
-                // [A] ROBUST DATE PARSING & FILTERING
+                // [A] DATE FILTER
                 if (fromDate && toDate) {
                     let rawDate = r[colMap.date] ? String(r[colMap.date]).trim() : "";
                     let invDate = new Date(rawDate);
                     
+                    // Robust Parsing (mm-dd-yyyy or yyyy-mm-dd)
                     if (isNaN(invDate.getTime()) && rawDate) {
                         const parts = rawDate.split(/[-/.]/);
                         if (parts.length === 3) {
@@ -3720,21 +3730,26 @@ async function loadTvStats() {
                     if (!isNaN(invDate.getTime())) {
                         invDate.setHours(0,0,0,0);
                         if (invDate < fromDate || invDate > toDate) return; 
-                    } else { return; }
+                    } else { return; } // Skip invalid dates
                 }
 
-                // [B] INIT STORE STATS
+                // [B] SUB-DIVISION FILTER (Feature Space Only)
+                if (activeTvCategory === "Feature Space" && subDivFilter) {
+                    const rowSubDiv = r[colMap.subdiv] ? String(r[colMap.subdiv]).toLowerCase() : "";
+                    if (!rowSubDiv.includes(subDivFilter)) return; 
+                }
+
+                // [C] INIT STORE ENTRY
                 const storeName = r[colMap.store] ? String(r[colMap.store]).trim() : "Unknown";
                 if (!storeStats[storeName]) {
                     if (activeTvCategory === "OFR Audit") {
                         storeStats[storeName] = { mgr: { t:0, d:0, ld:0, lp:0 }, tl: { t:0, d:0, ld:0, lp:0 } };
                     } else {
-                        // Standard structure for Offer Board & Feature Space
                         storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
                     }
                 }
 
-                // [C] FEATURE SPACE & OFFER BOARD (Unified Logic)
+                // [D] LOGIC: OFFER BOARD & FEATURE SPACE
                 if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
                     const assignee = r[colMap.assignee];
                     if (assignee && assignee.trim() !== "") {
@@ -3770,9 +3785,9 @@ async function loadTvStats() {
                     }
                 }
 
-                // [D] OFR AUDIT CALCULATION (Existing Logic)
+                // [E] LOGIC: OFR AUDIT (Role Split)
                 else if (activeTvCategory === "OFR Audit") {
-                    // Manager Logic
+                    // Manager
                     const mgrEmail = r[10];
                     if (mgrEmail && mgrEmail.trim() !== "") {
                         gTotal++; mgrStats.total++; storeStats[storeName].mgr.t++;
@@ -3781,14 +3796,10 @@ async function loadTvStats() {
                         if (mgrDone) {
                             gDone++; mgrStats.done++; storeStats[storeName].mgr.d++;
                             const mgrTime = r[14] ? new Date(r[14]) : null;
-                            if (mgrDue && mgrTime && mgrTime > mgrDue) {
-                                gLateDone++; mgrStats.lateDone++; storeStats[storeName].mgr.ld++;
-                            }
-                        } else if (mgrDue && now > mgrDue) {
-                            gOverdue++; mgrStats.latePending++; storeStats[storeName].mgr.lp++;
-                        }
+                            if (mgrDue && mgrTime && mgrTime > mgrDue) { gLateDone++; mgrStats.lateDone++; storeStats[storeName].mgr.ld++; }
+                        } else if (mgrDue && now > mgrDue) { gOverdue++; mgrStats.latePending++; storeStats[storeName].mgr.lp++; }
                     }
-                    // TL Logic
+                    // TL
                     const tlEmail = r[11];
                     if (tlEmail && tlEmail.trim() !== "") {
                         gTotal++; tlStats.total++; storeStats[storeName].tl.t++;
@@ -3797,12 +3808,8 @@ async function loadTvStats() {
                         if (tlDone) {
                             gDone++; tlStats.done++; storeStats[storeName].tl.d++;
                             const tlTime = r[15] ? new Date(r[15]) : null;
-                            if (tlDue && tlTime && tlTime > tlDue) {
-                                gLateDone++; tlStats.lateDone++; storeStats[storeName].tl.ld++;
-                            }
-                        } else if (tlDue && now > tlDue) {
-                            gOverdue++; tlStats.latePending++; storeStats[storeName].tl.lp++;
-                        }
+                            if (tlDue && tlTime && tlTime > tlDue) { gLateDone++; tlStats.lateDone++; storeStats[storeName].tl.ld++; }
+                        } else if (tlDue && now > tlDue) { gOverdue++; tlStats.latePending++; storeStats[storeName].tl.lp++; }
                     }
                 }
             });
@@ -3826,30 +3833,28 @@ async function loadTvStats() {
             const sortedStores = Object.keys(storeStats).sort();
 
             if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
-                // Standard Header for Feature Space / Offer Board
+                // Standard Header
                 tableHeader = `
                     <tr style="background:#f5f5f5;">
-                        <th style="text-align:left; position: sticky; top:0; background:#e0e0e0; z-index:10;">Store Name</th>
-                        <th style="position: sticky; top:0; background:#e0e0e0; z-index:10;">Total</th>
-                        <th style="position: sticky; top:0; background:#e0e0e0; z-index:10;">Done</th>
-                        <th style="position: sticky; top:0; background:#e0e0e0; z-index:10;">Late Done ⚠️</th>
-                        <th style="position: sticky; top:0; background:#e0e0e0; z-index:10;">Overdue ⏳</th>
-                        <th style="position: sticky; top:0; background:#e0e0e0; z-index:10;">Progress</th>
+                        <th style="text-align:left; position:sticky; top:0; background:#e0e0e0; z-index:10;">Store Name</th>
+                        <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Total</th>
+                        <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Done</th>
+                        <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Late Done ⚠️</th>
+                        <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Overdue ⏳</th>
+                        <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Progress</th>
                     </tr>`;
                 
-                // Standard Rows
                 sortedStores.forEach(s => {
                     const d = storeStats[s];
                     const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
                     const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
-                    
                     tableRows += `
                     <tr>
                         <td style="font-weight:500;">${s}</td>
                         <td>${d.t}</td>
                         <td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td>
-                        <td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}; font-weight:${d.ld > 0 ? 'bold' : 'normal'}">${d.ld || '-'}</td>
-                        <td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.lp > 0 ? 'bold' : 'normal'}">${d.lp || '-'}</td>
+                        <td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td>
+                        <td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td>
                         <td style="width:100px;">
                             <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
                                 <div style="width:${p}%; background:${barColor}; height:100%;"></div>
@@ -3860,25 +3865,24 @@ async function loadTvStats() {
                 });
 
             } else {
-                // OFR Audit (Complex Header)
+                // OFR Audit Header
                 tableHeader = `
                     <tr style="background:#f5f5f5;">
-                        <th rowspan="2" style="text-align:left; vertical-align:middle; position: sticky; top:0; background:#e0e0e0; z-index:10; border-bottom:1px solid #ccc;">Store Name</th>
-                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top:0; background:#e0e0e0; z-index:10;">👨‍💼 Merch Manager</th>
-                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position: sticky; top:0; background:#e0e0e0; z-index:10;">👷 Audit TL</th>
+                        <th rowspan="2" style="text-align:left; vertical-align:middle; position:sticky; top:0; background:#e0e0e0; z-index:10; border-bottom:1px solid #ccc;">Store Name</th>
+                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👨‍💼 Merch Manager</th>
+                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👷 Audit TL</th>
                     </tr>
                     <tr style="background:#f5f5f5;">
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️✅</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳⚠️</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️✅</th>
-                        <th style="position: sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳⚠️</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️✅</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳⚠️</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️✅</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳⚠️</th>
                     </tr>`;
 
-                // OFR Rows
                 sortedStores.forEach(s => {
                     const d = storeStats[s];
                     const mgrColor = d.mgr.t > 0 && d.mgr.t === d.mgr.d ? '#e8f5e9' : '';
@@ -3889,11 +3893,11 @@ async function loadTvStats() {
                         <td style="background:${mgrColor}">${d.mgr.t}</td>
                         <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
                         <td style="color:${d.mgr.ld > 0 ? '#f57c00' : '#ccc'}">${d.mgr.ld || '-'}</td>
-                        <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.mgr.lp > 0 ? 'bold' : 'normal'}">${d.mgr.lp || '-'}</td>
+                        <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}">${d.mgr.lp || '-'}</td>
                         <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
                         <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
                         <td style="color:${d.tl.ld > 0 ? '#f57c00' : '#ccc'}">${d.tl.ld || '-'}</td>
-                        <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}; font-weight:${d.tl.lp > 0 ? 'bold' : 'normal'}">${d.tl.lp || '-'}</td>
+                        <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}">${d.tl.lp || '-'}</td>
                     </tr>`;
                 });
             }
@@ -3909,7 +3913,7 @@ async function loadTvStats() {
         } 
         
         // ============================================================
-        // 🅱️ FALLBACK FOR OTHER CATEGORIES (Events / Planogram)
+        // 🅱️ FALLBACK FOR SIMPLE CATEGORIES
         // ============================================================
         else {
             let total = 0, completed = 0;
@@ -3918,7 +3922,6 @@ async function loadTvStats() {
             rows.forEach(r => {
                 let storeName = r[2] || "Unknown";
                 let isDone = false;
-
                 if (activeTvCategory === "Events") isDone = (r[10] && r[10].length > 0);
                 else if (activeTvCategory === "Planogram") isDone = (r[12] && r[12].length > 0);
 
@@ -3929,14 +3932,14 @@ async function loadTvStats() {
                 if (isDone) storeStatsSimple[storeName].C++;
             });
 
-            // Update Cards (Simple)
+            // Cards
             const pct = total > 0 ? Math.round((completed/total)*100) : 0;
             document.getElementById("tv-stat-total").innerText = total;
             document.getElementById("tv-stat-pending").innerText = total - completed;
             document.getElementById("tv-stat-completed").innerText = completed;
             document.getElementById("tv-stat-percent").innerText = pct + "%";
 
-            // Render Simple Table
+            // Simple Table
             let html = `
             <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;">
                 <table class="data-table" style="width:100%;">
