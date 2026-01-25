@@ -3171,10 +3171,7 @@ else if (activeTvCategory === "OFR Audit") {
             let color = activeTvCategory === "Planogram" ? "#673ab7" : "#2196f3";
             let btnTxt = "📸 Execute";
             
-            // ... inside loadTvTasks ...
-        // ... inside Planogram/Feature Space else-if block ...
-
-        // Render Cards
+        
         container.innerHTML = myPendingTasks.map(t => `
             <div class="tv-task-card" style="border-left: 5px solid ${color};">
                 <div>
@@ -3193,9 +3190,10 @@ else if (activeTvCategory === "OFR Audit") {
                                 📍 ${t.dispLoc}
                             </span>` : ''
                         }
+                        
                         ${t.execType ? `
                             <span style="background:#fff3e0; color:#e65100; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #ffe0b2;">
-                                🛠️ ${t.execType}
+                                ${t.execType}
                             </span>` : ''
                         }
                     </div>
