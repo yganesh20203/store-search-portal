@@ -3049,24 +3049,90 @@ async function loadTvTasks() {
         }
 
         // --- PLANOGRAM & FEATURE SPACE (Existing) ---
+      // --- PLANOGRAM & FEATURE SPACE (Corrected Indices) ---
         else if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
             const isPlano = activeTvCategory === "Planogram";
-            const approverIdx = isPlano ? 9 : 5; 
+            let color = isPlano ? "#673ab7" : "#2196f3";
+            let btnTxt = "📸 Execute";
+            
+            // ✅ APPROVER INDEX (Planogram usually 8, Feature Space is 5)
+            const approverIdx = isPlano ? 8 : 5; 
+            
+            // ✅ STATUS INDEX (Planogram 12, Feature Space is 14 based on your headers)
             const statusIdx = isPlano ? 12 : 14; 
 
             myPendingTasks = data.values.slice(1).map((r, i) => {
                 const rawAppr = (r[approverIdx] || "").toLowerCase().trim();
+                
+                // ✅ EXACT MAPPING FOR FEATURE SPACE
+                const itemDescVal = !isPlano ? r[11] : ""; // Col L
+                const dispLocVal = !isPlano ? r[12] : "";  // Col M
+                const execTypeVal = !isPlano ? r[13] : ""; // Col N
+                const itemNoVal = !isPlano ? r[10] : "";   // Col K
+                const subDivVal = !isPlano ? r[8] : r[5];  // FS: Col I (8), Plano: Col F (5)
+                const catNameVal = !isPlano ? r[9] : r[6]; // FS: Col J (9), Plano: Col G (6)
+
                 return {
-                    rowIndex: i + 2, id: r[0], storeNo: r[1], storeName: r[2], endDate: isPlano ? r[4] : r[3],
-                    subDiv: isPlano ? r[5] : "", category: isPlano ? r[7] : "", brand: isPlano ? r[8] : "",
-                    itemDesc: !isPlano ? r[10] : "", dispLoc: !isPlano ? r[11] : "", execType: !isPlano ? r[12] : "",
-                    approverEmail: rawAppr, approverUser: rawAppr.split('@')[0], status: r[statusIdx]
+                    rowIndex: i + 2, 
+                    id: r[0], 
+                    storeNo: r[1], 
+                    storeName: r[2], 
+                    endDate: r[4], 
+                    
+                    subDiv: subDivVal, 
+                    category: catNameVal, 
+                    brand: isPlano ? r[7] : "",
+                    
+                    // Mapped Values
+                    itemDesc: itemDescVal,
+                    itemNo: itemNoVal, 
+                    dispLoc: dispLocVal,  
+                    execType: execTypeVal, 
+                    
+                    approverEmail: rawAppr, 
+                    approverUser: rawAppr.split('@')[0], 
+                    status: r[statusIdx]
                 };
             }).filter(t => {
                 const isPending = !t.status || t.status.trim() === "";
                 if (!isPending) return false;
                 return (t.approverEmail === rawUser) || (t.approverUser === currentUsername);
             });
+
+            // ✅ RENDER CARDS
+            container.innerHTML = myPendingTasks.map(t => `
+                <div class="tv-task-card" style="border-left: 5px solid ${color};">
+                    <div>
+                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                            <span>${t.storeName} (${t.storeNo})</span>
+                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
+                        </div>
+                        
+                        <h4 style="margin:5px 0; color:${color}; line-height:1.4;">
+                            ${t.itemDesc || t.brand + " (" + t.category + ")"}
+                            ${t.itemNo ? `<div style="color:#777; font-size:11px; font-weight:normal; margin-top:2px;">Item: #${t.itemNo}</div>` : ''}
+                        </h4>
+
+                        <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;">
+                            ${t.dispLoc ? `
+                                <span style="background:#e3f2fd; color:#1565c0; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #bbdefb;">
+                                    📍 ${t.dispLoc}
+                                </span>` : ''
+                            }
+                            
+                            ${t.execType ? `
+                                <span style="background:#fff3e0; color:#e65100; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #ffe0b2;">
+                                    ${t.execType}
+                                </span>` : ''
+                            }
+                        </div>
+
+                        ${t.subDiv ? `<div style="font-size:12px; color:#666;">📂 ${t.subDiv}</div>` : ''}
+                    </div>
+                    
+                    <button onclick="window.openTvExecuteModal('${t.id}', '${(t.itemDesc || t.brand).replace(/'/g, "")}')" style="margin-top:10px; width:100%; background:${color}; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">${btnTxt}</button>
+                </div>
+            `).join("");
         }
 
         // --- RENDER ---
@@ -3167,44 +3233,7 @@ else if (activeTvCategory === "OFR Audit") {
         `;
     }).join("");
 }
-        else if (activeTvCategory === "Planogram" || activeTvCategory === "Feature Space") {
-            let color = activeTvCategory === "Planogram" ? "#673ab7" : "#2196f3";
-            let btnTxt = "📸 Execute";
-            
         
-        container.innerHTML = myPendingTasks.map(t => `
-            <div class="tv-task-card" style="border-left: 5px solid ${color};">
-                <div>
-                    <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                        <span>${t.storeName} (${t.storeNo})</span>
-                        <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
-                    </div>
-                    
-                    <h4 style="margin:5px 0; color:${color}; line-height:1.4;">
-                        ${t.itemDesc || t.brand + " (" + t.category + ")"}
-                    </h4>
-
-                    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;">
-                        ${t.dispLoc ? `
-                            <span style="background:#e3f2fd; color:#1565c0; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #bbdefb;">
-                                📍 ${t.dispLoc}
-                            </span>` : ''
-                        }
-                        
-                        ${t.execType ? `
-                            <span style="background:#fff3e0; color:#e65100; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #ffe0b2;">
-                                ${t.execType}
-                            </span>` : ''
-                        }
-                    </div>
-
-                    ${t.subDiv ? `<div style="font-size:12px; color:#666;">📂 ${t.subDiv}</div>` : ''}
-                </div>
-                
-                <button onclick="window.openTvExecuteModal('${t.id}', '${(t.itemDesc || t.brand).replace(/'/g, "")}')" style="margin-top:10px; width:100%; background:${color}; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">${btnTxt}</button>
-            </div>
-        `).join("");
-        }
 
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
