@@ -3171,19 +3171,41 @@ else if (activeTvCategory === "OFR Audit") {
             let color = activeTvCategory === "Planogram" ? "#673ab7" : "#2196f3";
             let btnTxt = "📸 Execute";
             
-            container.innerHTML = myPendingTasks.map(t => `
-                <div class="tv-task-card" style="border-left: 5px solid ${color};">
-                    <div>
-                        <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
-                            <span>${t.storeName} (${t.storeNo})</span>
-                            <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
-                        </div>
-                        <h4 style="margin:5px 0; color:${color};">${t.itemDesc || t.brand + " (" + t.category + ")"}</h4>
-                        <div style="font-size:12px;">${t.dispLoc ? `Loc: <b>${t.dispLoc}</b>` : `SubDiv: ${t.subDiv}`}</div>
+            // ... inside loadTvTasks ...
+        // ... inside Planogram/Feature Space else-if block ...
+
+        // Render Cards
+        container.innerHTML = myPendingTasks.map(t => `
+            <div class="tv-task-card" style="border-left: 5px solid ${color};">
+                <div>
+                    <div style="font-size:11px; color:#666; display:flex; justify-content:space-between;">
+                        <span>${t.storeName} (${t.storeNo})</span>
+                        <span style="color:#d32f2f; font-weight:bold;">Due: ${t.endDate}</span>
                     </div>
-                    <button onclick="window.openTvExecuteModal('${t.id}', '${t.itemDesc || t.brand}')" style="margin-top:15px; width:100%; background:${color}; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">${btnTxt}</button>
+                    
+                    <h4 style="margin:5px 0; color:${color}; line-height:1.4;">
+                        ${t.itemDesc || t.brand + " (" + t.category + ")"}
+                    </h4>
+
+                    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;">
+                        ${t.dispLoc ? `
+                            <span style="background:#e3f2fd; color:#1565c0; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #bbdefb;">
+                                📍 ${t.dispLoc}
+                            </span>` : ''
+                        }
+                        ${t.execType ? `
+                            <span style="background:#fff3e0; color:#e65100; padding:4px 6px; border-radius:4px; font-size:11px; font-weight:bold; border:1px solid #ffe0b2;">
+                                🛠️ ${t.execType}
+                            </span>` : ''
+                        }
+                    </div>
+
+                    ${t.subDiv ? `<div style="font-size:12px; color:#666;">📂 ${t.subDiv}</div>` : ''}
                 </div>
-            `).join("");
+                
+                <button onclick="window.openTvExecuteModal('${t.id}', '${(t.itemDesc || t.brand).replace(/'/g, "")}')" style="margin-top:10px; width:100%; background:${color}; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">${btnTxt}</button>
+            </div>
+        `).join("");
         }
 
     } catch (e) { container.innerHTML = "Error: " + e.message; }
