@@ -2775,7 +2775,7 @@ window.downloadTvTemplate = function() {
     let filename = "";
 
     if (activeTvCategory === "Offer Board") {
-        headers = ["Store No.", "Store Name", "Start Date (yyyy-mm-dd)", "End Date (yyyy-mm-dd)", "Approver LoginId", "Escalation L1", "Escalation L2", "Article Name"];
+        headers = ["Store No.", "Store Name", "Start Date (mm-dd-yyyy)", "End Date (mm-dd-yyyy)", "Approver LoginId", "Escalation L1", "Escalation L2", "Article Name"];
         filename = "OfferBoard_Template.csv";
     } 
     else if (activeTvCategory === "OFR Audit") {
