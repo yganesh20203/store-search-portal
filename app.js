@@ -881,20 +881,21 @@ async function loadTicketDashboard() {
         // Expected: id, parent_id, date, assigned_by, assigned_to, task, priority, status, visibility
         
         // Map raw array to objects for easier handling
-        allTasksCache = data.values.slice(1).map((row, index) => {
-            return {
-                rowIndex: index + 2, // Sheet Row Number (1-based + header)
-                id: row[0],
-                parentId: row[1],
-                date: row[2],
-                by: row[3]?.toLowerCase(),
-                to: row[4]?.toLowerCase(),
-                task: row[5],
-                priority: row[6],
-                status: row[7],
-                visibility: row[8]?.toLowerCase() || ""
-            };
-        });
+       allTasksCache = data.values.slice(1).map((row, index) => {
+    return {
+        rowIndex: index + 2,
+        id: row[0],
+        parentId: row[1],
+        date: row[2],
+        by: row[3]?.toLowerCase(),
+        to: row[4]?.toLowerCase(),
+        task: row[5],
+        priority: row[6],
+        status: row[7], 
+        visibility: row[8]?.toLowerCase() || "",
+        batch: row[9] || ""
+    };
+});
 
         // Initial Filter: Show "My Tasks" by default
         filterTasks();
@@ -1294,30 +1295,45 @@ async function confirmResolve() {
     const notes = document.getElementById("resolve-notes").value;
     const btn = document.querySelector("#resolve-modal button");
     btn.innerText = "⏳ Updating DB...";
+    btn.disabled = true;
     
     try {
-        const sheetRow = currentResolveRowIndex + 1; 
-        const range = `Sheet1!F${sheetRow}:G${sheetRow}`; 
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
-
-        const response = await fetch(url, {
+        const sheetRow = currentResolveRowIndex + 1; // Convert 0-index to Sheet Row
+        
+        // ✅ FIX: Target Column H (Status) and Column K (Remarks)
+        // We update Status to "RESOLVED"
+        const statusRange = `Sheet1!H${sheetRow}`;
+        
+        // We write the Status
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${statusRange}?valueInputOption=USER_ENTERED`, {
             method: "PUT",
             headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ values: [[ "RESOLVED", notes ]] })
+            body: JSON.stringify({ values: [[ "RESOLVED" ]] })
         });
 
-        if(response.ok) {
-            alert("✅ Ticket Resolved!");
-            closeResolveModal();
-            loadTicketDashboard(); 
-        } else {
-            throw new Error("Update Failed");
+        // ✅ OPTIONAL: Save Remarks to Column K (Column 11)
+        // This ensures we don't overwrite Visibility (Col I) or Batch (Col J)
+        if(notes) {
+            const remarksRange = `Sheet1!K${sheetRow}`;
+            await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${remarksRange}?valueInputOption=USER_ENTERED`, {
+                method: "PUT",
+                headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [[ notes ]] })
+            });
         }
+
+        alert("✅ Ticket Resolved!");
+        closeResolveModal();
+        
+        // Refresh the list to remove it from "Live Pending"
+        loadTicketDashboard(); 
 
     } catch (e) {
         alert("Error: " + e.message);
+        console.error(e);
     } finally {
         btn.innerText = "Mark as Resolved";
+        btn.disabled = false;
     }
 }
 
