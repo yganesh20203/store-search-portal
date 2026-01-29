@@ -997,27 +997,39 @@ async function createTicket() {
 }
 
 // --- BULK UPLOAD CSV ---
-async function handleBulkTaskUpload(input) {
+window.handleBulkTaskUpload = function(input) {
     const file = input.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         const text = e.target.result;
         const rows = text.split("\n").map(r => r.trim()).filter(r => r);
         
         if (rows.length < 2) { alert("CSV is empty"); return; }
 
-        // Store Headers & Data Globally
-        bulkCsvHeaders = rows[0].split(",").map(h => h.trim());
-        bulkCsvData = rows.slice(1).map(r => r.split(","));
+        // 1. Parse Headers
+        const headers = rows[0].split(",").map(h => h.trim().toLowerCase());
+        bulkCsvData = rows.slice(1).map(r => r.split(",")); // Store data globally
+        bulkCsvHeaders = headers;
 
-        // Open Wizard - Step 1
-        showColumnSelection();
+        // 2. CHECK FOR STANDARD IMPEX (Auto-Process)
+        // We check if the first column is 'assign_to_email' and second is 'task_description'
+        if (headers[0] === "assign_to_email" && headers[1] === "task_description") {
+            if(confirm("⚡ Standard Impex Detected!\n\nAuto-create tasks without mapping?")) {
+                await processStandardTaskImpex(); // <--- New Function
+            } else {
+                showColumnSelection(); // Fallback to wizard if they say No
+            }
+        } 
+        // 3. Unknown Format -> Go to Wizard
+        else {
+            showColumnSelection(); 
+        }
     };
     reader.readAsText(file);
-    input.value = ""; // Reset input
-}
+    input.value = ""; 
+};
 
 // 2. SHOW COLUMN OPTIONS (Step 1)
 function showColumnSelection() {
@@ -4958,4 +4970,86 @@ async function generateAccessToken(creds) {
     });
     const data = await response.json();
     return data.access_token;
+}
+
+window.downloadTaskTemplate = function() {
+    // 1. Define Standard Headers
+    const headers = [
+        "Assign_To_Email",  // Col A: User email (Required)
+        "Task_Description", // Col B: What to do (Required)
+        "Priority",         // Col C: High, Medium, Low (Default: Medium)
+        "Due_Date",         // Col D: yyyy-mm-dd (Optional)
+        "Visibility"        // Col E: cc emails (Optional)
+    ];
+
+    // 2. Create Dummy Data Row (Example)
+    const exampleRow = [
+        "user@flipkart.com", 
+        "Verify stock for Item #123", 
+        "High", 
+        "2025-10-30", 
+        "manager@flipkart.com"
+    ];
+
+    // 3. Generate CSV
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n" 
+        + exampleRow.join(",");
+
+    // 4. Trigger Download
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Task_Manager_Impex.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+async function processStandardTaskImpex() {
+    const currentUser = localStorage.getItem("portal_user_email");
+    const date = new Date().toLocaleDateString();
+    const newRows = [];
+    const batchName = "IMPEX_" + Date.now();
+
+    // Loop through standard data
+    // Expected Order: [0]Email, [1]Task, [2]Priority, [3]Due, [4]Visibility
+    
+    bulkCsvData.forEach(row => {
+        const assignedUser = row[0]?.trim();
+        const taskDesc = row[1]?.trim();
+        
+        if (assignedUser && taskDesc) {
+            const tktId = "IMP-" + Math.floor(Math.random() * 1000000);
+            
+            // Handle Optional Fields
+            const priority = row[2]?.trim() || "Medium";
+            const dueDate = row[3]?.trim() || date; // Use today if missing
+            const visibility = row[4]?.trim() || "";
+
+            // Push to Sheet Schema: 
+            // ID | Parent | Date | By | To | Task | Priority | Status | Visibility | Batch
+            newRows.push([
+                tktId, 
+                "", 
+                dueDate,        // Date Column
+                currentUser,    // Assigned By
+                assignedUser,   // Assigned To
+                taskDesc, 
+                priority, 
+                "OPEN", 
+                visibility, 
+                batchName
+            ]);
+        }
+    });
+
+    if (newRows.length > 0) {
+        // Reuse your existing append helper
+        await appendRowsToSheet(newRows);
+        alert(`✅ Success! ${newRows.length} tasks created via Impex.`);
+        loadTicketDashboard();
+    } else {
+        alert("❌ No valid rows found. Check Email/Task columns.");
+    }
 }
