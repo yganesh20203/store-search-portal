@@ -908,65 +908,78 @@ function filterTasks() {
     const container = document.getElementById("ticket-list-container");
     const filterType = document.getElementById("task-filter-view").value;
     const searchText = document.getElementById("task-search").value.toLowerCase();
-    const currentUser = localStorage.getItem("portal_user_email").toLowerCase();
+    const currentUser = localStorage.getItem("portal_user_email")?.toLowerCase();
+
+    if (!currentUser) return;
 
     let filtered = [];
 
-    // --- ROW LEVEL SECURITY LOGIC ---
+    // --- 1. FILTER LOGIC ---
     if (filterType === 'my_tasks') {
+        // Show ALL tasks assigned to me
         filtered = allTasksCache.filter(t => t.to === currentUser);
-    } else if (filterType === 'assigned_by_me') {
+    } 
+    else if (filterType === 'my_pending') { 
+        // ✅ NEW: Show only OPEN tasks assigned to me
+        filtered = allTasksCache.filter(t => t.to === currentUser && t.status !== "RESOLVED");
+    } 
+    else if (filterType === 'assigned_by_me') {
         filtered = allTasksCache.filter(t => t.by === currentUser);
-    } else if (filterType === 'team') {
-        // Show if user is in the 'Visibility' column OR is involved
-        filtered = allTasksCache.filter(t => 
-            t.visibility.includes(currentUser) || t.to === currentUser || t.by === currentUser
-        );
+    } 
+    else if (filterType === 'all_batches') {
+        // Show unique items if they have a batch name
+        // (This might require custom logic, for now showing all team visibility)
+        filtered = allTasksCache.filter(t => t.visibility.includes(currentUser) || t.to === currentUser || t.by === currentUser);
     }
 
-    // --- SEARCH FILTER ---
+    // --- 2. SEARCH FILTER ---
     if (searchText) {
         filtered = filtered.filter(t => 
             t.task.toLowerCase().includes(searchText) || 
-            t.id.toLowerCase().includes(searchText)
+            t.id.toLowerCase().includes(searchText) ||
+            (t.batch && t.batch.toLowerCase().includes(searchText)) // Search by batch too
         );
     }
 
-    // --- RENDER ---
+    // --- 3. RENDER ---
     if (filtered.length === 0) {
-        container.innerHTML = "<p style='padding:20px; text-align:center;'>No tasks found for this view.</p>";
+        container.innerHTML = "<p style='padding:20px; text-align:center; color:#666;'>No tasks found.</p>";
         return;
     }
 
-    let html = `<table class="data-table">
+    let html = `<table class="data-table" style="width:100%;">
         <thead><tr>
-            <th>ID</th><th>Priority</th><th>Task</th><th>Assigned To</th><th>Status</th><th>Actions</th>
+            <th>ID</th><th>Date</th><th>Task</th><th>Assignee</th><th>Status</th><th>Action</th>
         </tr></thead><tbody>`;
 
     filtered.forEach(t => {
-        // Indent subtasks visually
+        // Indent subtasks
         const isSubtask = t.parentId && t.parentId.length > 2;
         const indentStyle = isSubtask ? "border-left: 4px solid #1976d2; background:#f9fbff;" : "";
         const icon = isSubtask ? "↳ " : "";
         
-        // Priority Color
-        let priColor = t.priority === "High" ? "#ffebee" : (t.priority === "Medium" ? "#fff3e0" : "#e8f5e9");
-        if(t.status === "RESOLVED") priColor = "#f0f0f0"; // Grey out done tasks
+        // Status Color
+        let statusColor = t.status === "RESOLVED" ? "#e0e0e0" : "#fff";
+        let statusText = t.status === "RESOLVED" ? "✅ DONE" : "🔥 OPEN";
+        let statusBadge = t.status === "RESOLVED" 
+            ? `<span style="color:green; font-weight:bold;">${statusText}</span>` 
+            : `<span style="color:#d32f2f; font-weight:bold;">${statusText}</span>`;
 
-        html += `<tr style="${indentStyle} background:${priColor}">
+        html += `<tr style="${indentStyle} background:${statusColor}">
             <td><small>${t.id}</small></td>
-            <td style="font-weight:bold; font-size:11px;">${t.priority}</td>
+            <td><small>${t.date}</small></td>
             <td>
-                ${icon} ${t.task}
-                ${t.parentId ? `<br><small style='color:#888'>Parent: ${t.parentId}</small>` : ''}
+                ${icon} <b>${t.task}</b>
+                ${t.batch ? `<br><span style="font-size:10px; background:#e3f2fd; padding:2px 5px; border-radius:4px; color:#1565c0;">📦 ${t.batch}</span>` : ''}
             </td>
             <td>${t.to}</td>
-            <td>${t.status}</td>
+            <td>${statusBadge}</td>
             <td>
                 ${t.status !== 'RESOLVED' ? `
-                    <button onclick="window.openTaskActionModal('${t.id}', '${t.task.replace(/'/g, "")}')" style="cursor:pointer; padding:4px; font-size:10px;">⚙️ Manage</button>
-                    <button onclick="window.openResolveModal('${t.id}', ${t.rowIndex - 1})" style="cursor:pointer; padding:4px; font-size:10px; color:green;">✅ Done</button>
-                ` : '✔'}
+                    <button onclick="window.openResolveModal('${t.id}', ${t.rowIndex - 1})" style="cursor:pointer; background:#4caf50; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:11px;">
+                        ✅ Close
+                    </button>
+                ` : '<span style="color:#aaa;">-</span>'}
             </td>
         </tr>`;
     });
@@ -977,23 +990,62 @@ function filterTasks() {
 
 // --- CREATE SINGLE TASK ---
 async function createTicket() {
-    const email = document.getElementById("tkt-email").value.trim();
-    const task = document.getElementById("tkt-task").value;
-    const priority = document.getElementById("tkt-priority").value;
-    const visibility = document.getElementById("tkt-visibility").value;
+    // 1. Get Values safely (Handle missing inputs gracefully)
+    const emailInput = document.getElementById("tkt-email");
+    const taskInput = document.getElementById("tkt-task");
+    const batchInput = document.getElementById("tkt-batch");
+    
+    // Safety Check: If elements don't exist in HTML, stop
+    if (!emailInput || !taskInput) { alert("Error: Input fields missing in HTML."); return; }
+
+    const email = emailInput.value.trim();
+    const task = taskInput.value.trim();
+    const batch = batchInput ? batchInput.value.trim() : ""; // Optional Batch
+    
+    // Default values since inputs were removed from HTML
+    const priority = "Medium"; 
+    const visibility = ""; 
+
     const currentUser = localStorage.getItem("portal_user_email");
 
     if(!email || !task) { alert("Please fill email and task."); return; }
 
+    const btn = document.querySelector("button[onclick='window.createTicket()']");
+    if(btn) { btn.innerText = "⏳ Assigning..."; btn.disabled = true; }
+
     const tktId = "TKT-" + Math.floor(Math.random() * 100000);
     const date = new Date().toLocaleDateString();
 
-    // Sheet Row Structure: ID | Parent | Date | By | To | Task | Priority | Status | Visibility
-    const row = [[ tktId, "", date, currentUser, email, task, priority, "OPEN", visibility ]];
+    // 2. Align Schema with Bulk Upload:
+    // ID | Parent | Date | By | To | Task | Priority | Status | Visibility | Batch
+    const row = [[ 
+        tktId, 
+        "", 
+        date, 
+        currentUser, 
+        email, 
+        task, 
+        priority, 
+        "OPEN", 
+        visibility,
+        batch // ✅ Now saving the batch name!
+    ]];
 
-    await appendRowsToSheet(row);
-    alert("✅ Task Assigned!");
-    loadTicketDashboard();
+    try {
+        await appendRowsToSheet(row);
+        alert("✅ Task Assigned!");
+        
+        // Clear Inputs
+        emailInput.value = "";
+        taskInput.value = "";
+        if(batchInput) batchInput.value = "";
+        
+        loadTicketDashboard();
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        if(btn) { btn.innerText = "🚀 Assign"; btn.disabled = false; }
+    }
 }
 
 // --- BULK UPLOAD CSV ---
