@@ -921,15 +921,13 @@ function filterTasks() {
         filtered = allTasksCache.filter(t => t.to === currentUser);
     } 
     else if (filterType === 'my_pending') { 
-        // ✅ NEW: Show only OPEN tasks assigned to me
+        // Show only OPEN tasks assigned to me
         filtered = allTasksCache.filter(t => t.to === currentUser && t.status !== "RESOLVED");
     } 
     else if (filterType === 'assigned_by_me') {
         filtered = allTasksCache.filter(t => t.by === currentUser);
     } 
     else if (filterType === 'all_batches') {
-        // Show unique items if they have a batch name
-        // (This might require custom logic, for now showing all team visibility)
         filtered = allTasksCache.filter(t => t.visibility.includes(currentUser) || t.to === currentUser || t.by === currentUser);
     }
 
@@ -938,7 +936,7 @@ function filterTasks() {
         filtered = filtered.filter(t => 
             t.task.toLowerCase().includes(searchText) || 
             t.id.toLowerCase().includes(searchText) ||
-            (t.batch && t.batch.toLowerCase().includes(searchText)) // Search by batch too
+            (t.batch && t.batch.toLowerCase().includes(searchText))
         );
     }
 
@@ -977,7 +975,13 @@ function filterTasks() {
             <td>${statusBadge}</td>
             <td>
                 ${t.status !== 'RESOLVED' ? `
-                    <button onclick="window.openResolveModal('${t.id}', ${t.rowIndex - 1})" style="cursor:pointer; background:#4caf50; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:11px;">
+                    <button onclick="window.openTaskActionModal('${t.id}', '${t.task.replace(/'/g, "")}')" 
+                        style="cursor:pointer; background:#ff9800; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:11px; margin-right:5px;">
+                        ⚙️ Manage
+                    </button>
+
+                    <button onclick="window.openResolveModal('${t.id}', ${t.rowIndex - 1})" 
+                        style="cursor:pointer; background:#4caf50; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:11px;">
                         ✅ Close
                     </button>
                 ` : '<span style="color:#aaa;">-</span>'}
