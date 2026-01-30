@@ -3183,7 +3183,8 @@ async function loadTvTasks() {
             }).filter(t => {
                 const isPending = !t.status || t.status.trim() === "";
                 if (!isPending) return false;
-                return (t.approverEmail === rawUser) || (t.approverUser === currentUsername);
+                return t.approverEmail.includes(rawUser);
+                //return (t.approverEmail === rawUser) || (t.approverUser === currentUsername);
             });
 
             // ✅ RENDER CARDS
