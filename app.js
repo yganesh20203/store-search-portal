@@ -1298,25 +1298,28 @@ function closeResolveModal() {
 async function confirmResolve() {
     const notes = document.getElementById("resolve-notes").value;
     const btn = document.querySelector("#resolve-modal button");
+    
     btn.innerText = "⏳ Updating DB...";
     btn.disabled = true;
     
     try {
-        const sheetRow = currentResolveRowIndex + 1; // Convert 0-index to Sheet Row
+        // The row index from the button click is 0-based. Sheets are 1-based.
+        const sheetRow = currentResolveRowIndex + 1; 
         
-        // ✅ FIX: Target Column H (Status) and Column K (Remarks)
-        // We update Status to "RESOLVED"
+        // ---------------------------------------------------------
+        // ✅ FIX 1: Target Column H (Status) for "RESOLVED"
+        // ---------------------------------------------------------
         const statusRange = `Sheet1!H${sheetRow}`;
-        
-        // We write the Status
         await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${statusRange}?valueInputOption=USER_ENTERED`, {
             method: "PUT",
             headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
             body: JSON.stringify({ values: [[ "RESOLVED" ]] })
         });
 
-        // ✅ OPTIONAL: Save Remarks to Column K (Column 11)
-        // This ensures we don't overwrite Visibility (Col I) or Batch (Col J)
+        // ---------------------------------------------------------
+        // ✅ FIX 2: Write Remarks to Column K (New Column)
+        // ---------------------------------------------------------
+        // This ensures we don't overwrite Priority or Visibility
         if(notes) {
             const remarksRange = `Sheet1!K${sheetRow}`;
             await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TICKET_SHEET_ID}/values/${remarksRange}?valueInputOption=USER_ENTERED`, {
@@ -1326,17 +1329,17 @@ async function confirmResolve() {
             });
         }
 
-        alert("✅ Ticket Resolved!");
+        alert("✅ Ticket Closed Successfully!");
         closeResolveModal();
         
-        // Refresh the list to remove it from "Live Pending"
+        // Refresh to remove from "Live Pending" view
         loadTicketDashboard(); 
 
     } catch (e) {
         alert("Error: " + e.message);
         console.error(e);
     } finally {
-        btn.innerText = "Mark as Resolved";
+        btn.innerText = "✅ Mark as Resolved";
         btn.disabled = false;
     }
 }
