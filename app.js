@@ -5129,3 +5129,135 @@ async function processStandardTaskImpex() {
         alert("❌ No valid rows found. Check Email/Task columns.");
     }
 }
+
+// Global variable to store access rights
+let currentUserAccess = [];
+
+async function handleLogin() {
+    const emailInput = document.getElementById("login-email").value.trim().toLowerCase();
+    const passInput = document.getElementById("login-password").value.trim();
+    const loginBtn = document.getElementById("login-btn"); // Assuming you have an ID for the button
+
+    if (!emailInput || !passInput) { alert("Please enter email and password"); return; }
+
+    // UI Feedback
+    if(loginBtn) { loginBtn.innerText = "⏳ Verifying..."; loginBtn.disabled = true; }
+
+    try {
+        // 1. Fetch the Users Sheet (Credentials + Permissions)
+        // Make sure CONFIG.CREDENTIALS_SHEET_ID points to your login sheet
+        // Make sure 'Users' is the correct tab name
+        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.CREDENTIALS_SHEET_ID}/values/Users?key=${apiKey}`);
+        const data = await response.json();
+
+        if (!data.values) { alert("User database empty."); return; }
+
+        // 2. Find User and Check Password
+        // Row Structure: [0]Email, [1]Password, [2]Permissions
+        const userRow = data.values.find(row => 
+            row[0] && row[0].toLowerCase().trim() === emailInput && 
+            row[1] && row[1].toString().trim() === passInput
+        );
+
+        if (userRow) {
+            // ✅ LOGIN SUCCESS
+            
+            // 3. Capture Permissions from Column C (Index 2)
+            const rawPerms = userRow[2] || ""; 
+            currentUserAccess = rawPerms.split(",").map(p => p.trim());
+
+            // 4. Save Session
+            localStorage.setItem("portal_user_email", emailInput);
+            // Optional: Save permissions to storage so they persist on refresh
+            localStorage.setItem("portal_user_access", JSON.stringify(currentUserAccess));
+
+            // 5. Switch UI
+            document.getElementById("login-screen").classList.add("hidden");
+            document.getElementById("app-screen").classList.remove("hidden");
+            
+            // 6. Render Sidebar based on access
+            renderDynamicSidebar();
+            
+            // 7. Load first allowed tab
+            if(currentUserAccess.length > 0) {
+                 // Check if the tab name maps to a real function before loading
+                 // (Reuse the sidebar logic to click the first item)
+                 const firstModule = document.querySelector("#sidebar-menu li");
+                 if(firstModule) firstModule.click();
+            }
+
+        } else {
+            alert("❌ Invalid Email or Password.");
+        }
+
+    } catch (error) {
+        console.error("Login Error:", error);
+        alert("System Error during login.");
+    } finally {
+        if(loginBtn) { loginBtn.innerText = "Login"; loginBtn.disabled = false; }
+    }
+}
+function renderDynamicSidebar() {
+    const menuContainer = document.getElementById("sidebar-menu");
+    menuContainer.innerHTML = ""; // Clear existing
+
+    // Define Configuration for ALL modules
+    const allModules = {
+        "TrueView":      { icon: "📸", func: "loadTrueView" },
+        "Task Manager":  { icon: "🎫", func: "loadTicketDashboard" },
+        "Hourly Sales":  { icon: "📊", func: "loadHourlySales" }, 
+        "Stock Count":   { icon: "📦", func: "loadStockCount" }
+    };
+
+    // If permissions failed to load, try getting from localStorage
+    if (currentUserAccess.length === 0) {
+        const stored = localStorage.getItem("portal_user_access");
+        if (stored) currentUserAccess = JSON.parse(stored);
+    }
+
+    // Loop through user's permissions and create buttons
+    currentUserAccess.forEach(tabName => {
+        const module = allModules[tabName];
+        
+        if (module) {
+            const li = document.createElement("li");
+            li.innerHTML = `${module.icon} ${tabName}`;
+            li.onclick = () => {
+                // UI Highlight
+                document.querySelectorAll("#sidebar-menu li").forEach(i => i.classList.remove("active"));
+                li.classList.add("active");
+                
+                // Hide all sections
+                document.querySelectorAll(".ui-section").forEach(el => el.classList.add("hidden"));
+                
+                // Call the function dynamically
+                if (typeof window[module.func] === "function") {
+                    window[module.func](); 
+                } else {
+                    console.error("Function not found:", module.func);
+                }
+            };
+            menuContainer.appendChild(li);
+        }
+    });
+    
+    // Always add Logout at the bottom
+    // (You can handle this in HTML or JS, but ensuring it's there is good)
+}
+function checkLoginStatus() {
+    const user = localStorage.getItem("portal_user_email");
+    if (user) {
+        document.getElementById("login-screen").classList.add("hidden");
+        document.getElementById("app-screen").classList.remove("hidden");
+        
+        // ✅ Re-render sidebar on refresh
+        renderDynamicSidebar();
+        
+        // Optional: Load the first allowed tab by default if nothing active
+        const firstTab = document.querySelector("#sidebar-menu li");
+        if(firstTab) firstTab.click();
+    }
+}
+
+// Ensure you call checkLoginStatus() when the window loads!
+window.onload = checkLoginStatus;
