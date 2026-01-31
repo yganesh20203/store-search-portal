@@ -35,19 +35,6 @@ let mapLayers = {
     metro: null,
     dmart: null
 };
-const allModules = {
-        "Sales Reports":   { icon: "📊", func: "loadSalesDashboard" },
-        "Hourly Sales":    { icon: "🕒", func: "loadHourlyDashboard" },
-        "KYB Map":         { icon: "🇮🇳", func: "loadBusinessDashboard" },
-        "Task Manager":    { icon: "🎫", func: "loadTicketDashboard" },
-        "My Inbox":        { icon: "📅", func: "loadDailyUpdateDashboard" },
-        "Mail Search":     { icon: "📧", func: "loadApprovalsDashboard" },
-        "TrueView":        { icon: "👁️", func: "loadTrueViewDashboard" },
-        "Work on Reports": { icon: "🛠️", func: "loadWorkDashboard" },
-        "Member DB":       { icon: "👥", func: "loadMemberDashboard" },
-        "Google Sheets":   { icon: "📈", func: "loadTrackerDashboard" },
-        "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" }
-    };
 
 // ==========================================
 // 2. ATTACH FUNCTIONS TO WINDOW
@@ -5210,53 +5197,99 @@ async function handleLogin() {
         if(loginBtn) { loginBtn.innerText = "Login"; loginBtn.disabled = false; }
     }
 }
+
 function renderDynamicSidebar() {
     const menuContainer = document.getElementById("sidebar-menu");
-    menuContainer.innerHTML = ""; // Clear existing
+    if (!menuContainer) return;
 
-    // Define Configuration for ALL modules
+    menuContainer.innerHTML = ""; // Clear existing menu
+
+    // 1. DEFINE ALL MAPPINGS
+    // The "Key" (Left side) must match EXACTLY what is in your Google Sheet Column C
     const allModules = {
-        "TrueView":      { icon: "📸", func: "loadTrueView" },
-        "Task Manager":  { icon: "🎫", func: "loadTicketDashboard" },
-        "Hourly Sales":  { icon: "📊", func: "loadHourlySales" }, 
-        "Stock Count":   { icon: "📦", func: "loadStockCount" }
+        "Sales Reports":   { icon: "📊", func: "loadSalesDashboard" },
+        "Hourly Sales":    { icon: "🕒", func: "loadHourlyDashboard" },
+        "KYB Map":         { icon: "🇮🇳", func: "loadBusinessDashboard" },
+        "Task Manager":    { icon: "🎫", func: "loadTicketDashboard" },
+        "My Inbox":        { icon: "📅", func: "loadDailyUpdateDashboard" },
+        "Mail Search":     { icon: "📧", func: "loadApprovalsDashboard" },
+        "TrueView":        { icon: "👁️", func: "loadTrueViewDashboard" },
+        "Work on Reports": { icon: "🛠️", func: "loadWorkDashboard" },
+        "Member DB":       { icon: "👥", func: "loadMemberDashboard" },
+        "Google Sheets":   { icon: "📈", func: "loadTrackerDashboard" },
+        "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" }
     };
 
-    // If permissions failed to load, try getting from localStorage
+    // 2. Retrieve Permissions
     if (currentUserAccess.length === 0) {
         const stored = localStorage.getItem("portal_user_access");
         if (stored) currentUserAccess = JSON.parse(stored);
     }
 
-    // Loop through user's permissions and create buttons
+    // Debugging: Check console to see what the app thinks you have
+    console.log("Rendering Sidebar for:", currentUserAccess);
+
+    // 3. Generate Buttons
     currentUserAccess.forEach(tabName => {
-        const module = allModules[tabName];
-        
+        // Clean up string (remove accidental spaces)
+        const cleanName = tabName.trim();
+        const module = allModules[cleanName];
+
         if (module) {
             const li = document.createElement("li");
-            li.innerHTML = `${module.icon} ${tabName}`;
+            
+            // Sidebar Item Styling
+            li.style.padding = "12px 15px";
+            li.style.cursor = "pointer";
+            li.style.borderBottom = "1px solid rgba(255,255,255,0.1)";
+            li.style.color = "white";
+            li.style.display = "flex";
+            li.style.alignItems = "center";
+            li.style.gap = "10px";
+            li.style.transition = "background 0.2s";
+
+            li.innerHTML = `<span style="font-size:18px;">${module.icon}</span> <span>${cleanName}</span>`;
+
+            // Hover Effect
+            li.onmouseover = () => { li.style.background = "rgba(255,255,255,0.1)"; };
+            li.onmouseout = () => { if(!li.classList.contains('active')) li.style.background = "transparent"; };
+
             li.onclick = () => {
-                // UI Highlight
-                document.querySelectorAll("#sidebar-menu li").forEach(i => i.classList.remove("active"));
+                // UI Active State
+                document.querySelectorAll("#sidebar-menu li").forEach(i => {
+                    i.classList.remove("active");
+                    i.style.background = "transparent";
+                    i.style.borderLeft = "none";
+                });
                 li.classList.add("active");
-                
-                // Hide all sections
-                document.querySelectorAll(".ui-section").forEach(el => el.classList.add("hidden"));
-                
-                // Call the function dynamically
+                li.style.background = "rgba(255,255,255,0.2)";
+                li.style.borderLeft = "4px solid #fff";
+
+                // Hide all UI sections
+                document.querySelectorAll("#content-wrapper > div").forEach(el => {
+                    if(!el.id.includes("pivot")) el.classList.add("hidden");
+                });
+
+                // Close Mobile Menu if open
+                const sidebar = document.querySelector('.sidebar');
+                if(sidebar) sidebar.classList.remove('show-mobile');
+
+                // Execute Function
                 if (typeof window[module.func] === "function") {
-                    window[module.func](); 
+                    window[module.func]();
                 } else {
-                    console.error("Function not found:", module.func);
+                    console.error(`Function ${module.func} not found for ${cleanName}`);
+                    alert(`Error: Module ${cleanName} is not linked correctly.`);
                 }
             };
             menuContainer.appendChild(li);
+        } else {
+            console.warn(`⚠️ Warning: Permission '${cleanName}' found in Sheet but not defined in app.js code.`);
         }
     });
-    
-    // Always add Logout at the bottom
-    // (You can handle this in HTML or JS, but ensuring it's there is good)
 }
+
+
 function checkLoginStatus() {
     const user = localStorage.getItem("portal_user_email");
     if (user) {
