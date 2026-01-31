@@ -35,6 +35,19 @@ let mapLayers = {
     metro: null,
     dmart: null
 };
+const allModules = {
+        "Sales Reports":   { icon: "📊", func: "loadSalesDashboard" },
+        "Hourly Sales":    { icon: "🕒", func: "loadHourlyDashboard" },
+        "KYB Map":         { icon: "🇮🇳", func: "loadBusinessDashboard" },
+        "Task Manager":    { icon: "🎫", func: "loadTicketDashboard" },
+        "My Inbox":        { icon: "📅", func: "loadDailyUpdateDashboard" },
+        "Mail Search":     { icon: "📧", func: "loadApprovalsDashboard" },
+        "TrueView":        { icon: "👁️", func: "loadTrueViewDashboard" },
+        "Work on Reports": { icon: "🛠️", func: "loadWorkDashboard" },
+        "Member DB":       { icon: "👥", func: "loadMemberDashboard" },
+        "Google Sheets":   { icon: "📈", func: "loadTrackerDashboard" },
+        "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" }
+    };
 
 // ==========================================
 // 2. ATTACH FUNCTIONS TO WINDOW
