@@ -110,43 +110,23 @@
         <div class="dashboard-layout">
             
             <aside class="sidebar">
-                <div class="sidebar-header">
-                    <h2 style="display:flex; justify-content:space-between; width:100%;">
-                        <span>🛍️ Store Portal</span>
-                        <button class="mobile-close-btn" onclick="document.querySelector('.sidebar').classList.remove('show-mobile')">✕</button>
-                    </h2>
-                    <div id="user-info" class="user-badge">● Connected</div>
-                </div>
+    <div class="sidebar-header">
+        <h2 style="display:flex; justify-content:space-between; width:100%;">
+            <span>🛍️ Store Portal</span>
+            <button class="mobile-close-btn" onclick="document.querySelector('.sidebar').classList.remove('show-mobile')">✕</button>
+        </h2>
+        <div id="user-info" class="user-badge">● Connected</div>
+    </div>
 
-                <nav class="sidebar-nav">
-                    <div class="nav-group">
-                        <span class="group-title">ANALYTICS</span>
-                        <button onclick="window.loadSalesDashboard()" class="nav-item active">📊 Sales Reports</button>
-                        <button onclick="window.loadHourlyDashboard()" class="nav-item">🕒 Hourly Sales</button>
-                        <button onclick="window.loadBusinessDashboard()" class="nav-item">🇮🇳 KYB Map</button>
-                    </div>
+    <nav class="sidebar-nav">
+        <ul id="sidebar-menu" style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:5px;">
+            </ul>
+    </nav>
 
-                    <div class="nav-group">
-                        <span class="group-title">OPERATIONS</span>
-                        <button onclick="window.loadTicketDashboard()" class="nav-item">🎫 Task Manager</button>
-                        <button onclick="window.loadDailyUpdateDashboard()" class="nav-item">📅 My Inbox</button>
-                        <button onclick="window.loadApprovalsDashboard()" class="nav-item">📧 Mail Search</button>
-                        <button onclick="window.loadTrueViewDashboard()" class="nav-item">👁️ TrueView</button>
-                    </div>
-
-                    <div class="nav-group">
-                        <span class="group-title">DATA TOOLS</span>
-                        <button onclick="window.loadWorkDashboard()" class="nav-item">🛠️ Work on Reports</button>
-                        <button onclick="window.loadMemberDashboard()" class="nav-item">👥 Member DB</button>
-                        <button onclick="window.loadTrackerDashboard()" class="nav-item">📈 Google Sheets</button>
-                        <button onclick="window.loadWalkinDashboard()" class="nav-item">🚶 Walkin Data</button>
-                    </div>
-                </nav>
-
-                <div class="sidebar-footer">
-                    <button class="logout-btn" onclick="window.logout()">🔒 Logout</button>
-                </div>
-            </aside>
+    <div class="sidebar-footer">
+        <button class="logout-btn" onclick="window.logout()">🔒 Logout</button>
+    </div>
+</aside>
 
             <main class="main-content">
                 
