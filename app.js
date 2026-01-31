@@ -126,7 +126,7 @@ document.addEventListener('keydown', () => { sessionInteractionCount++; });
 // 1. MAIN LOGIN FUNCTION
 async function unlockAndLogin() {
     const accessKey = document.getElementById("access-key").value;
-    const username = document.getElementById("login-user").value.trim().toLowerCase(); // Normalize email
+    const username = document.getElementById("login-user").value.trim().toLowerCase(); 
     const password = document.getElementById("login-pass").value.trim();
     
     const btn = document.getElementById("login-btn");
@@ -161,7 +161,6 @@ async function unlockAndLogin() {
         if (userStatus.found) {
             // SCENARIO A: First Time User
             if (userStatus.isNewUser || password === "123456") {
-                // ... (Keep existing setup password logic) ...
                 document.getElementById("sp-username").value = username;
                 document.getElementById("sp-row-index").value = userStatus.rowIndex;
                 document.getElementById("auth-overlay").classList.add("hidden");
@@ -175,7 +174,6 @@ async function unlockAndLogin() {
             else {
                 throw new Error("Invalid Password");
             }
-        }
         } else {
             // SCENARIO D: User Not Found (Guest Mode)
             console.warn("⛔ Guest User.");
