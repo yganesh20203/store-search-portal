@@ -159,22 +159,23 @@ async function unlockAndLogin() {
         const userStatus = await checkBackendCredentials(username, password);
 
         if (userStatus.found) {
-            // SCENARIO A: First Time User (Empty Password or Default '123456')
+            // SCENARIO A: First Time User
             if (userStatus.isNewUser || password === "123456") {
-                // Open "Set Password" Modal
+                // ... (Keep existing setup password logic) ...
                 document.getElementById("sp-username").value = username;
                 document.getElementById("sp-row-index").value = userStatus.rowIndex;
-                document.getElementById("auth-overlay").classList.add("hidden"); // Hide login
-                document.getElementById("set-password-modal").classList.remove("hidden"); // Show setup
+                document.getElementById("auth-overlay").classList.add("hidden");
+                document.getElementById("set-password-modal").classList.remove("hidden");
             } 
             // SCENARIO B: Valid Login
             else if (userStatus.validPass) {
-                completeLogin(username);
+                // ✅ PASS PERMISSIONS TO COMPLETE LOGIN
+                completeLogin(username, userStatus.permissions);
             } 
-            // SCENARIO C: Wrong Password
             else {
                 throw new Error("Invalid Password");
             }
+        }
         } else {
             // SCENARIO D: User Not Found (Guest Mode)
             console.warn("⛔ Guest User.");
@@ -193,12 +194,13 @@ async function unlockAndLogin() {
 }
 
 // 2. CHECK CREDENTIALS HELPER
+// 2. CHECK CREDENTIALS HELPER
 async function checkBackendCredentials(user, pass) {
     if (!CONFIG.USER_DB_SHEET_ID) return { found: false };
     
     try {
-        // Fetch Columns A (User) and B (Pass)
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.USER_DB_SHEET_ID}/values/Sheet2!A:B`;
+        // ✅ CHANGE: Fetch Columns A, B, AND C (A=User, B=Pass, C=Permissions)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.USER_DB_SHEET_ID}/values/Sheet2!A:C`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
         
@@ -209,15 +211,16 @@ async function checkBackendCredentials(user, pass) {
         
         if (rowIndex !== -1) {
             const storedPass = data.values[rowIndex][1] ? data.values[rowIndex][1].toString() : "";
+            const rawPermissions = data.values[rowIndex][2] || ""; // ✅ Capture Col C
             
             // Check if password is "Empty" (New User)
             if (storedPass === "" || storedPass === "123456") {
-                return { found: true, validPass: true, isNewUser: true, rowIndex: rowIndex + 1 };
+                return { found: true, validPass: true, isNewUser: true, rowIndex: rowIndex + 1, permissions: rawPermissions };
             }
             
             // Check if password matches
             if (storedPass === pass) {
-                return { found: true, validPass: true, isNewUser: false, rowIndex: rowIndex + 1 };
+                return { found: true, validPass: true, isNewUser: false, rowIndex: rowIndex + 1, permissions: rawPermissions };
             }
             
             return { found: true, validPass: false }; // User exists, wrong pass
@@ -229,18 +232,37 @@ async function checkBackendCredentials(user, pass) {
 }
 
 // 3. SUCCESSFUL LOGIN ROUTINE
-function completeLogin(username) {
+// 3. SUCCESSFUL LOGIN ROUTINE
+function completeLogin(username, rawPermissions = "") {
+    // 1. Hide Login / Show Dashboard (Using Correct IDs from your HTML)
     document.getElementById("auth-overlay").classList.add("hidden");
     document.getElementById("dashboard").classList.remove("hidden");
+    
+    // 2. Save Session Data
     localStorage.setItem("portal_user_email", username);
+    
+    // 3. Process Permissions
+    // If cell is empty, default to nothing or specific tabs? 
+    // Here we ensure it's an array.
+    if (!rawPermissions) rawPermissions = ""; 
+    currentUserAccess = rawPermissions.split(",").map(p => p.trim()).filter(p => p !== "");
+
+    // Save to storage so refreshing the page doesn't lose access
+    localStorage.setItem("portal_user_access", JSON.stringify(currentUserAccess));
+
     document.getElementById("user-info").innerText = `● ${username}`;
     
-    loadSalesDashboard();
+    // 4. Render Sidebar & Load DBs
+    renderDynamicSidebar(); // <--- DRAW BUTTONS
     initDuckDB();
     
-    // Log the session
+    // 5. Log the session
     createSessionRow(username, "VALID_USER");
     startSilentUsageTimer(username);
+
+    // 6. Load First Allowed Tab Automatically
+    const firstTab = document.querySelector("#sidebar-menu li");
+    if(firstTab) firstTab.click();
 }
 
 // 4. SAVE NEW PASSWORD (User sets their own)
@@ -5293,15 +5315,19 @@ function renderDynamicSidebar() {
 function checkLoginStatus() {
     const user = localStorage.getItem("portal_user_email");
     if (user) {
-        document.getElementById("login-screen").classList.add("hidden");
-        document.getElementById("app-screen").classList.remove("hidden");
+        // 1. Use Correct HTML IDs
+        document.getElementById("auth-overlay").classList.add("hidden");
+        document.getElementById("dashboard").classList.remove("hidden");
         
-        // ✅ Re-render sidebar on refresh
+        // 2. Render Sidebar from LocalStorage
         renderDynamicSidebar();
         
-        // Optional: Load the first allowed tab by default if nothing active
+        // 3. Init Database
+        initDuckDB();
+        
+        // 4. Optional: Click first tab
         const firstTab = document.querySelector("#sidebar-menu li");
-        if(firstTab) firstTab.click();
+        if(firstTab && !document.querySelector(".pane.active")) firstTab.click();
     }
 }
 
