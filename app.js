@@ -5310,24 +5310,28 @@ function renderDynamicSidebar() {
 }
 
 
+
 function checkLoginStatus() {
+    // 1. Check if we remember the user's email
     const user = localStorage.getItem("portal_user_email");
+    
+    // 2. If found, just pre-fill the username box
     if (user) {
-        // 1. Use Correct HTML IDs
-        document.getElementById("auth-overlay").classList.add("hidden");
-        document.getElementById("dashboard").classList.remove("hidden");
-        
-        // 2. Render Sidebar from LocalStorage
-        renderDynamicSidebar();
-        
-        // 3. Init Database
-        initDuckDB();
-        
-        // 4. Optional: Click first tab
-        const firstTab = document.querySelector("#sidebar-menu li");
-        if(firstTab && !document.querySelector(".pane.active")) firstTab.click();
+        const emailInput = document.getElementById("login-user");
+        if (emailInput) emailInput.value = user;
     }
+
+
+    document.getElementById("auth-overlay").classList.remove("hidden");
+    document.getElementById("dashboard").classList.add("hidden");
+    
+    // Optional: Clear any old access permissions to prevent UI glitches
+    currentUserAccess = [];
+    localStorage.removeItem("portal_user_access");
 }
+
+// Ensure you call checkLoginStatus() when the window loads!
+window.onload = checkLoginStatus;
 
 // Ensure you call checkLoginStatus() when the window loads!
 window.onload = checkLoginStatus;
