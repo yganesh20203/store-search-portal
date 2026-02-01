@@ -88,14 +88,15 @@ body {
 /* --- A. Sidebar (Left) --- */
 .sidebar {
     width: 260px;
-    height: 100%;
+    height: 100vh; /* Force full viewport height */
     background-color: var(--sidebar-bg);
     color: white;
     display: flex;
-    flex-direction: column;
-    flex-shrink: 0; /* Prevents sidebar from squishing */
+    flex-direction: column; /* Stack items vertically */
+    flex-shrink: 0;
     border-right: 1px solid #1e293b;
     z-index: 10;
+    overflow: hidden; /* Prevent the container itself from scrolling */
 }
 
 .sidebar-header {
@@ -114,9 +115,13 @@ body {
 
 /* Sidebar Navigation */
 .sidebar-nav {
-    flex-grow: 1;
-    overflow-y: auto;
+    flex-grow: 1; /* Takes up all available empty space */
+    overflow-y: auto; /* Scroll ONLY this middle section */
     padding: 20px;
+    
+    /* Scrollbar styling for a cleaner look */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) transparent;
 }
 
 .nav-group { margin-bottom: 25px; }
@@ -138,7 +143,13 @@ body {
 .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
 .nav-item.active { background: var(--primary); color: white; font-weight: 600; }
 
-.sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+.sidebar-footer {
+    flex-shrink: 0; /* Prevent footer from being squashed */
+    padding: 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    background-color: var(--sidebar-bg); /* Ensure background matches */
+}
+
 .logout-btn {
     width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.1);
     color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2);
@@ -298,20 +309,24 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 768px) {
     /* 1. Change Layout to Stacked/Overlay */
     .dashboard-layout {
-        position: relative; /* Allows sidebar to float over content */
+        position: relative;
     }
 
-    /* 2. Sidebar: Hidden off-screen by default */
+    /* 2. Sidebar: Fixed to Viewport on Mobile */
     .sidebar {
-        position: absolute;
+        position: fixed; /* Fixed prevents it from scrolling with the body */
         top: 0;
         left: 0;
-        height: 100vh; /* Full height */
-        z-index: 1000; /* Float above everything */
         width: 260px;
-        transform: translateX(-100%); /* Hide to the left */
+        
+        /* 100dvh adjusts for mobile URL bars automatically */
+        height: 100vh; 
+        height: 100dvh; 
+        
+        z-index: 2000; /* Higher z-index to stay on top of everything */
+        transform: translateX(-100%);
         transition: transform 0.3s ease-in-out;
-        box-shadow: 4px 0 15px rgba(0,0,0,0.5); /* Strong shadow for depth */
+        box-shadow: 4px 0 15px rgba(0,0,0,0.5);
     }
 
     /* Class to slide sidebar IN */
@@ -319,13 +334,18 @@ input:focus, select:focus, textarea:focus {
         transform: translateX(0);
     }
 
-    /* 3. Sidebar Header: Adjust for Close Button */
+    /* 3. Adjust Footer for Mobile Safe Areas (iPhone Home Bar) */
+    .sidebar-footer {
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+
+    /* 4. Sidebar Header: Adjust for Close Button */
     .sidebar-header h2 {
         justify-content: space-between;
         width: 100%;
     }
 
-    /* 4. Show Mobile Buttons */
+    /* 5. Show Mobile Buttons */
     #mobile-menu-btn {
         display: block;
         background: transparent;
@@ -345,13 +365,12 @@ input:focus, select:focus, textarea:focus {
         cursor: pointer;
     }
 
-    /* 5. Main Content: Force Full Width */
+    /* 6. Main Content: Force Full Width */
     .main-content {
         width: 100vw;
         margin-left: 0;
     }
     
-    /* Adjust header padding for mobile */
     .top-bar {
         padding: 0 15px; 
     }
