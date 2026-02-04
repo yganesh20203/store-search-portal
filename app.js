@@ -1,5 +1,6 @@
 import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm";
 
+
 // ==========================================
 // 1. GLOBAL STATE
 // ==========================================
@@ -85,7 +86,27 @@ window.loadTvStats = loadTvStats;
 window.populateKybColumns = populateKybColumns;
 window.runKybAnalysis = runKybAnalysis;
 
-
+// ==========================================
+// 🛡️ SECURITY FAIL-SAFE (Runs Immediately)
+// ==========================================
+(function forceSessionCheck() {
+    // If the page has loaded but we don't have the session credentials in memory...
+    if (!activeSessionCreds && document.getElementById("dashboard")) {
+        console.warn("⛔ No active session keys found. Forcing Relogin.");
+        
+        // 1. Force Dashboard Hidden
+        document.getElementById("dashboard").classList.add("hidden");
+        
+        // 2. Force Login Screen Visible
+        const authScreen = document.getElementById("auth-overlay");
+        if (authScreen) authScreen.classList.remove("hidden");
+        
+        // 3. Pre-fill email if available (Convenience)
+        const savedUser = localStorage.getItem("portal_user_email");
+        const userField = document.getElementById("login-user");
+        if (savedUser && userField) userField.value = savedUser;
+    }
+})();
 // ==========================================
 // 3. INITIALIZE DUCKDB
 // ==========================================
