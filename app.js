@@ -4403,6 +4403,9 @@ function resetStatsToZero() {
 // ==========================================
 // 🎛️ DYNAMIC DOWNLOAD VIEW RENDERER
 // ==========================================
+// ==========================================
+// 🎛️ DYNAMIC DOWNLOAD VIEW RENDERER (Updated with Timer UI)
+// ==========================================
 window.renderDownloadOptions = function() {
     const container = document.getElementById("tv-view-download");
     if (!container) return;
@@ -4420,7 +4423,7 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-offer" placeholder="Special Offer" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
-        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
+        pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
     // --- B. FEATURE SPACE ---
@@ -4433,7 +4436,7 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-item" placeholder="Item Description" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
-        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
+        pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
     // --- C. PLANOGRAM ---
@@ -4446,10 +4449,10 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-brand" placeholder="Brand" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
-        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#673ab7; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
+        pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#673ab7; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
-    // --- D. OFFER BOARD (NEW) ---
+    // --- D. OFFER BOARD ---
     else if (activeTvCategory === "Offer Board") {
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
@@ -4457,10 +4460,10 @@ window.renderDownloadOptions = function() {
                     <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
-        pptButton = `<button onclick="window.generateTvPPT()" style="width:100%; background:#ff9800; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
+        pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#ff9800; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
-    // --- RENDER VIEW ---
+    // --- RENDER VIEW (Added Progress Bar & Timer) ---
     container.innerHTML = `
         <div style="background:#e8eaf6; padding:20px; border-radius:8px; border:1px solid #c5cae9; max-width:500px;">
             <h3 style="margin-top:0;">📅 Export ${activeTvCategory} Report</h3>
@@ -4469,9 +4472,21 @@ window.renderDownloadOptions = function() {
                 <div><label>To:</label><input type="date" id="tv-rep-to" style="width:100%; padding:10px;"></div>
             </div>
             ${extraFilters}
+            
             <button id="btn-download-report" onclick="window.generateTvReport()" style="width:100%; background:#3f51b5; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer;">⬇️ Download CSV</button>
             ${pptButton}
-            <p id="tv-download-status" style="margin-top:10px; font-size:12px; text-align:center;"></p>
+
+            <div id="ppt-progress-container" class="hidden" style="margin-top:15px;">
+                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; font-weight:bold;">
+                    <span id="ppt-status-text">Initializing...</span>
+                    <span id="ppt-timer-text">Est. Time: --</span>
+                </div>
+                <div style="width:100%; background:#cfd8dc; height:8px; border-radius:4px; overflow:hidden;">
+                    <div id="ppt-progress-bar" style="width:0%; height:100%; background:#4caf50; transition:width 0.3s;"></div>
+                </div>
+            </div>
+
+            <p id="tv-download-status" style="margin-top:10px; font-size:12px; text-align:center; color:#d32f2f;"></p>
         </div>
     `;
 };
@@ -4479,18 +4494,37 @@ window.renderDownloadOptions = function() {
 // ==========================================
 // 📊 PPT GENERATION LOGIC
 // ==========================================
+// ==========================================
+// 📊 PPT GENERATION LOGIC (With Timer & Progress)
+// ==========================================
 window.generateTvPPT = async function() {
     const fromInput = document.getElementById("tv-rep-from").value;
     const toInput = document.getElementById("tv-rep-to").value;
     const statusEl = document.getElementById("tv-download-status");
+    const btn = document.getElementById("btn-ppt-gen");
     const config = TV_CONFIG_MAP[activeTvCategory];
+
+    // Progress Elements
+    const progressContainer = document.getElementById("ppt-progress-container");
+    const progressBar = document.getElementById("ppt-progress-bar");
+    const statusText = document.getElementById("ppt-status-text");
+    const timerText = document.getElementById("ppt-timer-text");
 
     if (!fromInput || !toInput) { alert("Select Dates"); return; }
 
-    statusEl.innerText = "⏳ Initializing PPT Engine...";
+    btn.disabled = true;
+    btn.style.opacity = "0.6";
+    statusEl.innerText = "";
     
+    // Show Progress Bar
+    if(progressContainer) progressContainer.classList.remove("hidden");
+    if(progressBar) progressBar.style.width = "0%";
+    if(timerText) timerText.innerText = "Calculating...";
+
     try {
         // 1. Fetch Data
+        if(statusText) statusText.innerText = "Fetching Sheet Data...";
+        
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
@@ -4504,9 +4538,7 @@ window.generateTvPPT = async function() {
         let filteredData = [];
         let imageColIndex = -1; 
 
-        // --- FILTER LOGIC ---
-        
-        // A. PLANOGRAM
+        // --- FILTER LOGIC (Same as before) ---
         if (activeTvCategory === "Planogram") {
             imageColIndex = 11;
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
@@ -4523,8 +4555,6 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
-        
-        // B. FEATURE SPACE
         else if (activeTvCategory === "Feature Space") {
             imageColIndex = 15;
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
@@ -4541,8 +4571,6 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
-        
-        // C. EVENTS
         else if (activeTvCategory === "Events") {
             imageColIndex = 11;
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
@@ -4563,17 +4591,15 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
-
-        // D. OFFER BOARD (NEW)
         else if (activeTvCategory === "Offer Board") {
-            imageColIndex = 11; // Col L is Photo
+            imageColIndex = 11; 
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
 
             filteredData = rows.filter(r => {
-                const d = new Date(r[3]); // Start Date
+                const d = new Date(r[3]); 
                 if (!(d >= fromDate && d <= toDate)) return false;
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
-                if (!r[11] || r[11].trim() === "") return false; // Must have photo
+                if (!r[11] || r[11].trim() === "") return false; 
                 return true;
             });
         }
@@ -4584,12 +4610,32 @@ window.generateTvPPT = async function() {
         let pres = new PptxGenJS();
         pres.layout = "LAYOUT_16x9";
 
-        // 3. Process Rows & Fetch Images
-        for (let i = 0; i < filteredData.length; i++) {
+        // 3. Process Rows & Fetch Images with TIMER
+        const totalSlides = filteredData.length;
+        const startTime = Date.now();
+        
+        for (let i = 0; i < totalSlides; i++) {
             const row = filteredData[i];
             const driveLink = row[imageColIndex];
             
-            statusEl.innerText = `⏳ Processing Slide ${i+1} of ${filteredData.length}...`;
+            // --- TIMER LOGIC ---
+            // Calculate time elapsed so far
+            const elapsed = (Date.now() - startTime) / 1000; // seconds
+            
+            // Average time per slide so far
+            const avgTime = i > 0 ? (elapsed / i) : 0; 
+            
+            // Estimated Remaining
+            const remainingSlides = totalSlides - i;
+            const estSecondsLeft = avgTime > 0 ? Math.ceil(avgTime * remainingSlides) : "Calculating...";
+            
+            // Update UI
+            const pct = Math.round(((i) / totalSlides) * 100);
+            if(progressBar) progressBar.style.width = `${pct}%`;
+            if(statusText) statusText.innerText = `Processing Slide ${i+1} of ${totalSlides}`;
+            if(timerText) timerText.innerText = typeof estSecondsLeft === 'number' 
+                ? `Est. Wait: ${estSecondsLeft} sec` 
+                : `Est. Wait: ...`;
 
             let fileId = null;
             if (driveLink.includes("id=")) fileId = driveLink.split("id=")[1].split("&")[0];
@@ -4635,8 +4681,8 @@ window.generateTvPPT = async function() {
                             ["Store", row[1] + " - " + row[2]],
                             ["Date Range", row[3] + " to " + row[4]],
                             ["Posters", row[8]],
-                            ["Status", row[9]], // Executed
-                            ["Reason", row[10]], // If Not Executed
+                            ["Status", row[9]], 
+                            ["Reason", row[10]], 
                             ["Audit By", row[12]]
                         ];
                     }
@@ -4651,10 +4697,10 @@ window.generateTvPPT = async function() {
 
                     // Add Image (Right Half)
                     if (base64Img) {
-                        slide.addImage({
-                            data: base64Img,
-                            x: 5.2, y: 0.5, w: 4.5, h: 4.5,
-                            sizing: { type: "contain", w: 4.5, h: 4.5 }
+                        slide.addImage({ 
+                            data: base64Img, 
+                            x: 5.2, y: 0.5, w: 4.5, h: 4.5, 
+                            sizing: { type: "contain", w: 4.5, h: 4.5 } 
                         });
                     }
 
@@ -4664,13 +4710,29 @@ window.generateTvPPT = async function() {
             }
         }
 
-        statusEl.innerText = "💾 Saving PPT...";
+        // Final UI Update
+        if(progressBar) progressBar.style.width = "100%";
+        if(statusText) statusText.innerText = "Finalizing File...";
+        if(timerText) timerText.innerText = "Almost done!";
+
         await pres.writeFile({ fileName: `${activeTvCategory}_Report.pptx` });
-        statusEl.innerText = "✅ PPT Downloaded!";
+        
+        statusEl.innerText = ""; // Clear error text if any
+        if(statusText) statusText.innerText = "✅ Download Complete!";
+        if(timerText) timerText.innerText = "";
+
+        // Hide progress bar after 3 seconds
+        setTimeout(() => {
+            if(progressContainer) progressContainer.classList.add("hidden");
+        }, 5000);
 
     } catch (e) {
         statusEl.innerText = "Error: " + e.message;
         console.error(e);
+        if(progressContainer) progressContainer.classList.add("hidden");
+    } finally {
+        btn.disabled = false;
+        btn.style.opacity = "1";
     }
 };
 
