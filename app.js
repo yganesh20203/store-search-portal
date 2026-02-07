@@ -5193,7 +5193,8 @@ function renderDynamicSidebar() {
         "Work on Reports": { icon: "🛠️", func: "loadWorkDashboard" },
         "Member DB":       { icon: "👥", func: "loadMemberDashboard" },
         "Google Sheets":   { icon: "📈", func: "loadTrackerDashboard" },
-        "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" }
+        "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" },
+        "PO Issues": { icon: "🚨", func: "loadPoIssuesDashboard" }
     };
 
     // 2. Retrieve Permissions
@@ -5291,3 +5292,230 @@ window.onload = checkLoginStatus;
 
 // Ensure you call checkLoginStatus() when the window loads!
 window.onload = checkLoginStatus;
+
+// ==========================================
+// 📦 PO ISSUES MODULE
+// ==========================================
+
+// 1. Sidebar Loader
+window.loadPoIssuesDashboard = function() {
+    resetUI();
+    highlightSidebar("PO Issues");
+    document.getElementById("po-issues-ui").classList.remove("hidden");
+    document.getElementById("po-role-select").classList.remove("hidden");
+    document.getElementById("po-store-form").classList.add("hidden");
+    document.getElementById("po-central-dash").classList.add("hidden");
+};
+
+// 2. Role Switcher
+window.selectPoRole = function(role) {
+    document.getElementById("po-role-select").classList.add("hidden");
+    document.getElementById("po-store-form").classList.add("hidden");
+    document.getElementById("po-central-dash").classList.add("hidden");
+
+    if (role === 'store') {
+        document.getElementById("po-store-form").classList.remove("hidden");
+    } else if (role === 'central') {
+        document.getElementById("po-central-dash").classList.remove("hidden");
+        loadCentralPoTasks();
+    } else {
+        // Back button
+        document.getElementById("po-role-select").classList.remove("hidden");
+    }
+};
+
+// 3. Submit Issue (Store Side)
+window.submitPoIssue = async function() {
+    const poNum = document.getElementById("po-num").value;
+    const catNo = document.getElementById("po-cat-no").value;
+    const catName = document.getElementById("po-cat-name").value;
+    const issueType = document.getElementById("po-issue-type").value;
+    const fileInput = document.getElementById("po-proof-file");
+    
+    if (!poNum || !catNo || !issueType) { alert("Please fill all required fields."); return; }
+    if (fileInput.files.length === 0) { alert("📸 Proof (Photo/PDF) is required."); return; }
+
+    const btn = document.querySelector("#po-store-form button"); 
+    btn.innerText = "⏳ Uploading...";
+    btn.disabled = true;
+
+    try {
+        // A. Upload Proof
+        const file = fileInput.files[0];
+        const fileName = `PO_${poNum}_${Date.now()}.${file.name.split('.').pop()}`;
+        // Uses your existing uploadBlobToDrive function
+        const proofLink = await uploadBlobToDrive(file, fileName);
+
+        // B. Assign to Central Person
+        // Default to a central pool email since no specific logic was provided
+        const assignedTo = "central.team@flipkart.com"; 
+
+        // C. Save to Sheet
+        const issueId = "PO-" + Math.floor(Math.random() * 100000);
+        const user = localStorage.getItem("portal_user_email");
+        const timestamp = new Date().toLocaleString();
+
+        // Columns: ID, Date, PO, CatNo, CatName, Issue, Proof, By, Status, AssignedTo
+        const row = [[ issueId, timestamp, poNum, catNo, catName, issueType, proofLink, user, "OPEN", assignedTo ]];
+
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data!A1:append?valueInputOption=USER_ENTERED`;
+        await fetch(url, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: row })
+        });
+
+        alert("✅ Issue Raised Successfully!");
+        // Reset Form
+        document.getElementById("po-num").value = "";
+        document.getElementById("po-cat-no").value = "";
+        document.getElementById("po-cat-name").value = "";
+        document.getElementById("po-issue-type").value = "";
+        fileInput.value = "";
+        window.selectPoRole('back');
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = "🚀 Submit Ticket";
+        btn.disabled = false;
+    }
+};
+
+// 4. Load Tasks (Central Side)
+async function loadCentralPoTasks() {
+    const container = document.getElementById("po-central-list");
+    const escalationBox = document.getElementById("po-escalation-box");
+    container.innerHTML = "⏳ Fetching pending tickets...";
+    escalationBox.classList.add("hidden");
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) {
+            container.innerHTML = "<p style='text-align:center; color:#999;'>No pending issues.</p>";
+            return;
+        }
+
+        const rows = data.values.slice(1); // Skip header
+        const now = new Date();
+        let overdueCount = 0;
+        let html = "";
+
+        rows.forEach((r, i) => {
+            // Filter: Only OPEN tickets
+            if (r[8] !== "OPEN") return;
+
+            // Data Mapping (Indices based on submission above)
+            // [0]ID, [1]Time, [2]PO, [3]CatNo, [4]CatName, [5]Issue, [6]Proof
+            const ticketTime = new Date(r[1]);
+            const elapsedHours = (now - ticketTime) / (1000 * 60 * 60);
+            
+            // Check Escalation (12 Hours)
+            let isOverdue = false;
+            let timeBadge = `<span style="color:green; font-size:11px;">${Math.round(elapsedHours)}h ago</span>`;
+            
+            if (elapsedHours > 12) {
+                isOverdue = true;
+                overdueCount++;
+                timeBadge = `<span style="color:white; background:#d32f2f; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 ${Math.round(elapsedHours)}h LATE</span>`;
+            }
+
+            html += `
+            <div style="background:white; border-left: 5px solid ${isOverdue ? '#d32f2f' : '#1976d2'}; padding:15px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <span style="font-weight:bold; color:#555;">PO: ${r[2]}</span>
+                    ${timeBadge}
+                </div>
+                <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:5px;">${r[5]}</div>
+                <div style="font-size:12px; color:#666; margin-bottom:10px;">
+                    Cat: ${r[3]} - ${r[4]} <br>
+                    Raised by: ${r[7]}
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <a href="${r[6]}" target="_blank" style="text-decoration:none; flex:1;">
+                        <button style="width:100%; padding:8px; background:#e3f2fd; color:#1565c0; border:1px solid #bbdefb; border-radius:4px; cursor:pointer;">📄 View Proof</button>
+                    </a>
+                    <button onclick="window.openPoResolveModal('${r[0]}', ${i + 2})" style="flex:1; padding:8px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer;">✅ Resolve</button>
+                </div>
+            </div>`;
+        });
+
+        if (html === "") {
+            container.innerHTML = "<p style='text-align:center; color:#999;'>All caught up! No pending tickets.</p>";
+        } else {
+            container.innerHTML = html;
+        }
+
+        // Show Escalation Warning
+        if (overdueCount > 0) {
+            escalationBox.classList.remove("hidden");
+            document.getElementById("po-escalation-text").innerText = `Warning: ${overdueCount} tickets have breached the 12-hour SLA! Resolve immediately.`;
+        }
+
+    } catch (e) {
+        container.innerHTML = "Error: " + e.message;
+    }
+}
+
+// 5. Open Resolve Modal
+window.openPoResolveModal = function(id, rowIndex) {
+    document.getElementById("po-resolve-id").value = id;
+    document.getElementById("po-resolve-row").value = rowIndex;
+    document.getElementById("po-resolve-desc").innerText = `Resolving Ticket: ${id}`;
+    document.getElementById("po-resolve-modal").classList.remove("hidden");
+};
+
+// 6. Confirm Resolution
+window.confirmPoResolution = async function() {
+    const rowIndex = document.getElementById("po-resolve-row").value;
+    const mgrEmail = document.getElementById("po-manager-email").value;
+    const notes = document.getElementById("po-resolve-notes").value;
+    const btn = document.querySelector("#po-resolve-modal button");
+
+    if (!mgrEmail || !notes) { alert("Manager Email and Notes are required."); return; }
+
+    btn.innerText = "⏳ Updating...";
+    btn.disabled = true;
+
+    try {
+        const timestamp = new Date().toLocaleString();
+        
+        // 1. Update Status to RESOLVED (Col I is Index 8 -> Column I)
+        // Note: Sheet columns are 1-based letters. I is the 9th column.
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${rowIndex}`, "RESOLVED");
+        
+        // 2. Update Details (Col K, L, M) -> Manager, Notes, Time
+        const detailsRange = `PO_Data!K${rowIndex}:M${rowIndex}`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/${detailsRange}?valueInputOption=USER_ENTERED`;
+        
+        await fetch(url, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [[ mgrEmail, notes, timestamp ]] })
+        });
+
+        alert("✅ Ticket Resolved!");
+        document.getElementById("po-resolve-modal").classList.add("hidden");
+        loadCentralPoTasks(); // Refresh list
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerText = "✅ Mark Resolved";
+        btn.disabled = false;
+    }
+};
+
+// Helper for single cell update
+async function updateSheetCell(sheetId, range, value) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+    await fetch(url, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ values: [[ value ]] })
+    });
+}
+
