@@ -5338,19 +5338,21 @@ window.loadPoIssuesDashboard = async function() {
 
 // 2. Role Switcher
 window.selectPoRole = function(role) {
-    document.getElementById("po-role-select").classList.add("hidden");
-    document.getElementById("po-store-form").classList.add("hidden");
-    document.getElementById("po-central-dash").classList.add("hidden");
+    // Hide All
+    ["po-role-select", "po-store-form", "po-central-dash", "po-manager-dash"].forEach(id => {
+        document.getElementById(id).classList.add("hidden");
+    });
 
-    if (role === 'store') {
-        document.getElementById("po-store-form").classList.remove("hidden");
-    } else if (role === 'central') {
+    if (role === 'store') document.getElementById("po-store-form").classList.remove("hidden");
+    else if (role === 'central') {
         document.getElementById("po-central-dash").classList.remove("hidden");
         loadCentralPoTasks();
-    } else {
-        // Back button
-        document.getElementById("po-role-select").classList.remove("hidden");
     }
+    else if (role === 'manager') {
+        document.getElementById("po-manager-dash").classList.remove("hidden");
+        loadManagerApprovals();
+    }
+    else document.getElementById("po-role-select").classList.remove("hidden"); // Back
 };
 
 // 3. Submit Issue (Store Side)
@@ -5430,87 +5432,200 @@ window.submitPoIssue = async function() {
 // 4. Load Tasks (Central Side)
 async function loadCentralPoTasks() {
     const container = document.getElementById("po-central-list");
-    const escalationBox = document.getElementById("po-escalation-box");
-    container.innerHTML = "⏳ Fetching pending tickets...";
-    escalationBox.classList.add("hidden");
+    container.innerHTML = "⏳ Loading...";
+    const currentUser = localStorage.getItem("portal_user_email");
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        if (!data.values || data.values.length < 2) {
-            container.innerHTML = "<p style='text-align:center; color:#999;'>No pending issues.</p>";
-            return;
-        }
+        if (!data.values || data.values.length < 2) { container.innerHTML = "No tasks."; return; }
 
-        const rows = data.values.slice(1); // Skip header
-        const now = new Date();
-        let overdueCount = 0;
+        const rows = data.values.slice(1);
         let html = "";
 
         rows.forEach((r, i) => {
-            // Filter: Only OPEN tickets
-            if (r[8] !== "OPEN") return;
+            // Filter: Show only assigned to me OR pool
+            // if (r[9] !== currentUser && !r[9].includes("central")) return; 
+            
+            // Status Logic
+            const status = r[8]; // Col I
+            if (status === "RESOLVED") return; // Hide resolved
 
-            // Data Mapping (Indices based on submission above)
-            // [0]ID, [1]Time, [2]PO, [3]CatNo, [4]CatName, [5]Issue, [6]Proof
-            const ticketTime = new Date(r[1]);
-            const elapsedHours = (now - ticketTime) / (1000 * 60 * 60);
-            
-            // Check Escalation (12 Hours)
-            let isOverdue = false;
-            let timeBadge = `<span style="color:green; font-size:11px;">${Math.round(elapsedHours)}h ago</span>`;
-            
-            if (elapsedHours > 12) {
-                isOverdue = true;
-                overdueCount++;
-                timeBadge = `<span style="color:white; background:#d32f2f; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 ${Math.round(elapsedHours)}h LATE</span>`;
+            let actionBtn = "";
+            let statusBadge = "";
+
+            if (status === "OPEN") {
+                statusBadge = `<span style="background:#e3f2fd; color:#1976d2; padding:2px 6px; border-radius:4px; font-size:10px;">🆕 OPEN</span>`;
+                actionBtn = `<button onclick="window.openRequestModal('${r[0]}', ${i+2}, '${r[2]}')" style="flex:1; padding:8px; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer;">📨 Request Approval</button>`;
+            } 
+            else if (status === "PENDING_APPROVAL") {
+                statusBadge = `<span style="background:#fff3e0; color:#e65100; padding:2px 6px; border-radius:4px; font-size:10px;">⏳ AWAITING MANAGER</span>`;
+                actionBtn = `<button disabled style="flex:1; padding:8px; background:#ccc; color:#666; border:none; border-radius:4px; cursor:not-allowed;">⏳ Pending Manager</button>`;
+            }
+            else if (status === "APPROVED") {
+                statusBadge = `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:10px;">✅ APPROVED</span>`;
+                actionBtn = `<button onclick="window.openFinalResolveModal('${r[0]}', ${i+2})" style="flex:1; padding:8px; background:#2e7d32; color:white; border:none; border-radius:4px; cursor:pointer;">💾 Final Resolve</button>`;
             }
 
             html += `
-            <div style="background:white; border-left: 5px solid ${isOverdue ? '#d32f2f' : '#1976d2'}; padding:15px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+            <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <span style="font-weight:bold; color:#555;">PO: ${r[2]}</span>
-                    ${timeBadge}
+                    <span style="font-weight:bold;">PO: ${r[2]}</span>
+                    ${statusBadge}
                 </div>
-                <div style="font-size:14px; font-weight:bold; color:#1565c0; margin-bottom:5px;">${r[5]}</div>
-                <div style="font-size:12px; color:#666; margin-bottom:10px;">
-                    Cat: ${r[3]} - ${r[4]} <br>
-                    Raised by: ${r[7]}
+                <div style="font-size:12px; color:#555; margin-bottom:10px;">
+                    <b>Issue:</b> ${r[5]} <br>
+                    <b>Cat:</b> ${r[3]} (${r[4]}) <br>
+                    <b>Raised by:</b> ${r[7]}
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <a href="${r[6]}" target="_blank" style="text-decoration:none; flex:1;">
-                        <button style="width:100%; padding:8px; background:#e3f2fd; color:#1565c0; border:1px solid #bbdefb; border-radius:4px; cursor:pointer;">📄 View Proof</button>
-                    </a>
-                    <button onclick="window.openPoResolveModal('${r[0]}', ${i + 2})" style="flex:1; padding:8px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer;">✅ Resolve</button>
+                    <a href="${r[6]}" target="_blank" style="flex:1;"><button style="width:100%; padding:8px; background:#f5f5f5; border:1px solid #ccc; border-radius:4px;">📄 View Proof</button></a>
+                    ${actionBtn}
                 </div>
             </div>`;
         });
 
-        if (html === "") {
-            container.innerHTML = "<p style='text-align:center; color:#999;'>All caught up! No pending tickets.</p>";
-        } else {
-            container.innerHTML = html;
-        }
-
-        // Show Escalation Warning
-        if (overdueCount > 0) {
-            escalationBox.classList.remove("hidden");
-            document.getElementById("po-escalation-text").innerText = `Warning: ${overdueCount} tickets have breached the 12-hour SLA! Resolve immediately.`;
-        }
-
-    } catch (e) {
-        container.innerHTML = "Error: " + e.message;
-    }
+        container.innerHTML = html || "<p>No active tasks.</p>";
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
 
+window.openRequestModal = function(id, row, poNum) {
+    document.getElementById("req-id").value = id;
+    document.getElementById("req-row").value = row;
+    document.getElementById("req-po-num").value = poNum;
+    document.getElementById("po-request-modal").classList.remove("hidden");
+};
 // 5. Open Resolve Modal
 window.openPoResolveModal = function(id, rowIndex) {
     document.getElementById("po-resolve-id").value = id;
     document.getElementById("po-resolve-row").value = rowIndex;
     document.getElementById("po-resolve-desc").innerText = `Resolving Ticket: ${id}`;
     document.getElementById("po-resolve-modal").classList.remove("hidden");
+};
+
+window.submitApprovalRequest = async function() {
+    const row = document.getElementById("req-row").value;
+    const poNum = document.getElementById("req-po-num").value;
+    const mgrEmail = document.getElementById("req-mgr-email").value.trim();
+    const btn = document.querySelector("#po-request-modal button");
+
+    if (!mgrEmail) { alert("Enter manager email."); return; }
+
+    btn.innerText = "⏳ Processing...";
+    btn.disabled = true;
+
+    try {
+        // A. Update Sheet: Status -> PENDING_APPROVAL, Manager -> Email
+        // Col I (Status), Col K (Manager)
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "PENDING_APPROVAL");
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!K${row}`, mgrEmail);
+
+        // B. Generate Mailto Trigger
+        const subject = `Approval Required: PO Issue ${poNum}`;
+        const body = `Hi,\n\nPlease approve the issue for PO ${poNum}.\n\n1. Login to Portal\n2. Go to PO Issues -> Manager Approvals\n3. Click Approve\n\nThanks.`;
+        window.location.href = `mailto:${mgrEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+        alert("✅ Status Updated! Sending email draft...");
+        document.getElementById("po-request-modal").classList.add("hidden");
+        loadCentralPoTasks();
+
+    } catch (e) { alert("Error: " + e.message); } 
+    finally { btn.innerText = "🚀 Send Request"; btn.disabled = false; }
+};
+
+// 4. MANAGER: Load Approvals
+async function loadManagerApprovals() {
+    const container = document.getElementById("po-manager-list");
+    container.innerHTML = "⏳ Checking for approvals...";
+    const currentUser = localStorage.getItem("portal_user_email");
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values) { container.innerHTML = "No data."; return; }
+
+        const rows = data.values.slice(1);
+        let html = "";
+
+        rows.forEach((r, i) => {
+            // Filter: Status is PENDING_APPROVAL AND Manager Email matches current user
+            const status = r[8];
+            const mgrEmail = r[10] ? r[10].toLowerCase().trim() : "";
+            
+            if (status === "PENDING_APPROVAL" && mgrEmail === currentUser.toLowerCase()) {
+                html += `
+                <div style="background:white; border-left:5px solid #e65100; padding:15px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                    <h4 style="margin:0 0 5px 0;">PO: ${r[2]}</h4>
+                    <p style="font-size:12px; color:#555; margin-bottom:10px;">
+                        <b>Issue:</b> ${r[5]} <br>
+                        <b>Raised By:</b> ${r[7]} <br>
+                        <a href="${r[6]}" target="_blank" style="color:#1976d2;">📄 View Proof</a>
+                    </p>
+                    <button onclick="window.managerApprove('${r[0]}', ${i+2})" style="width:100%; padding:10px; background:#e65100; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">✅ Approve Issue</button>
+                </div>`;
+            }
+        });
+
+        container.innerHTML = html || `<div style="text-align:center; padding:20px;">No pending approvals for <b>${currentUser}</b></div>`;
+
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
+}
+
+// 5. MANAGER: Approve Action
+window.managerApprove = async function(id, row) {
+    if(!confirm("Confirm approval for this PO issue?")) return;
+
+    try {
+        const timestamp = new Date().toLocaleString();
+        // Update Status -> APPROVED (Col I), Approval Time -> (Col L)
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "APPROVED");
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!L${row}`, timestamp);
+        
+        alert("✅ Approved! The central team can now resolve it.");
+        loadManagerApprovals(); // Refresh list
+    } catch (e) { alert("Error: " + e.message); }
+};
+
+// 6. CENTRAL: Final Resolve (Only after Approval)
+window.openFinalResolveModal = function(id, row) {
+    document.getElementById("res-id").value = id;
+    document.getElementById("res-row").value = row;
+    document.getElementById("po-final-resolve-modal").classList.remove("hidden");
+};
+
+window.submitFinalResolution = async function() {
+    const row = document.getElementById("res-row").value;
+    const notes = document.getElementById("res-notes").value;
+    const btn = document.querySelector("#po-final-resolve-modal button");
+
+    if (!notes) { alert("Please enter resolution notes."); return; }
+
+    btn.innerText = "⏳ Saving...";
+    btn.disabled = true;
+
+    try {
+        const timestamp = new Date().toLocaleString();
+        // Update Status -> RESOLVED (Col I)
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "RESOLVED");
+        // Update Notes (Col M), Resolve Time (Col N)
+        const range = `PO_Data!M${row}:N${row}`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
+        await fetch(url, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [[ notes, timestamp ]] })
+        });
+
+        alert("✅ Ticket Closed Successfully!");
+        document.getElementById("po-final-resolve-modal").classList.add("hidden");
+        loadCentralPoTasks();
+
+    } catch (e) { alert("Error: " + e.message); }
+    finally { btn.innerText = "💾 Mark Resolved"; btn.disabled = false; }
 };
 
 // 6. Confirm Resolution
