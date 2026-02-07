@@ -5304,15 +5304,11 @@ window.loadPoIssuesDashboard = async function() {
     highlightSidebar("PO Issues");
     document.getElementById("po-issues-ui").classList.remove("hidden");
     document.getElementById("po-role-select").classList.remove("hidden");
-    
-    // Hide all sub-views initially
     ["po-store-container", "po-central-dash", "po-manager-dash"].forEach(id => document.getElementById(id).classList.add("hidden"));
-    
     await fetchPoRoutingRules();
 };
 
 window.switchStoreTab = function(tab) {
-    // 1. Highlight Tab
     document.querySelectorAll(".po-tab").forEach(b => {
         b.classList.remove("active");
         b.style.background = "#eee";
@@ -5324,12 +5320,9 @@ window.switchStoreTab = function(tab) {
         activeBtn.style.background = "#4caf50";
         activeBtn.style.color = "white";
     }
-
-    // 2. Show Content
     document.querySelectorAll(".store-view").forEach(d => d.classList.add("hidden"));
     document.getElementById(`view-${tab}`).classList.remove("hidden");
 
-    // 3. Load Data if needed
     if (tab === 'history') loadStoreHistory();
     if (tab === 'stats') renderPoAnalytics('store', 'po-store-stats-content');
 };
@@ -5340,7 +5333,7 @@ window.selectPoRole = function(role) {
 
     if (role === 'store') {
         document.getElementById("po-store-container").classList.remove("hidden");
-        window.switchStoreTab('raise'); // Default to raise
+        window.switchStoreTab('raise');
     } 
     else if (role === 'central') {
         document.getElementById("po-central-dash").classList.remove("hidden");
@@ -5354,13 +5347,14 @@ window.selectPoRole = function(role) {
 };
 // 3. Submit Issue (Store Side)
 window.submitPoIssue = async function() {
+    const storeId = document.getElementById("po-store-id").value.trim(); // 🆕
     const poNum = document.getElementById("po-num").value.trim();
     const catNo = document.getElementById("po-cat-no").value.trim();
     const catName = document.getElementById("po-cat-name").value;
     const issueType = document.getElementById("po-issue-type").value;
     const fileInput = document.getElementById("po-proof-file");
     
-    if (!poNum || !catNo || !issueType) { alert("Fill all fields."); return; }
+    if (!storeId || !poNum || !catNo || !issueType) { alert("Please fill all required fields, including Store ID."); return; }
     if (fileInput.files.length === 0) { alert("Upload proof."); return; }
 
     const btn = document.querySelector("#view-raise button"); 
@@ -5369,22 +5363,22 @@ window.submitPoIssue = async function() {
     try {
         if (Object.keys(poCategoryMap).length === 0) await fetchPoRoutingRules();
 
-        // Routing
         const exactKey = `${catNo}_${issueType}`;
         const catDefKey = `${catNo}_DEFAULT`;
         const globalDef = "DEFAULT_DEFAULT";
         let assignedTo = poCategoryMap[exactKey] || poCategoryMap[catDefKey] || poCategoryMap[globalDef] || "central.team@flipkart.com";
 
-        // Upload
         const file = fileInput.files[0];
-        const fileName = `PO_${poNum}_${Date.now()}.${file.name.split('.').pop()}`;
+        const fileName = `PO_${storeId}_${poNum}_${Date.now()}.${file.name.split('.').pop()}`;
         const proofLink = await uploadBlobToDrive(file, fileName);
 
-        // Save
         const issueId = "PO-" + Math.floor(Math.random() * 100000);
         const user = localStorage.getItem("portal_user_email");
         const timestamp = new Date().toLocaleString();
-        const row = [[ issueId, timestamp, poNum, catNo, catName, issueType, proofLink, user, "OPEN", assignedTo ]];
+
+        // 🆕 NEW ROW SCHEMA: Store_ID at Index 2
+        // ID, Time, StoreID, PO, CatNo, CatName, Issue, Proof, By, Status, Assignee
+        const row = [[ issueId, timestamp, storeId, poNum, catNo, catName, issueType, proofLink, user, "OPEN", assignedTo ]];
 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data!A1:append?valueInputOption=USER_ENTERED`;
         await fetch(url, { method: "POST", headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: row }) });
@@ -5409,15 +5403,13 @@ async function loadStoreHistory() {
         const data = await response.json();
 
         if (!data.values || data.values.length < 2) { container.innerHTML = "No history."; return; }
-
-        const rows = data.values.slice(1).reverse(); // Show newest first
+        const rows = data.values.slice(1).reverse();
         let html = "";
 
         rows.forEach(r => {
-            // Filter: Only show tickets raised by THIS user
-            if (r[7].toLowerCase().trim() !== currentUser) return;
+            if (r[8].toLowerCase().trim() !== currentUser) return; // Col I = Raised By
 
-            const status = r[8];
+            const status = r[9]; // Col J
             let statusColor = "#1976d2";
             if (status === "RESOLVED") statusColor = "green";
             if (status === "PENDING_APPROVAL") statusColor = "#e65100";
@@ -5425,18 +5417,16 @@ async function loadStoreHistory() {
             html += `
             <div style="background:#f9f9f9; padding:15px; border-radius:4px; border-left:5px solid ${statusColor}; margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; font-weight:bold;">
-                    <span>PO: ${r[2]}</span>
+                    <span>Store: ${r[2]} | PO: ${r[3]}</span>
                     <span style="color:${statusColor}">${status}</span>
                 </div>
                 <div style="font-size:12px; color:#555; margin-top:5px;">
-                    Issue: ${r[5]} <br>
-                    Date: ${r[1]} <br>
-                    Assigned: ${r[9]}
+                    Issue: ${r[6]} <br>
+                    Date: ${r[1]}
                 </div>
-                ${status === 'RESOLVED' ? `<div style="margin-top:8px; font-size:11px; background:#e8f5e9; padding:5px; border-radius:4px;"><b>✅ Resolution:</b> ${r[11]}</div>` : ''}
+                ${status === 'RESOLVED' ? `<div style="margin-top:8px; font-size:11px; background:#e8f5e9; padding:5px;"><b>✅ Resolution:</b> ${r[13]}</div>` : ''}
             </div>`;
         });
-
         container.innerHTML = html || "<p>You haven't raised any issues yet.</p>";
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
@@ -5467,26 +5457,25 @@ async function renderPoAnalytics(scope, containerId) {
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        if (!data.values || data.values.length < 2) { container.innerHTML = "No data."; return; }
+        if (!data.values) { container.innerHTML = "No data."; return; }
 
         let total = 0, open = 0, resolved = 0, pendingMgr = 0;
         
         data.values.slice(1).forEach(r => {
-            // Scope Filter
-            if (scope === 'store' && r[7].toLowerCase().trim() !== currentUser) return;
+            if (scope === 'store' && r[8].toLowerCase().trim() !== currentUser) return;
 
             total++;
-            const status = r[8];
+            const status = r[9]; // Col J
             if (status === "OPEN") open++;
             else if (status === "RESOLVED") resolved++;
             else if (status === "PENDING_APPROVAL") pendingMgr++;
         });
 
         container.innerHTML = `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
                 <div style="background:#e3f2fd; padding:15px; border-radius:8px; text-align:center;">
                     <div style="font-size:24px; font-weight:bold; color:#1976d2;">${total}</div>
-                    <div style="font-size:12px; color:#555;">Total Raised</div>
+                    <div style="font-size:12px; color:#555;">Total</div>
                 </div>
                 <div style="background:#e8f5e9; padding:15px; border-radius:8px; text-align:center;">
                     <div style="font-size:24px; font-weight:bold; color:#2e7d32;">${resolved}</div>
@@ -5494,17 +5483,13 @@ async function renderPoAnalytics(scope, containerId) {
                 </div>
                 <div style="background:#fff3e0; padding:15px; border-radius:8px; text-align:center;">
                     <div style="font-size:24px; font-weight:bold; color:#e65100;">${pendingMgr}</div>
-                    <div style="font-size:12px; color:#555;">Pending Mgr</div>
+                    <div style="font-size:12px; color:#555;">Pending</div>
                 </div>
                 <div style="background:#ffebee; padding:15px; border-radius:8px; text-align:center;">
                     <div style="font-size:24px; font-weight:bold; color:#d32f2f;">${open}</div>
                     <div style="font-size:12px; color:#555;">Open</div>
                 </div>
-            </div>
-            
-            ${scope === 'central' ? `<div style="text-align:center; font-size:12px; color:#666;">(Showing global data)</div>` : ''}
-        `;
-
+            </div>`;
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
 
@@ -5525,42 +5510,37 @@ async function loadCentralPoTasks() {
         let html = "";
 
         rows.forEach((r, i) => {
-            // Filter: Show only assigned to me OR pool
-            // if (r[9] !== currentUser && !r[9].includes("central")) return; 
-            
-            // Status Logic
-            const status = r[8]; // Col I
-            if (status === "RESOLVED") return; // Hide resolved
+            const status = r[9]; // Col J (Index 9)
+            if (status === "RESOLVED") return;
 
             let actionBtn = "";
             let statusBadge = "";
 
             if (status === "OPEN") {
                 statusBadge = `<span style="background:#e3f2fd; color:#1976d2; padding:2px 6px; border-radius:4px; font-size:10px;">🆕 OPEN</span>`;
-                actionBtn = `<button onclick="window.openRequestModal('${r[0]}', ${i+2}, '${r[2]}')" style="flex:1; padding:8px; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer;">📨 Request Approval</button>`;
-            } 
-            else if (status === "PENDING_APPROVAL") {
-                statusBadge = `<span style="background:#fff3e0; color:#e65100; padding:2px 6px; border-radius:4px; font-size:10px;">⏳ AWAITING MANAGER</span>`;
-                actionBtn = `<button disabled style="flex:1; padding:8px; background:#ccc; color:#666; border:none; border-radius:4px; cursor:not-allowed;">⏳ Pending Manager</button>`;
-            }
-            else if (status === "APPROVED") {
+                actionBtn = `<button onclick="window.openRequestModal('${r[0]}', ${i+2}, '${r[3]}')" style="flex:1; padding:8px; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer;">📨 Request Approval</button>`;
+            } else if (status === "PENDING_APPROVAL") {
+                statusBadge = `<span style="background:#fff3e0; color:#e65100; padding:2px 6px; border-radius:4px; font-size:10px;">⏳ PENDING MANAGER</span>`;
+                actionBtn = `<button disabled style="flex:1; padding:8px; background:#ccc; color:#666; border:none; border-radius:4px;">⏳ Waiting...</button>`;
+            } else if (status === "APPROVED") {
                 statusBadge = `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:10px;">✅ APPROVED</span>`;
                 actionBtn = `<button onclick="window.openFinalResolveModal('${r[0]}', ${i+2})" style="flex:1; padding:8px; background:#2e7d32; color:white; border:none; border-radius:4px; cursor:pointer;">💾 Final Resolve</button>`;
             }
 
+            // Display Store ID (r[2])
             html += `
-            <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+            <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:4px; margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <span style="font-weight:bold;">PO: ${r[2]}</span>
+                    <span style="font-weight:bold;">Store: ${r[2]} | PO: ${r[3]}</span>
                     ${statusBadge}
                 </div>
                 <div style="font-size:12px; color:#555; margin-bottom:10px;">
-                    <b>Issue:</b> ${r[5]} <br>
-                    <b>Cat:</b> ${r[3]} (${r[4]}) <br>
-                    <b>Raised by:</b> ${r[7]}
+                    <b>Issue:</b> ${r[6]} <br>
+                    <b>Cat:</b> ${r[4]} - ${r[5]} <br>
+                    <b>Raised by:</b> ${r[8]}
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <a href="${r[6]}" target="_blank" style="flex:1;"><button style="width:100%; padding:8px; background:#f5f5f5; border:1px solid #ccc; border-radius:4px;">📄 View Proof</button></a>
+                    <a href="${r[7]}" target="_blank" style="flex:1;"><button style="width:100%; padding:8px; background:#f5f5f5; border:1px solid #ccc; border-radius:4px;">📄 Proof</button></a>
                     ${actionBtn}
                 </div>
             </div>`;
@@ -5591,31 +5571,28 @@ window.submitApprovalRequest = async function() {
     const btn = document.querySelector("#po-request-modal button");
 
     if (!mgrEmail) { alert("Enter manager email."); return; }
-
     btn.innerText = "⏳ Saving..."; btn.disabled = true;
 
     try {
-        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "PENDING_APPROVAL");
-        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!K${row}`, mgrEmail);
+        // Status -> J (Index 9), Manager -> L (Index 11)
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!J${row}`, "PENDING_APPROVAL");
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!L${row}`, mgrEmail);
 
-        // 🔴 GMAIL REDIRECT FIX
         const subject = `Action Required: Approval for PO ${poNum}`;
         const body = `Hi,\n\nPlease approve the issue for PO ${poNum}.\n\nLogin to Portal > PO Issues > Manager Approvals.\n\nThanks.`;
         const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${mgrEmail}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         
-        window.open(gmailUrl, '_blank'); // Opens Gmail in new tab
-
+        window.open(gmailUrl, '_blank');
         alert("✅ Status Updated! Gmail opened.");
         document.getElementById("po-request-modal").classList.add("hidden");
         loadCentralPoTasks();
-
     } catch (e) { alert("Error: " + e.message); } 
     finally { btn.innerText = "🚀 Open Gmail"; btn.disabled = false; }
 };
 // 4. MANAGER: Load Approvals
-async function loadManagerApprovals() {
+window.loadManagerApprovals = async function() {
     const container = document.getElementById("po-manager-list");
-    container.innerHTML = "⏳ Checking for approvals...";
+    container.innerHTML = "⏳ Loading...";
     const currentUser = localStorage.getItem("portal_user_email");
 
     try {
@@ -5624,46 +5601,40 @@ async function loadManagerApprovals() {
         const data = await response.json();
 
         if (!data.values) { container.innerHTML = "No data."; return; }
-
         const rows = data.values.slice(1);
         let html = "";
 
         rows.forEach((r, i) => {
-            // Filter: Status is PENDING_APPROVAL AND Manager Email matches current user
-            const status = r[8];
-            const mgrEmail = r[10] ? r[10].toLowerCase().trim() : "";
+            const status = r[9]; // Col J
+            const mgrEmail = r[11] ? r[11].toLowerCase().trim() : ""; // Col L
             
             if (status === "PENDING_APPROVAL" && mgrEmail === currentUser.toLowerCase()) {
                 html += `
-                <div style="background:white; border-left:5px solid #e65100; padding:15px; border-radius:4px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                    <h4 style="margin:0 0 5px 0;">PO: ${r[2]}</h4>
+                <div style="background:white; border-left:5px solid #e65100; padding:15px; border-radius:4px; margin-bottom:10px;">
+                    <h4 style="margin:0 0 5px 0;">Store: ${r[2]} | PO: ${r[3]}</h4>
                     <p style="font-size:12px; color:#555; margin-bottom:10px;">
-                        <b>Issue:</b> ${r[5]} <br>
-                        <b>Raised By:</b> ${r[7]} <br>
-                        <a href="${r[6]}" target="_blank" style="color:#1976d2;">📄 View Proof</a>
+                        <b>Issue:</b> ${r[6]} <br>
+                        <b>Raised By:</b> ${r[8]} <br>
+                        <a href="${r[7]}" target="_blank" style="color:#1976d2;">📄 View Proof</a>
                     </p>
                     <button onclick="window.managerApprove('${r[0]}', ${i+2})" style="width:100%; padding:10px; background:#e65100; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">✅ Approve Issue</button>
                 </div>`;
             }
         });
-
-        container.innerHTML = html || `<div style="text-align:center; padding:20px;">No pending approvals for <b>${currentUser}</b></div>`;
-
+        container.innerHTML = html || `<div style="text-align:center; padding:20px;">No pending approvals.</div>`;
     } catch (e) { container.innerHTML = "Error: " + e.message; }
 }
 
 // 5. MANAGER: Approve Action
 window.managerApprove = async function(id, row) {
-    if(!confirm("Confirm approval for this PO issue?")) return;
-
+    if(!confirm("Confirm approval?")) return;
     try {
         const timestamp = new Date().toLocaleString();
-        // Update Status -> APPROVED (Col I), Approval Time -> (Col L)
-        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "APPROVED");
-        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!L${row}`, timestamp);
-        
-        alert("✅ Approved! The central team can now resolve it.");
-        loadManagerApprovals(); // Refresh list
+        // Status -> APPROVED (Col J), ApprovalTime -> (Col M)
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!J${row}`, "APPROVED");
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!M${row}`, timestamp);
+        alert("✅ Approved!");
+        loadManagerApprovals();
     } catch (e) { alert("Error: " + e.message); }
 };
 
@@ -5679,17 +5650,15 @@ window.submitFinalResolution = async function() {
     const notes = document.getElementById("res-notes").value;
     const btn = document.querySelector("#po-final-resolve-modal button");
 
-    if (!notes) { alert("Please enter resolution notes."); return; }
-
-    btn.innerText = "⏳ Saving...";
-    btn.disabled = true;
+    if (!notes) { alert("Resolution notes required."); return; }
+    btn.innerText = "⏳ Saving..."; btn.disabled = true;
 
     try {
         const timestamp = new Date().toLocaleString();
-        // Update Status -> RESOLVED (Col I)
-        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "RESOLVED");
-        // Update Notes (Col M), Resolve Time (Col N)
-        const range = `PO_Data!M${row}:N${row}`;
+        // Status -> RESOLVED (Col J)
+        await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!J${row}`, "RESOLVED");
+        // Notes (Col N), Time (Col O)
+        const range = `PO_Data!N${row}:O${row}`;
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
         await fetch(url, {
             method: "PUT",
@@ -5697,10 +5666,9 @@ window.submitFinalResolution = async function() {
             body: JSON.stringify({ values: [[ notes, timestamp ]] })
         });
 
-        alert("✅ Ticket Closed Successfully!");
+        alert("✅ Ticket Closed!");
         document.getElementById("po-final-resolve-modal").classList.add("hidden");
         loadCentralPoTasks();
-
     } catch (e) { alert("Error: " + e.message); }
     finally { btn.innerText = "💾 Mark Resolved"; btn.disabled = false; }
 };
