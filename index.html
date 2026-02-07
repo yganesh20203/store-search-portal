@@ -250,11 +250,26 @@
                                 </div>
 
                                 <div id="view-raise" class="store-view">
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
-                                        <div><label style="font-weight:bold; font-size:12px;">PO Number:</label><input type="text" id="po-num" placeholder="e.g. 8839201" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></div>
-                                        <div><label style="font-weight:bold; font-size:12px;">Category No:</label><input type="text" id="po-cat-no" placeholder="e.g. 060" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></div>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:15px;">
+                                        <div>
+                                            <label style="font-weight:bold; font-size:12px;">Store ID:</label>
+                                            <input type="text" id="po-store-id" placeholder="e.g. 4702" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; border-left: 4px solid #d32f2f;">
+                                        </div>
+                                        <div>
+                                            <label style="font-weight:bold; font-size:12px;">PO Number:</label>
+                                            <input type="text" id="po-num" placeholder="e.g. 8839201" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                        </div>
+                                        <div>
+                                            <label style="font-weight:bold; font-size:12px;">Category No:</label>
+                                            <input type="text" id="po-cat-no" placeholder="e.g. 060" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                        </div>
                                     </div>
-                                    <div style="margin-bottom:15px;"><label style="font-weight:bold; font-size:12px;">Category Name:</label><input type="text" id="po-cat-name" placeholder="e.g. Staples" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></div>
+
+                                    <div style="margin-bottom:15px;">
+                                        <label style="font-weight:bold; font-size:12px;">Category Name:</label>
+                                        <input type="text" id="po-cat-name" placeholder="e.g. Staples" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                    </div>
+
                                     <div style="margin-bottom:15px;">
                                         <label style="font-weight:bold; font-size:12px;">Select Issue Type:</label>
                                         <select id="po-issue-type" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
@@ -270,11 +285,13 @@
                                             <option value="Price Mismatch">Price Mismatch</option>
                                         </select>
                                     </div>
+
                                     <div style="margin-bottom:20px; border:1px dashed #ccc; padding:15px; background:#f9f9f9; text-align:center;">
                                         <label style="font-weight:bold; font-size:12px; display:block; margin-bottom:10px;">📸 Upload Proof (Photo or PDF):</label>
                                         <input type="file" id="po-proof-file" accept="image/*,application/pdf">
                                         <p style="font-size:10px; color:#999; margin-top:5px;">Required for verification.</p>
                                     </div>
+
                                     <button onclick="window.submitPoIssue()" style="width:100%; background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🚀 Submit Ticket</button>
                                 </div>
 
