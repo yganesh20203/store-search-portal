@@ -5304,57 +5304,54 @@ window.loadPoIssuesDashboard = async function() {
     highlightSidebar("PO Issues");
     document.getElementById("po-issues-ui").classList.remove("hidden");
     document.getElementById("po-role-select").classList.remove("hidden");
-    document.getElementById("po-store-form").classList.add("hidden");
-    document.getElementById("po-central-dash").classList.add("hidden");
+    
+    // Hide all sub-views initially
+    ["po-store-container", "po-central-dash", "po-manager-dash"].forEach(id => document.getElementById(id).classList.add("hidden"));
+    
+    await fetchPoRoutingRules();
+};
 
-    console.log("⏳ Loading Complex PO Routing Rules...");
-    try {
-        // Fetch Columns A, B, C from 'PO_Mapping'
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Mapping!A:C`;
-        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        const data = await response.json();
-
-        if (data.values && data.values.length > 1) {
-            poCategoryMap = {}; // Reset global map
-            
-            // Skip Header, Start from Row 1
-            data.values.slice(1).forEach(row => {
-                const catNo = row[0]?.toString().trim() || "DEFAULT";
-                const issueType = row[1]?.toString().trim() || "DEFAULT";
-                const email = row[2]?.toString().trim();
-
-                if (email) {
-                    // CREATE COMPOSITE KEY: "060_Short Supply"
-                    const key = `${catNo}_${issueType}`;
-                    poCategoryMap[key] = email;
-                }
-            });
-            console.log("✅ Routing Rules Loaded:", poCategoryMap);
-        }
-    } catch (e) {
-        console.warn("⚠️ Failed to load mappings.", e);
+window.switchStoreTab = function(tab) {
+    // 1. Highlight Tab
+    document.querySelectorAll(".po-tab").forEach(b => {
+        b.classList.remove("active");
+        b.style.background = "#eee";
+        b.style.color = "#333";
+    });
+    const activeBtn = document.getElementById(`tab-${tab}`);
+    if(activeBtn) {
+        activeBtn.classList.add("active");
+        activeBtn.style.background = "#4caf50";
+        activeBtn.style.color = "white";
     }
+
+    // 2. Show Content
+    document.querySelectorAll(".store-view").forEach(d => d.classList.add("hidden"));
+    document.getElementById(`view-${tab}`).classList.remove("hidden");
+
+    // 3. Load Data if needed
+    if (tab === 'history') loadStoreHistory();
+    if (tab === 'stats') renderPoAnalytics('store', 'po-store-stats-content');
 };
 
 // 2. Role Switcher
 window.selectPoRole = function(role) {
-    // Hide All
-    ["po-role-select", "po-store-form", "po-central-dash", "po-manager-dash"].forEach(id => {
-        document.getElementById(id).classList.add("hidden");
-    });
+    ["po-role-select", "po-store-container", "po-central-dash", "po-manager-dash"].forEach(id => document.getElementById(id).classList.add("hidden"));
 
-    if (role === 'store') document.getElementById("po-store-form").classList.remove("hidden");
+    if (role === 'store') {
+        document.getElementById("po-store-container").classList.remove("hidden");
+        window.switchStoreTab('raise'); // Default to raise
+    } 
     else if (role === 'central') {
         document.getElementById("po-central-dash").classList.remove("hidden");
         loadCentralPoTasks();
-    }
+    } 
     else if (role === 'manager') {
         document.getElementById("po-manager-dash").classList.remove("hidden");
         loadManagerApprovals();
-    }
-    else document.getElementById("po-role-select").classList.remove("hidden"); // Back
+    } 
+    else document.getElementById("po-role-select").classList.remove("hidden");
 };
-
 // 3. Submit Issue (Store Side)
 window.submitPoIssue = async function() {
     const poNum = document.getElementById("po-num").value.trim();
@@ -5363,71 +5360,153 @@ window.submitPoIssue = async function() {
     const issueType = document.getElementById("po-issue-type").value;
     const fileInput = document.getElementById("po-proof-file");
     
-    if (!poNum || !catNo || !issueType) { alert("Please fill all required fields."); return; }
-    if (fileInput.files.length === 0) { alert("📸 Proof (Photo/PDF) is required."); return; }
+    if (!poNum || !catNo || !issueType) { alert("Fill all fields."); return; }
+    if (fileInput.files.length === 0) { alert("Upload proof."); return; }
 
-    const btn = document.querySelector("#po-store-form button"); 
-    btn.innerText = "⏳ Uploading...";
-    btn.disabled = true;
+    const btn = document.querySelector("#view-raise button"); 
+    btn.innerText = "⏳ Uploading..."; btn.disabled = true;
 
     try {
-        // A. Upload Proof
+        if (Object.keys(poCategoryMap).length === 0) await fetchPoRoutingRules();
+
+        // Routing
+        const exactKey = `${catNo}_${issueType}`;
+        const catDefKey = `${catNo}_DEFAULT`;
+        const globalDef = "DEFAULT_DEFAULT";
+        let assignedTo = poCategoryMap[exactKey] || poCategoryMap[catDefKey] || poCategoryMap[globalDef] || "central.team@flipkart.com";
+
+        // Upload
         const file = fileInput.files[0];
         const fileName = `PO_${poNum}_${Date.now()}.${file.name.split('.').pop()}`;
         const proofLink = await uploadBlobToDrive(file, fileName);
 
-        // ============================================================
-        // 🧠 COMPLEX ROUTING LOGIC (Tiered Lookup)
-        // ============================================================
-        
-        // 1. Try EXACT Match (Specific Cat + Specific Issue)
-        // e.g. "060_Short Supply"
-        let assignedTo = poCategoryMap[`${catNo}_${issueType}`];
-
-        // 2. If no match, try Category Default (Specific Cat + "DEFAULT")
-        // e.g. "060_DEFAULT"
-        if (!assignedTo) {
-            assignedTo = poCategoryMap[`${catNo}_DEFAULT`];
-        }
-
-        // 3. If still no match, try Global Default ("DEFAULT_DEFAULT")
-        if (!assignedTo) {
-            assignedTo = poCategoryMap["DEFAULT_DEFAULT"] || "central.team@flipkart.com";
-        }
-
-        console.log(`🔀 Routing: [Cat:${catNo} | Issue:${issueType}] -> Assigned To: ${assignedTo}`);
-
-        // C. Save to Sheet
+        // Save
         const issueId = "PO-" + Math.floor(Math.random() * 100000);
         const user = localStorage.getItem("portal_user_email");
         const timestamp = new Date().toLocaleString();
-
         const row = [[ issueId, timestamp, poNum, catNo, catName, issueType, proofLink, user, "OPEN", assignedTo ]];
 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data!A1:append?valueInputOption=USER_ENTERED`;
-        await fetch(url, {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ values: row })
+        await fetch(url, { method: "POST", headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: row }) });
+
+        alert(`✅ Issue Raised!\nAssigned to: ${assignedTo}`);
+        document.getElementById("po-num").value = "";
+        window.switchStoreTab('history');
+
+    } catch (e) { alert("Error: " + e.message); } 
+    finally { btn.innerText = "🚀 Submit Ticket"; btn.disabled = false; }
+};
+
+// 5. Store History (My Status)
+async function loadStoreHistory() {
+    const container = document.getElementById("po-store-list");
+    container.innerHTML = "⏳ Loading...";
+    const currentUser = localStorage.getItem("portal_user_email").toLowerCase().trim();
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) { container.innerHTML = "No history."; return; }
+
+        const rows = data.values.slice(1).reverse(); // Show newest first
+        let html = "";
+
+        rows.forEach(r => {
+            // Filter: Only show tickets raised by THIS user
+            if (r[7].toLowerCase().trim() !== currentUser) return;
+
+            const status = r[8];
+            let statusColor = "#1976d2";
+            if (status === "RESOLVED") statusColor = "green";
+            if (status === "PENDING_APPROVAL") statusColor = "#e65100";
+
+            html += `
+            <div style="background:#f9f9f9; padding:15px; border-radius:4px; border-left:5px solid ${statusColor}; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                    <span>PO: ${r[2]}</span>
+                    <span style="color:${statusColor}">${status}</span>
+                </div>
+                <div style="font-size:12px; color:#555; margin-top:5px;">
+                    Issue: ${r[5]} <br>
+                    Date: ${r[1]} <br>
+                    Assigned: ${r[9]}
+                </div>
+                ${status === 'RESOLVED' ? `<div style="margin-top:8px; font-size:11px; background:#e8f5e9; padding:5px; border-radius:4px;"><b>✅ Resolution:</b> ${r[11]}</div>` : ''}
+            </div>`;
         });
 
-        alert(`✅ Issue Raised! Assigned to: ${assignedTo}`);
-        
-        // Reset Form
-        document.getElementById("po-num").value = "";
-        document.getElementById("po-cat-no").value = "";
-        document.getElementById("po-cat-name").value = "";
-        document.getElementById("po-issue-type").value = "";
-        fileInput.value = "";
-        window.selectPoRole('back');
+        container.innerHTML = html || "<p>You haven't raised any issues yet.</p>";
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
+}
 
-    } catch (e) {
-        alert("Error: " + e.message);
-    } finally {
-        btn.innerText = "🚀 Submit Ticket";
-        btn.disabled = false;
+// 6. Central Actions (With Gmail Fix)
+
+
+// 7. ANALYTICS (Store & Central)
+window.toggleCentralView = function(view) {
+    if(view === 'work') {
+        document.getElementById("po-central-work-view").classList.remove("hidden");
+        document.getElementById("po-central-stats-view").classList.add("hidden");
+        loadCentralPoTasks();
+    } else {
+        document.getElementById("po-central-work-view").classList.add("hidden");
+        document.getElementById("po-central-stats-view").classList.remove("hidden");
+        renderPoAnalytics('central', 'po-central-stats-content');
     }
 };
+
+async function renderPoAnalytics(scope, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "⏳ Calculating...";
+    const currentUser = localStorage.getItem("portal_user_email").toLowerCase().trim();
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) { container.innerHTML = "No data."; return; }
+
+        let total = 0, open = 0, resolved = 0, pendingMgr = 0;
+        
+        data.values.slice(1).forEach(r => {
+            // Scope Filter
+            if (scope === 'store' && r[7].toLowerCase().trim() !== currentUser) return;
+
+            total++;
+            const status = r[8];
+            if (status === "OPEN") open++;
+            else if (status === "RESOLVED") resolved++;
+            else if (status === "PENDING_APPROVAL") pendingMgr++;
+        });
+
+        container.innerHTML = `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div style="background:#e3f2fd; padding:15px; border-radius:8px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#1976d2;">${total}</div>
+                    <div style="font-size:12px; color:#555;">Total Raised</div>
+                </div>
+                <div style="background:#e8f5e9; padding:15px; border-radius:8px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#2e7d32;">${resolved}</div>
+                    <div style="font-size:12px; color:#555;">Resolved</div>
+                </div>
+                <div style="background:#fff3e0; padding:15px; border-radius:8px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#e65100;">${pendingMgr}</div>
+                    <div style="font-size:12px; color:#555;">Pending Mgr</div>
+                </div>
+                <div style="background:#ffebee; padding:15px; border-radius:8px; text-align:center;">
+                    <div style="font-size:24px; font-weight:bold; color:#d32f2f;">${open}</div>
+                    <div style="font-size:12px; color:#555;">Open</div>
+                </div>
+            </div>
+            
+            ${scope === 'central' ? `<div style="text-align:center; font-size:12px; color:#666;">(Showing global data)</div>` : ''}
+        `;
+
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
+}
 
 // 4. Load Tasks (Central Side)
 async function loadCentralPoTasks() {
@@ -5513,28 +5592,26 @@ window.submitApprovalRequest = async function() {
 
     if (!mgrEmail) { alert("Enter manager email."); return; }
 
-    btn.innerText = "⏳ Processing...";
-    btn.disabled = true;
+    btn.innerText = "⏳ Saving..."; btn.disabled = true;
 
     try {
-        // A. Update Sheet: Status -> PENDING_APPROVAL, Manager -> Email
-        // Col I (Status), Col K (Manager)
         await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!I${row}`, "PENDING_APPROVAL");
         await updateSheetCell(CONFIG.PO_ISSUES_SHEET_ID, `PO_Data!K${row}`, mgrEmail);
 
-        // B. Generate Mailto Trigger
-        const subject = `Approval Required: PO Issue ${poNum}`;
-        const body = `Hi,\n\nPlease approve the issue for PO ${poNum}.\n\n1. Login to Portal\n2. Go to PO Issues -> Manager Approvals\n3. Click Approve\n\nThanks.`;
-        window.location.href = `mailto:${mgrEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        // 🔴 GMAIL REDIRECT FIX
+        const subject = `Action Required: Approval for PO ${poNum}`;
+        const body = `Hi,\n\nPlease approve the issue for PO ${poNum}.\n\nLogin to Portal > PO Issues > Manager Approvals.\n\nThanks.`;
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${mgrEmail}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        window.open(gmailUrl, '_blank'); // Opens Gmail in new tab
 
-        alert("✅ Status Updated! Sending email draft...");
+        alert("✅ Status Updated! Gmail opened.");
         document.getElementById("po-request-modal").classList.add("hidden");
         loadCentralPoTasks();
 
     } catch (e) { alert("Error: " + e.message); } 
-    finally { btn.innerText = "🚀 Send Request"; btn.disabled = false; }
+    finally { btn.innerText = "🚀 Open Gmail"; btn.disabled = false; }
 };
-
 // 4. MANAGER: Load Approvals
 async function loadManagerApprovals() {
     const container = document.getElementById("po-manager-list");
@@ -5677,5 +5754,23 @@ async function updateSheetCell(sheetId, range, value) {
         headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ values: [[ value ]] })
     });
+}
+
+
+async function fetchPoRoutingRules() {
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Mapping!A:C`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+        if (data.values && data.values.length > 1) {
+            poCategoryMap = {};
+            data.values.slice(1).forEach(row => {
+                const catNo = row[0] ? row[0].toString().trim() : "DEFAULT";
+                const issueType = row[1] ? row[1].toString().trim() : "DEFAULT";
+                const email = row[2] ? row[2].toString().trim() : "";
+                if (email) poCategoryMap[`${catNo}_${issueType}`] = email;
+            });
+        }
+    } catch (e) { console.warn("Mapping fetch failed", e); }
 }
 
