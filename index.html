@@ -225,7 +225,7 @@
     </div>
 </div>
                     <div id="po-issues-ui" class="hidden">
-                        <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd; max-width:800px; margin:0 auto;">
+                        <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd; max-width:900px; margin:0 auto;">
                             
                             <div style="text-align:center; margin-bottom:20px;">
                                 <h2 style="color:#d32f2f; margin:0;">🚨 PO Issue Tracker</h2>
@@ -241,71 +241,80 @@
                                 </div>
                             </div>
 
-                            <div id="po-store-form" class="hidden">
-                                <h3 style="border-bottom:2px solid #4caf50; padding-bottom:10px; color:#2e7d32;">📝 Raise New Issue</h3>
-                                
-                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
-                                    <div>
-                                        <label style="font-weight:bold; font-size:12px;">PO Number:</label>
-                                        <input type="text" id="po-num" placeholder="e.g. 8839201" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                            <div id="po-store-container" class="hidden">
+                                <div style="display:flex; gap:10px; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+                                    <button onclick="window.switchStoreTab('raise')" class="po-tab active" id="tab-raise" style="flex:1; padding:10px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer;">📝 Raise Issue</button>
+                                    <button onclick="window.switchStoreTab('history')" class="po-tab" id="tab-history" style="flex:1; padding:10px; background:#eee; color:#333; border:none; border-radius:4px; cursor:pointer;">📂 My Status</button>
+                                    <button onclick="window.switchStoreTab('stats')" class="po-tab" id="tab-stats" style="flex:1; padding:10px; background:#eee; color:#333; border:none; border-radius:4px; cursor:pointer;">📊 Analytics</button>
+                                    <button onclick="window.selectPoRole('back')" style="padding:10px; background:#333; color:white; border:none; border-radius:4px; cursor:pointer;">⬅️ Exit</button>
+                                </div>
+
+                                <div id="view-raise" class="store-view">
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                                        <div><label style="font-weight:bold; font-size:12px;">PO Number:</label><input type="text" id="po-num" placeholder="e.g. 8839201" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></div>
+                                        <div><label style="font-weight:bold; font-size:12px;">Category No:</label><input type="text" id="po-cat-no" placeholder="e.g. 060" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></div>
                                     </div>
-                                    <div>
-                                        <label style="font-weight:bold; font-size:12px;">Category No:</label>
-                                        <input type="text" id="po-cat-no" placeholder="e.g. 060" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                    <div style="margin-bottom:15px;"><label style="font-weight:bold; font-size:12px;">Category Name:</label><input type="text" id="po-cat-name" placeholder="e.g. Staples" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></div>
+                                    <div style="margin-bottom:15px;">
+                                        <label style="font-weight:bold; font-size:12px;">Select Issue Type:</label>
+                                        <select id="po-issue-type" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                            <option value="">-- Select Issue --</option>
+                                            <option value="VNPK mismatch">VNPK mismatch</option>
+                                            <option value="Inactive PO">Inactive PO</option>
+                                            <option value="Article block">Article block</option>
+                                            <option value="GST mismatch">GST mismatch</option>
+                                            <option value="Vendor code mismatch">Vendor code mismatch</option>
+                                            <option value="UPC linking">UPC linking</option>
+                                            <option value="Short Supply">Short Supply</option>
+                                            <option value="Excess Supply">Excess Supply</option>
+                                            <option value="Price Mismatch">Price Mismatch</option>
+                                        </select>
                                     </div>
+                                    <div style="margin-bottom:20px; border:1px dashed #ccc; padding:15px; background:#f9f9f9; text-align:center;">
+                                        <label style="font-weight:bold; font-size:12px; display:block; margin-bottom:10px;">📸 Upload Proof (Photo or PDF):</label>
+                                        <input type="file" id="po-proof-file" accept="image/*,application/pdf">
+                                        <p style="font-size:10px; color:#999; margin-top:5px;">Required for verification.</p>
+                                    </div>
+                                    <button onclick="window.submitPoIssue()" style="width:100%; background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🚀 Submit Ticket</button>
                                 </div>
 
-                                <div style="margin-bottom:15px;">
-                                    <label style="font-weight:bold; font-size:12px;">Category Name:</label>
-                                    <input type="text" id="po-cat-name" placeholder="e.g. Staples" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                <div id="view-history" class="store-view hidden">
+                                    <div id="po-store-list" style="display:grid; gap:10px; max-height:500px; overflow-y:auto;">Loading...</div>
                                 </div>
 
-                                <div style="margin-bottom:15px;">
-                                    <label style="font-weight:bold; font-size:12px;">Select Issue Type:</label>
-                                    <select id="po-issue-type" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
-                                        <option value="">-- Select Issue --</option>
-                                        <option value="VNPK mismatch">VNPK mismatch</option>
-                                        <option value="Inactive PO">Inactive PO</option>
-                                        <option value="Article block">Article block</option>
-                                        <option value="GST mismatch">GST mismatch</option>
-                                        <option value="Vendor code mismatch">Vendor code mismatch</option>
-                                        <option value="UPC linking">UPC linking</option>
-                                        <option value="Short Supply">Short Supply</option>
-                                        <option value="Excess Supply">Excess Supply</option>
-                                        <option value="Price Mismatch">Price Mismatch</option>
-                                    </select>
-                                </div>
-
-                                <div style="margin-bottom:20px; border:1px dashed #ccc; padding:15px; background:#f9f9f9; text-align:center;">
-                                    <label style="font-weight:bold; font-size:12px; display:block; margin-bottom:10px;">📸 Upload Proof (Photo or PDF):</label>
-                                    <input type="file" id="po-proof-file" accept="image/*,application/pdf">
-                                    <p style="font-size:10px; color:#999; margin-top:5px;">Required for verification.</p>
-                                </div>
-
-                                <div style="display:flex; gap:10px;">
-                                    <button onclick="window.submitPoIssue()" style="flex:1; background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🚀 Submit Ticket</button>
-                                    <button onclick="window.selectPoRole('back')" style="background:#ddd; color:#333; padding:12px; border:none; border-radius:4px; cursor:pointer;">Back</button>
+                                <div id="view-stats" class="store-view hidden">
+                                    <div id="po-store-stats-content">Loading...</div>
                                 </div>
                             </div>
 
                             <div id="po-central-dash" class="hidden">
                                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #1976d2; padding-bottom:10px; margin-bottom:15px;">
                                     <h3 style="color:#1565c0; margin:0;">🛠️ Central Queue</h3>
-                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Role Switch</button>
+                                    <div style="display:flex; gap:5px;">
+                                        <button onclick="window.toggleCentralView('work')" style="background:#e3f2fd; color:#1976d2; border:1px solid #1976d2; padding:5px 10px; border-radius:4px; cursor:pointer;">📋 Work</button>
+                                        <button onclick="window.toggleCentralView('stats')" style="background:#fff; color:#333; border:1px solid #ccc; padding:5px 10px; border-radius:4px; cursor:pointer;">📊 Stats</button>
+                                        <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Back</button>
+                                    </div>
                                 </div>
-                                <div id="po-central-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">
-                                    <p>Loading tasks...</p>
+
+                                <div id="po-central-work-view">
+                                    <div id="po-escalation-box" class="hidden" style="background:#ffebee; border:1px solid #ef5350; padding:10px; border-radius:4px; margin-bottom:15px; color:#c62828; font-weight:bold; display:flex; align-items:center; gap:10px;">
+                                        <span>🔥</span><span id="po-escalation-text"></span>
+                                    </div>
+                                    <div id="po-central-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">Loading tasks...</div>
+                                </div>
+
+                                <div id="po-central-stats-view" class="hidden">
+                                    <div id="po-central-stats-content">Loading...</div>
                                 </div>
                             </div>
 
                             <div id="po-manager-dash" class="hidden">
                                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e65100; padding-bottom:10px; margin-bottom:15px;">
                                     <h3 style="color:#e65100; margin:0;">👨‍💼 Pending Approvals</h3>
-                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Role Switch</button>
+                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Back</button>
                                 </div>
-                                <div id="po-manager-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">
-                                    <p>Loading approvals...</p>
-                                </div>
+                                <div id="po-manager-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">Loading approvals...</div>
                             </div>
 
                         </div>
@@ -318,14 +327,13 @@
                                 <span class="close-btn" onclick="document.getElementById('po-request-modal').classList.add('hidden')">&times;</span>
                             </div>
                             <div class="modal-body">
-                                <input type="hidden" id="req-id"><input type="hidden" id="req-row">
-                                <input type="hidden" id="req-po-num">
-                                <label style="font-weight:bold; font-size:12px;">Manager Email:</label>
+                                <input type="hidden" id="req-id"><input type="hidden" id="req-row"><input type="hidden" id="req-po-num">
+                                <label style="font-weight:bold; font-size:12px;">Manager Email (Gmail):</label>
                                 <input type="email" id="req-mgr-email" placeholder="manager@flipkart.com" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;">
-                                <p style="font-size:11px; color:#666;">This will update the ticket status and open your email client to send a notification.</p>
+                                <p style="font-size:11px; color:#666;">This will open the Gmail app to send a notification.</p>
                             </div>
                             <div class="modal-footer">
-                                <button onclick="window.submitApprovalRequest()" style="background:#1976d2; color:white; width:100%; padding:10px; border:none; border-radius:4px; cursor:pointer;">🚀 Send Request</button>
+                                <button onclick="window.submitApprovalRequest()" style="background:#1976d2; color:white; width:100%; padding:10px; border:none; border-radius:4px; cursor:pointer;">🚀 Open Gmail</button>
                             </div>
                         </div>
                     </div>
