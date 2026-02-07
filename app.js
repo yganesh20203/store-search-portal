@@ -27,7 +27,8 @@ let tvDataCache = [];
 let pendingPhotoBlob = null;
 let kybMapLayer = null;
 let kybRadiusLayer = null;
-let activeSessionCreds = null; 
+let activeSessionCreds = null;
+let poCategoryMap = {}; 
 let tokenExpirationTime = 0;
 // Map Global
 let mapInstance = null;
@@ -5298,13 +5299,41 @@ window.onload = checkLoginStatus;
 // ==========================================
 
 // 1. Sidebar Loader
-window.loadPoIssuesDashboard = function() {
+window.loadPoIssuesDashboard = async function() {
     resetUI();
     highlightSidebar("PO Issues");
     document.getElementById("po-issues-ui").classList.remove("hidden");
     document.getElementById("po-role-select").classList.remove("hidden");
     document.getElementById("po-store-form").classList.add("hidden");
     document.getElementById("po-central-dash").classList.add("hidden");
+
+    console.log("⏳ Loading Complex PO Routing Rules...");
+    try {
+        // Fetch Columns A, B, C from 'PO_Mapping'
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Mapping!A:C`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (data.values && data.values.length > 1) {
+            poCategoryMap = {}; // Reset global map
+            
+            // Skip Header, Start from Row 1
+            data.values.slice(1).forEach(row => {
+                const catNo = row[0]?.toString().trim() || "DEFAULT";
+                const issueType = row[1]?.toString().trim() || "DEFAULT";
+                const email = row[2]?.toString().trim();
+
+                if (email) {
+                    // CREATE COMPOSITE KEY: "060_Short Supply"
+                    const key = `${catNo}_${issueType}`;
+                    poCategoryMap[key] = email;
+                }
+            });
+            console.log("✅ Routing Rules Loaded:", poCategoryMap);
+        }
+    } catch (e) {
+        console.warn("⚠️ Failed to load mappings.", e);
+    }
 };
 
 // 2. Role Switcher
@@ -5326,8 +5355,8 @@ window.selectPoRole = function(role) {
 
 // 3. Submit Issue (Store Side)
 window.submitPoIssue = async function() {
-    const poNum = document.getElementById("po-num").value;
-    const catNo = document.getElementById("po-cat-no").value;
+    const poNum = document.getElementById("po-num").value.trim();
+    const catNo = document.getElementById("po-cat-no").value.trim();
     const catName = document.getElementById("po-cat-name").value;
     const issueType = document.getElementById("po-issue-type").value;
     const fileInput = document.getElementById("po-proof-file");
@@ -5343,19 +5372,34 @@ window.submitPoIssue = async function() {
         // A. Upload Proof
         const file = fileInput.files[0];
         const fileName = `PO_${poNum}_${Date.now()}.${file.name.split('.').pop()}`;
-        // Uses your existing uploadBlobToDrive function
         const proofLink = await uploadBlobToDrive(file, fileName);
 
-        // B. Assign to Central Person
-        // Default to a central pool email since no specific logic was provided
-        const assignedTo = "central.team@flipkart.com"; 
+        // ============================================================
+        // 🧠 COMPLEX ROUTING LOGIC (Tiered Lookup)
+        // ============================================================
+        
+        // 1. Try EXACT Match (Specific Cat + Specific Issue)
+        // e.g. "060_Short Supply"
+        let assignedTo = poCategoryMap[`${catNo}_${issueType}`];
+
+        // 2. If no match, try Category Default (Specific Cat + "DEFAULT")
+        // e.g. "060_DEFAULT"
+        if (!assignedTo) {
+            assignedTo = poCategoryMap[`${catNo}_DEFAULT`];
+        }
+
+        // 3. If still no match, try Global Default ("DEFAULT_DEFAULT")
+        if (!assignedTo) {
+            assignedTo = poCategoryMap["DEFAULT_DEFAULT"] || "central.team@flipkart.com";
+        }
+
+        console.log(`🔀 Routing: [Cat:${catNo} | Issue:${issueType}] -> Assigned To: ${assignedTo}`);
 
         // C. Save to Sheet
         const issueId = "PO-" + Math.floor(Math.random() * 100000);
         const user = localStorage.getItem("portal_user_email");
         const timestamp = new Date().toLocaleString();
 
-        // Columns: ID, Date, PO, CatNo, CatName, Issue, Proof, By, Status, AssignedTo
         const row = [[ issueId, timestamp, poNum, catNo, catName, issueType, proofLink, user, "OPEN", assignedTo ]];
 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data!A1:append?valueInputOption=USER_ENTERED`;
@@ -5365,7 +5409,8 @@ window.submitPoIssue = async function() {
             body: JSON.stringify({ values: row })
         });
 
-        alert("✅ Issue Raised Successfully!");
+        alert(`✅ Issue Raised! Assigned to: ${assignedTo}`);
+        
         // Reset Form
         document.getElementById("po-num").value = "";
         document.getElementById("po-cat-no").value = "";
