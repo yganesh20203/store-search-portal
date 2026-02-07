@@ -224,6 +224,108 @@
         </div>
     </div>
 </div>
+                    <div id="po-issues-ui" class="hidden">
+                        <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd; max-width:800px; margin:0 auto;">
+                            
+                            <div style="text-align:center; margin-bottom:20px;">
+                                <h2 style="color:#d32f2f; margin:0;">🚨 PO Issue Tracker</h2>
+                                <p style="color:#666; font-size:12px;">Raise & Resolve Purchase Order Discrepancies</p>
+                            </div>
+
+                            <div id="po-role-select" style="text-align:center; padding:20px;">
+                                <h3>Who are you?</h3>
+                                <div style="display:flex; gap:20px; justify-content:center;">
+                                    <button onclick="window.selectPoRole('store')" style="padding:15px 30px; font-size:16px; background:#4caf50; color:white; border:none; border-radius:8px; cursor:pointer;">🏪 Store Team</button>
+                                    <button onclick="window.selectPoRole('central')" style="padding:15px 30px; font-size:16px; background:#1976d2; color:white; border:none; border-radius:8px; cursor:pointer;">🏢 Central Team</button>
+                                </div>
+                            </div>
+
+                            <div id="po-store-form" class="hidden">
+                                <h3 style="border-bottom:2px solid #4caf50; padding-bottom:10px; color:#2e7d32;">📝 Raise New Issue</h3>
+                                
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                                    <div>
+                                        <label style="font-weight:bold; font-size:12px;">PO Number:</label>
+                                        <input type="text" id="po-num" placeholder="e.g. 8839201" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                    </div>
+                                    <div>
+                                        <label style="font-weight:bold; font-size:12px;">Category No:</label>
+                                        <input type="text" id="po-cat-no" placeholder="e.g. 060" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                    </div>
+                                </div>
+
+                                <div style="margin-bottom:15px;">
+                                    <label style="font-weight:bold; font-size:12px;">Category Name:</label>
+                                    <input type="text" id="po-cat-name" placeholder="e.g. Staples" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                </div>
+
+                                <div style="margin-bottom:15px;">
+                                    <label style="font-weight:bold; font-size:12px;">Select Issue Type:</label>
+                                    <select id="po-issue-type" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                                        <option value="">-- Select Issue --</option>
+                                        <option value="Short Supply">Short Supply</option>
+                                        <option value="Excess Supply">Excess Supply</option>
+                                        <option value="Damaged Goods">Damaged Goods</option>
+                                        <option value="Wrong Item">Wrong Item Received</option>
+                                        <option value="Price Mismatch">Price Mismatch</option>
+                                        <option value="PO Not Reflecting">PO Not Reflecting</option>
+                                    </select>
+                                </div>
+
+                                <div style="margin-bottom:20px; border:1px dashed #ccc; padding:15px; background:#f9f9f9; text-align:center;">
+                                    <label style="font-weight:bold; font-size:12px; display:block; margin-bottom:10px;">📸 Upload Proof (Photo or PDF):</label>
+                                    <input type="file" id="po-proof-file" accept="image/*,application/pdf">
+                                    <p style="font-size:10px; color:#999; margin-top:5px;">Required for verification.</p>
+                                </div>
+
+                                <div style="display:flex; gap:10px;">
+                                    <button onclick="window.submitPoIssue()" style="flex:1; background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🚀 Submit Ticket</button>
+                                    <button onclick="window.selectPoRole('back')" style="background:#ddd; color:#333; padding:12px; border:none; border-radius:4px; cursor:pointer;">Back</button>
+                                </div>
+                            </div>
+
+                            <div id="po-central-dash" class="hidden">
+                                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #1976d2; padding-bottom:10px; margin-bottom:15px;">
+                                    <h3 style="color:#1565c0; margin:0;">🛠️ My Work Queue</h3>
+                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Switch Role</button>
+                                </div>
+
+                                <div id="po-escalation-box" class="hidden" style="background:#ffebee; border:1px solid #ef5350; padding:10px; border-radius:4px; margin-bottom:15px; color:#c62828; font-weight:bold; display:flex; align-items:center; gap:10px;">
+                                    <span>🔥</span>
+                                    <span id="po-escalation-text"></span>
+                                </div>
+
+                                <div id="po-central-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">
+                                    <p>Loading tasks...</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div id="po-resolve-modal" class="modal hidden">
+                        <div class="modal-content" style="max-width:450px;">
+                            <div class="modal-header">
+                                <h3>✅ Resolve PO Issue</h3>
+                                <span class="close-btn" onclick="document.getElementById('po-resolve-modal').classList.add('hidden')">&times;</span>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" id="po-resolve-id">
+                                <input type="hidden" id="po-resolve-row">
+                                
+                                <p id="po-resolve-desc" style="background:#f5f5f5; padding:10px; border-radius:4px; font-weight:bold;"></p>
+                                
+                                <label style="font-size:12px; font-weight:bold;">Manager Approval Email:</label>
+                                <input type="email" id="po-manager-email" placeholder="manager@flipkart.com" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                                
+                                <label style="font-size:12px; font-weight:bold;">Resolution Notes:</label>
+                                <textarea id="po-resolve-notes" rows="3" placeholder="What changes were made?" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button onclick="window.confirmPoResolution()" style="background:#1976d2; color:white; width:100%; padding:10px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">✅ Mark Resolved</button>
+                            </div>
+                        </div>
+                    </div>
 
                     <div id="approvals-ui" class="hidden">
                         <h3>📧 Mail Search Filter</h3>
