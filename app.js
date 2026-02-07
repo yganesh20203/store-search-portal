@@ -3789,6 +3789,7 @@ window.resetCamera = function() {
 
 
 // 8. DASHBOARD STATS (Fixed for Offer Board)
+// 8. DASHBOARD STATS (Fixed: Correctly reads DD/MM/YYYY dates)
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
     const config = TV_CONFIG_MAP[activeTvCategory];
@@ -3808,7 +3809,6 @@ async function loadTvStats() {
             filterDiv.style.background = "#e0f2f1";
             filterDiv.style.borderRadius = "8px";
             
-            // Show Sub-Division input only for Feature Space? (Or keep generic but usable)
             const subDivDisplay = activeTvCategory === "Feature Space" ? "inline-block" : "none";
 
             filterDiv.innerHTML = `
@@ -3826,13 +3826,11 @@ async function loadTvStats() {
             `;
             container.parentNode.insertBefore(filterDiv, container);
             
-            // Default Dates
             const today = new Date();
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             document.getElementById("dash-from").valueAsDate = firstDay;
             document.getElementById("dash-to").valueAsDate = today;
         } else {
-            // Toggle visibility of sub-div input dynamically if switching tabs without reload
             const subDivInput = document.getElementById("dash-subdiv");
             if(subDivInput) subDivInput.style.display = (activeTvCategory === "Feature Space" ? "inline-block" : "none");
         }
@@ -3884,7 +3882,6 @@ async function loadTvStats() {
 
             // --- 3. INIT STATS ---
             let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
-            // Separate stats for OFR Audit roles
             let mgrStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
             let tlStats = { total: 0, done: 0, lateDone: 0, latePending: 0 };
             const storeStats = {}; 
@@ -3896,7 +3893,6 @@ async function loadTvStats() {
                     let rawDate = r[colMap.date] ? String(r[colMap.date]).trim() : "";
                     let invDate = new Date(rawDate);
                     
-                    // Robust Parsing (mm-dd-yyyy or yyyy-mm-dd)
                     if (isNaN(invDate.getTime()) && rawDate) {
                         const parts = rawDate.split(/[-/.]/);
                         if (parts.length === 3) {
@@ -3908,10 +3904,10 @@ async function loadTvStats() {
                     if (!isNaN(invDate.getTime())) {
                         invDate.setHours(0,0,0,0);
                         if (invDate < fromDate || invDate > toDate) return; 
-                    } else { return; } // Skip invalid dates
+                    } else { return; } 
                 }
 
-                // [B] SUB-DIVISION FILTER (Feature Space Only)
+                // [B] SUB-DIVISION FILTER
                 if (activeTvCategory === "Feature Space" && subDivFilter) {
                     const rowSubDiv = r[colMap.subdiv] ? String(r[colMap.subdiv]).toLowerCase() : "";
                     if (!rowSubDiv.includes(subDivFilter)) return; 
@@ -3934,22 +3930,46 @@ async function loadTvStats() {
                         gTotal++;
                         storeStats[storeName].t++;
 
-                        const doneTimeStr = r[colMap.timestamp];
+                        const doneTimeStr = r[colMap.timestamp]; // e.g. "03/02/2026, 19:04:32"
                         const isDone = (doneTimeStr && doneTimeStr.trim().length > 5);
                         const dueObj = r[colMap.due] ? new Date(r[colMap.due]) : null;
 
                         if (isDone) {
                             gDone++;
                             storeStats[storeName].d++;
-                            // Late Check
+                            
+                            // 🟢 FIX FOR LATE DONE LOGIC STARTS HERE 🟢
                             if (dueObj) {
-                                const doneObj = new Date(doneTimeStr);
-                                dueObj.setHours(23,59,59,999); 
-                                if (doneObj > dueObj) {
+                                let doneObj = null;
+                                
+                                // Explicitly parse DD/MM/YYYY
+                                if (doneTimeStr.includes("/")) {
+                                    // Take only the date part "03/02/2026"
+                                    const datePart = doneTimeStr.split(",")[0].trim(); 
+                                    const parts = datePart.split("/");
+                                    if (parts.length === 3) {
+                                        // new Date(Year, MonthIndex, Day)
+                                        // parts[0] is Day (03), parts[1] is Month (02)
+                                        doneObj = new Date(parts[2], parts[1] - 1, parts[0]);
+                                        // Sets time to 00:00:00 to compare strictly by date
+                                        doneObj.setHours(0,0,0,0);
+                                    } else {
+                                        doneObj = new Date(doneTimeStr);
+                                    }
+                                } else {
+                                    doneObj = new Date(doneTimeStr);
+                                }
+
+                                dueObj.setHours(23,59,59,999); // End of due date
+                                
+                                // Only mark late if Done Date is strictly AFTER Due Date
+                                if (doneObj && doneObj > dueObj) {
                                     gLateDone++;
                                     storeStats[storeName].ld++;
                                 }
                             }
+                            // 🟢 FIX ENDS HERE 🟢
+
                         } else {
                             // Overdue Check
                             if (dueObj) {
@@ -4011,7 +4031,6 @@ async function loadTvStats() {
             const sortedStores = Object.keys(storeStats).sort();
 
             if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
-                // Standard Header
                 tableHeader = `
                     <tr style="background:#f5f5f5;">
                         <th style="text-align:left; position:sticky; top:0; background:#e0e0e0; z-index:10;">Store Name</th>
