@@ -3789,15 +3789,14 @@ window.resetCamera = function() {
 
 
 // 8. DASHBOARD STATS (Fixed for Offer Board)
-// 8. DASHBOARD STATS (Fixed: Forces DD/MM/YYYY for Execution Time)
-// 8. DASHBOARD STATS (Smart Hybrid Date Parsing)
+// 8. DASHBOARD STATS (Smart "Benefit of the Doubt" Date Logic)
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
     const config = TV_CONFIG_MAP[activeTvCategory];
     
     if (!config) { console.error("Config missing"); return; }
 
-    // --- (Keep existing Filter Logic if present) ---
+    // --- (Keep existing Filter Logic) ---
     if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
         const filterContainer = document.getElementById("tv-dash-filters");
         if (!filterContainer) {
@@ -3843,10 +3842,10 @@ async function loadTvStats() {
         const now = new Date();
 
         // ============================================================
-        // 🧠 SMART HYBRID DATE PARSERS
+        // 🧠 "BENEFIT OF THE DOUBT" DATE PARSER
         // ============================================================
         
-        // 1. Due Date Parser (Standardizes Sheet format)
+        // 1. Due Date Parser (Standard)
         function parseDueDate(dateStr) {
             if (!dateStr) return null;
             const d = new Date(dateStr);
@@ -3855,38 +3854,34 @@ async function loadTvStats() {
             return d;
         }
 
-        // 2. SMART Execution Parser (Handles Mixed MM/DD and DD/MM)
-        function parseDoneDate(dateStr) {
-            if (!dateStr || dateStr.trim() === "") return null;
+        // 2. Ambiguity Handler
+        // Returns an ARRAY of possible dates.
+        // For "02/03/2026": Returns [Feb 3rd, March 2nd]
+        function getPossibleDoneDates(dateStr) {
+            if (!dateStr || dateStr.trim() === "") return [];
             
-            // Remove time part "19:04:32"
             const cleanStr = dateStr.split(",")[0].trim();
             const parts = cleanStr.split(/[-/]/); // Split by / or -
             
             if (parts.length === 3) {
-                const p0 = parseInt(parts[0]); // First Number
-                const p1 = parseInt(parts[1]); // Second Number
+                const p0 = parseInt(parts[0]);
+                const p1 = parseInt(parts[1]);
                 const p2 = parseInt(parts[2]); // Year
 
-                // LOGIC: Detect Impossible Months
-                // If the second number is > 12 (e.g., 02/25/2026), it MUST be MM/DD
-                if (p1 > 12) {
-                    // Treat as MM/DD/YYYY
-                    return new Date(p2, p0 - 1, p1, 0, 0, 0);
-                } 
-                // If first number is > 12 (e.g., 25/02/2026), it MUST be DD/MM
-                else if (p0 > 12) {
-                    // Treat as DD/MM/YYYY
-                    return new Date(p2, p1 - 1, p0, 0, 0, 0);
-                }
-                // If BOTH are <= 12 (e.g., 03/02/2026), ambiguity exists.
-                // DEFAULT TO DD/MM/YYYY (Indian Standard)
-                else {
-                    return new Date(p2, p1 - 1, p0, 0, 0, 0);
-                }
+                // Case A: Unambiguous (e.g. 25/02 - Must be DD/MM)
+                if (p0 > 12) return [new Date(p2, p1 - 1, p0, 0,0,0)];
+                
+                // Case B: Unambiguous (e.g. 02/25 - Must be MM/DD)
+                if (p1 > 12) return [new Date(p2, p0 - 1, p1, 0,0,0)];
+
+                // Case C: Ambiguous (e.g. 02/03 - Could be either)
+                // Return BOTH possibilities
+                const candidate1 = new Date(p2, p1 - 1, p0, 0,0,0); // DD/MM (3rd Feb)
+                const candidate2 = new Date(p2, p0 - 1, p1, 0,0,0); // MM/DD (2nd March)
+                return [candidate1, candidate2];
             }
-            // Fallback for ISO strings (2026-02-05)
-            return new Date(dateStr);
+            // Fallback
+            return [new Date(dateStr)];
         }
 
         // ============================================================
@@ -3943,19 +3938,23 @@ async function loadTvStats() {
                         const doneTimeStr = r[colMap.timestamp]; 
                         const isDone = (doneTimeStr && doneTimeStr.trim().length > 5);
                         
-                        // Use Smart Parsers
                         const dueDate = parseDueDate(r[colMap.due]); 
-                        const doneDate = isDone ? parseDoneDate(doneTimeStr) : null; 
 
                         if (isDone) {
                             gDone++;
                             storeStats[storeName].d++;
                             
-                            // Strict Late Check
-                            if (dueDate && doneDate) {
-                                // doneDate is set to 00:00:00 of execution day
-                                // dueDate is set to 23:59:59 of due day
-                                if (doneDate > dueDate) {
+                            // 🟢 SMART CHECK: Benefit of the Doubt
+                            if (dueDate) {
+                                dueDate.setHours(23, 59, 59, 999);
+                                const candidates = getPossibleDoneDates(doneTimeStr);
+                                
+                                // Check if ANY candidate interpretation is "On Time"
+                                // If yes, we assume that was the correct date format.
+                                const potentiallyOnTime = candidates.some(d => d <= dueDate);
+                                
+                                // Only mark as LATE if ALL interpretations are LATE
+                                if (!potentiallyOnTime) {
                                     gLateDone++;
                                     storeStats[storeName].ld++;
                                 }
@@ -3968,7 +3967,7 @@ async function loadTvStats() {
                         }
                     }
                 }
-                // (OFR Audit logic omitted for brevity, uses same parsers)
+                // (OFR Audit logic omitted for brevity, logic identical)
             });
 
             // Update UI
