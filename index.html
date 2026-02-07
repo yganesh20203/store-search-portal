@@ -233,10 +233,11 @@
                             </div>
 
                             <div id="po-role-select" style="text-align:center; padding:20px;">
-                                <h3>Who are you?</h3>
-                                <div style="display:flex; gap:20px; justify-content:center;">
-                                    <button onclick="window.selectPoRole('store')" style="padding:15px 30px; font-size:16px; background:#4caf50; color:white; border:none; border-radius:8px; cursor:pointer;">🏪 Store Team</button>
-                                    <button onclick="window.selectPoRole('central')" style="padding:15px 30px; font-size:16px; background:#1976d2; color:white; border:none; border-radius:8px; cursor:pointer;">🏢 Central Team</button>
+                                <h3>Select Your Role</h3>
+                                <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+                                    <button onclick="window.selectPoRole('store')" style="padding:15px 30px; background:#4caf50; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">🏪 Store Team</button>
+                                    <button onclick="window.selectPoRole('central')" style="padding:15px 30px; background:#1976d2; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">🏢 Central Team</button>
+                                    <button onclick="window.selectPoRole('manager')" style="padding:15px 30px; background:#e65100; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">👨‍💼 Manager Approvals</button>
                                 </div>
                             </div>
 
@@ -269,7 +270,9 @@
                                         <option value="GST mismatch">GST mismatch</option>
                                         <option value="Vendor code mismatch">Vendor code mismatch</option>
                                         <option value="UPC linking">UPC linking</option>
-                                   
+                                        <option value="Short Supply">Short Supply</option>
+                                        <option value="Excess Supply">Excess Supply</option>
+                                        <option value="Price Mismatch">Price Mismatch</option>
                                     </select>
                                 </div>
 
@@ -287,43 +290,59 @@
 
                             <div id="po-central-dash" class="hidden">
                                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #1976d2; padding-bottom:10px; margin-bottom:15px;">
-                                    <h3 style="color:#1565c0; margin:0;">🛠️ My Work Queue</h3>
-                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Switch Role</button>
+                                    <h3 style="color:#1565c0; margin:0;">🛠️ Central Queue</h3>
+                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Role Switch</button>
                                 </div>
-
-                                <div id="po-escalation-box" class="hidden" style="background:#ffebee; border:1px solid #ef5350; padding:10px; border-radius:4px; margin-bottom:15px; color:#c62828; font-weight:bold; display:flex; align-items:center; gap:10px;">
-                                    <span>🔥</span>
-                                    <span id="po-escalation-text"></span>
-                                </div>
-
                                 <div id="po-central-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">
                                     <p>Loading tasks...</p>
+                                </div>
+                            </div>
+
+                            <div id="po-manager-dash" class="hidden">
+                                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e65100; padding-bottom:10px; margin-bottom:15px;">
+                                    <h3 style="color:#e65100; margin:0;">👨‍💼 Pending Approvals</h3>
+                                    <button onclick="window.selectPoRole('back')" style="background:#eee; padding:5px 10px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">⬅️ Role Switch</button>
+                                </div>
+                                <div id="po-manager-list" style="display:grid; gap:15px; max-height:500px; overflow-y:auto;">
+                                    <p>Loading approvals...</p>
                                 </div>
                             </div>
 
                         </div>
                     </div>
 
-                    <div id="po-resolve-modal" class="modal hidden">
-                        <div class="modal-content" style="max-width:450px;">
+                    <div id="po-request-modal" class="modal hidden">
+                        <div class="modal-content" style="max-width:400px;">
                             <div class="modal-header">
-                                <h3>✅ Resolve PO Issue</h3>
-                                <span class="close-btn" onclick="document.getElementById('po-resolve-modal').classList.add('hidden')">&times;</span>
+                                <h3>📨 Request Manager Approval</h3>
+                                <span class="close-btn" onclick="document.getElementById('po-request-modal').classList.add('hidden')">&times;</span>
                             </div>
                             <div class="modal-body">
-                                <input type="hidden" id="po-resolve-id">
-                                <input type="hidden" id="po-resolve-row">
-                                
-                                <p id="po-resolve-desc" style="background:#f5f5f5; padding:10px; border-radius:4px; font-weight:bold;"></p>
-                                
-                                <label style="font-size:12px; font-weight:bold;">Manager Approval Email:</label>
-                                <input type="email" id="po-manager-email" placeholder="manager@flipkart.com" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
-                                
-                                <label style="font-size:12px; font-weight:bold;">Resolution Notes:</label>
-                                <textarea id="po-resolve-notes" rows="3" placeholder="What changes were made?" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                                <input type="hidden" id="req-id"><input type="hidden" id="req-row">
+                                <input type="hidden" id="req-po-num">
+                                <label style="font-weight:bold; font-size:12px;">Manager Email:</label>
+                                <input type="email" id="req-mgr-email" placeholder="manager@flipkart.com" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; margin-bottom:15px;">
+                                <p style="font-size:11px; color:#666;">This will update the ticket status and open your email client to send a notification.</p>
                             </div>
                             <div class="modal-footer">
-                                <button onclick="window.confirmPoResolution()" style="background:#1976d2; color:white; width:100%; padding:10px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">✅ Mark Resolved</button>
+                                <button onclick="window.submitApprovalRequest()" style="background:#1976d2; color:white; width:100%; padding:10px; border:none; border-radius:4px; cursor:pointer;">🚀 Send Request</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="po-final-resolve-modal" class="modal hidden">
+                        <div class="modal-content" style="max-width:400px;">
+                            <div class="modal-header">
+                                <h3>✅ Final Resolution</h3>
+                                <span class="close-btn" onclick="document.getElementById('po-final-resolve-modal').classList.add('hidden')">&times;</span>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" id="res-id"><input type="hidden" id="res-row">
+                                <label style="font-weight:bold; font-size:12px;">Resolution Notes:</label>
+                                <textarea id="res-notes" rows="3" placeholder="What action was taken?" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;"></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button onclick="window.submitFinalResolution()" style="background:#2e7d32; color:white; width:100%; padding:10px; border:none; border-radius:4px; cursor:pointer;">💾 Mark Resolved</button>
                             </div>
                         </div>
                     </div>
