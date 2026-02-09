@@ -3792,7 +3792,7 @@ window.resetCamera = function() {
 // 8. DASHBOARD STATS (Fixed for Offer Board)
 
 // ==========================================
-// 8. DASHBOARD STATS (Unified: Fixed Date Parsing for All Categories)
+// 8. DASHBOARD STATS (Unified: Fixed Events Column Mapping)
 // ==========================================
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
@@ -3823,8 +3823,6 @@ async function loadTvStats() {
                 <button onclick="window.resetDashFilters()" style="background:#78909c; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">❌ Clear</button>
             </div>`;
         container.parentNode.insertBefore(filterDiv, container);
-        
-        // Default Dates (Current Month)
         const today = new Date();
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
         document.getElementById("dash-from").valueAsDate = firstDay;
@@ -3847,67 +3845,30 @@ async function loadTvStats() {
         const rows = data.values.slice(1);
         const now = new Date();
 
-        // ============================================================
-        // 🛠️ DATE PARSERS (The Fix)
-        // ============================================================
-        
-        // 1. Due Date Parser (For Sheet Column E/F)
-        // Explicitly handles "MM-DD-YYYY" (e.g., 02-05-2026 is Feb 5th)
+        // --- Date Helpers ---
         function parseDueDate(dateStr) {
             if (!dateStr) return null;
-            
-            // Clean up
-            let clean = dateStr.trim();
-            
-            // If format is like "02-05-2026" (Dashes) -> Treat as MM-DD-YYYY
-            if (clean.includes("-")) {
-                const parts = clean.split("-");
-                if (parts.length === 3) {
-                    // new Date(Year, MonthIndex, Day)
-                    // parts[0]=Month, parts[1]=Day, parts[2]=Year
-                    const d = new Date(parts[2], parts[0]-1, parts[1]);
-                    d.setHours(23, 59, 59, 999);
-                    return d;
-                }
-            }
-            
-            // Fallback for "/" or other standard formats
-            const d = new Date(clean);
-            if (!isNaN(d.getTime())) {
-                d.setHours(23, 59, 59, 999);
-                return d;
-            }
-            return null;
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return null;
+            d.setHours(23, 59, 59, 999);
+            return d;
         }
-
-        // 2. Done Date Parser (For Timestamp Column)
-        // Handles ambiguity (03/02 could be Mar 2nd or Feb 3rd)
         function getPossibleDoneDates(dateStr) {
             if (!dateStr || dateStr.trim() === "") return [];
-            const cleanStr = dateStr.split(",")[0].trim(); // Remove time
+            const cleanStr = dateStr.split(",")[0].trim();
             const parts = cleanStr.split(/[-/]/); 
-            
             if (parts.length === 3) {
-                const p0 = parseInt(parts[0]);
-                const p1 = parseInt(parts[1]);
-                const p2 = parseInt(parts[2]); 
-                
-                // Logic to guess format
-                if (p1 > 12) return [new Date(p2, p1 - 1, p0)]; // Must be DD/MM
-                else if (p0 > 12) return [new Date(p2, p0 - 1, p1)]; // Must be MM/DD
-                else {
-                    // Ambiguous? Return BOTH possibilities to give benefit of doubt
-                    return [
-                        new Date(p2, p1 - 1, p0), // DD/MM (India)
-                        new Date(p2, p0 - 1, p1)  // MM/DD (US)
-                    ];
-                }
+                const p0 = parseInt(parts[0]), p1 = parseInt(parts[1]), p2 = parseInt(parts[2]); 
+                // Handle DD/MM vs MM/DD ambiguity
+                if (p1 > 12) return [new Date(p2, p1 - 1, p0)];
+                else if (p0 > 12) return [new Date(p2, p0 - 1, p1)];
+                else return [new Date(p2, p1 - 1, p0), new Date(p2, p0 - 1, p1)];
             }
             return [new Date(dateStr)];
         }
 
         // ============================================================
-        // 🅰️ MAIN LOGIC (All Categories)
+        // 🅰️ MAIN LOGIC
         // ============================================================
         
         let fromDate = null; let toDate = null;
@@ -3918,27 +3879,32 @@ async function loadTvStats() {
         if (fVal) { fromDate = new Date(fVal); fromDate.setHours(0,0,0,0); }
         if (tVal) { toDate = new Date(tVal); toDate.setHours(23,59,59,999); }
 
-        // --- COLUMN MAPPING ---
+        // --- 🔍 CORRECTED COLUMN MAPPINGS ---
         let colMap = {};
         
-        if (activeTvCategory === "Offer Board") {
-            colMap = { store: 2, start: 3, due: 4, timestamp: 13, statusIdx: 11 };
-        } else if (activeTvCategory === "Feature Space") {
-            colMap = { store: 2, start: 3, due: 4, timestamp: 16, subdiv: 8, statusIdx: 15 };
-        } else if (activeTvCategory === "Events") {
-            // Updated for Events: Status(10), Timestamp(11), Due(4)
-            colMap = { store: 2, start: 3, due: 4, timestamp: 11, statusIdx: 10 };
-        } else if (activeTvCategory === "Planogram") {
-            colMap = { store: 2, start: 3, due: 4, timestamp: 13, statusIdx: 12 };
-        } else { 
-            colMap = { store: 2, start: 3 }; // OFR Audit (Invoice Date)
+        if (activeTvCategory === "Events") {
+            // Store(2), Start(3), End(4), StatusCheck(11-Link), Timestamp(12)
+            colMap = { store: 2, start: 3, due: 4, statusIdx: 11, timestamp: 12 };
+        } 
+        else if (activeTvCategory === "Planogram") {
+            // Adjust if Planogram structure is similar to Events
+            colMap = { store: 2, start: 3, due: 4, statusIdx: 11, timestamp: 12 };
+        }
+        else if (activeTvCategory === "Offer Board") {
+            colMap = { store: 2, start: 3, due: 4, statusIdx: 11, timestamp: 13 };
+        } 
+        else if (activeTvCategory === "Feature Space") {
+            colMap = { store: 2, start: 3, due: 4, statusIdx: 15, timestamp: 16, subdiv: 8 };
+        } 
+        else { 
+            colMap = { store: 2, start: 3 }; // OFR Audit
         }
 
         let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
         const storeStats = {}; 
 
         rows.forEach(r => {
-            // 1. Filter by Date (Start/Due Date)
+            // 1. Filter by Date
             const filterDateObj = parseDueDate(r[colMap.start]); 
             if (fromDate && toDate) {
                 if (!filterDateObj) return; 
@@ -3959,7 +3925,7 @@ async function loadTvStats() {
                 else storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
             }
 
-            // 4. OFR AUDIT SPECIAL LOGIC
+            // 4. OFR AUDIT LOGIC
             if (activeTvCategory === "OFR Audit") {
                 const mgrEmail = r[10];
                 if (mgrEmail && mgrEmail.trim() !== "") {
@@ -3991,13 +3957,13 @@ async function loadTvStats() {
                 }
             }
             
-            // 5. GENERIC LOGIC (Events, Planogram, Feature Space, Offer Board)
+            // 5. GENERIC LOGIC (Events, Planogram, etc.)
             else {
                 if (storeName !== "Unknown") {
                     gTotal++; storeStats[storeName].t++;
 
+                    // Check Status Column (Must be Link or >5 chars)
                     const statusVal = r[colMap.statusIdx];
-                    // Events/Planogram check: has text or link > 5 chars
                     const isDone = (statusVal && statusVal.trim().length > 5); 
                     
                     const doneTimeStr = r[colMap.timestamp]; 
@@ -4008,10 +3974,7 @@ async function loadTvStats() {
                         
                         // Calculate Late Done
                         if (dueDate && doneTimeStr) {
-                            dueDate.setHours(23, 59, 59, 999);
                             const candidates = getPossibleDoneDates(doneTimeStr);
-                            
-                            // Benefit of Doubt: If ANY candidate date is On Time, it is On Time.
                             const potentiallyOnTime = candidates.some(d => d <= dueDate);
                             if (!potentiallyOnTime) { 
                                 gLateDone++; 
@@ -4041,7 +4004,6 @@ async function loadTvStats() {
         let tableRows = "";
         const sortedStores = Object.keys(storeStats).sort();
 
-        // RENDER: OFR AUDIT
         if (activeTvCategory === "OFR Audit") {
              tableHeader = `<tr style="background:#f5f5f5;"><th rowspan="2" style="text-align:left;">Store</th><th colspan="4" style="text-align:center;">Manager</th><th colspan="4" style="text-align:center;">TL</th></tr><tr style="background:#f5f5f5;"><th>T</th><th>✅</th><th>⚠️</th><th>⏳</th><th>T</th><th>✅</th><th>⚠️</th><th>⏳</th></tr>`;
              sortedStores.forEach(s => {
@@ -4051,10 +4013,8 @@ async function loadTvStats() {
                 const tc = d.tl.t>0 && d.tl.t===d.tl.d ? '#e8f5e9' : '';
                 tableRows += `<tr><td style="font-weight:500;">${s}</td><td style="background:${mc}">${d.mgr.t}</td><td style="background:${mc}">${d.mgr.d}</td><td>${d.mgr.ld||'-'}</td><td>${d.mgr.lp||'-'}</td><td style="background:${tc}">${d.tl.t}</td><td style="background:${tc}">${d.tl.d}</td><td>${d.tl.ld||'-'}</td><td>${d.tl.lp||'-'}</td></tr>`;
              });
-        } 
-        // RENDER: ALL OTHER CATEGORIES (Events included)
-        else {
-            tableHeader = `<tr style="background:#f5f5f5;"><th style="text-align:left; position:sticky; top:0; background:#e0e0e0; z-index:10;">Store Name</th><th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Total</th><th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Done</th><th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Late Done ⚠️</th><th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Overdue ⏳</th><th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Progress</th></tr>`;
+        } else {
+            tableHeader = `<tr style="background:#f5f5f5;"><th style="text-align:left;">Store Name</th><th>Total</th><th>Done</th><th>Late Done ⚠️</th><th>Overdue ⏳</th><th>Progress</th></tr>`;
             sortedStores.forEach(s => {
                 const d = storeStats[s];
                 const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
