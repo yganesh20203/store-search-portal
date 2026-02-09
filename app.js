@@ -3790,14 +3790,14 @@ window.resetCamera = function() {
 
 
 // 8. DASHBOARD STATS (Fixed for Offer Board)
-// 8. DASHBOARD STATS (Smart "Benefit of the Doubt" Date Logic)
+
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
     const config = TV_CONFIG_MAP[activeTvCategory];
     
     if (!config) { console.error("Config missing"); return; }
 
-    // --- (Keep existing Filter Logic) ---
+    // --- 1. FILTER INJECTION ---
     if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
         const filterContainer = document.getElementById("tv-dash-filters");
         if (!filterContainer) {
@@ -3843,10 +3843,8 @@ async function loadTvStats() {
         const now = new Date();
 
         // ============================================================
-        // 🧠 "BENEFIT OF THE DOUBT" DATE PARSER
+        // 🧠 SMART DATE PARSERS
         // ============================================================
-        
-        // 1. Due Date Parser (Standard)
         function parseDueDate(dateStr) {
             if (!dateStr) return null;
             const d = new Date(dateStr);
@@ -3855,33 +3853,21 @@ async function loadTvStats() {
             return d;
         }
 
-        // 2. Ambiguity Handler
-        // Returns an ARRAY of possible dates.
-        // For "02/03/2026": Returns [Feb 3rd, March 2nd]
         function getPossibleDoneDates(dateStr) {
             if (!dateStr || dateStr.trim() === "") return [];
-            
             const cleanStr = dateStr.split(",")[0].trim();
-            const parts = cleanStr.split(/[-/]/); // Split by / or -
+            const parts = cleanStr.split(/[-/]/); 
             
             if (parts.length === 3) {
                 const p0 = parseInt(parts[0]);
                 const p1 = parseInt(parts[1]);
-                const p2 = parseInt(parts[2]); // Year
-
-                // Case A: Unambiguous (e.g. 25/02 - Must be DD/MM)
-                if (p0 > 12) return [new Date(p2, p1 - 1, p0, 0,0,0)];
-                
-                // Case B: Unambiguous (e.g. 02/25 - Must be MM/DD)
-                if (p1 > 12) return [new Date(p2, p0 - 1, p1, 0,0,0)];
-
-                // Case C: Ambiguous (e.g. 02/03 - Could be either)
-                // Return BOTH possibilities
-                const candidate1 = new Date(p2, p1 - 1, p0, 0,0,0); // DD/MM (3rd Feb)
-                const candidate2 = new Date(p2, p0 - 1, p1, 0,0,0); // MM/DD (2nd March)
-                return [candidate1, candidate2];
+                const p2 = parseInt(parts[2]); 
+                if (p1 > 12) return [new Date(p2, p1 - 1, p0)]; // Unambiguous DD/MM
+                else if (p0 > 12) return [new Date(p2, p0 - 1, p1)]; // Unambiguous MM/DD
+                else {
+                    return [new Date(p2, p1 - 1, p0), new Date(p2, p0 - 1, p1)]; // Ambiguous
+                }
             }
-            // Fallback
             return [new Date(dateStr)];
         }
 
@@ -3899,120 +3885,192 @@ async function loadTvStats() {
             if (tVal) { toDate = new Date(tVal); toDate.setHours(23,59,59,999); }
 
             let colMap = {};
-            if (activeTvCategory === "Offer Board") {
-                colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 13 }; 
-            } else if (activeTvCategory === "Feature Space") {
-                colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16, subdiv: 8 }; 
-            } else { // OFR Audit
-                colMap = { date: 3, store: 2 }; 
-            }
+            if (activeTvCategory === "Offer Board") colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 13 }; 
+            else if (activeTvCategory === "Feature Space") colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16, subdiv: 8 }; 
+            else colMap = { date: 3, store: 2 }; // OFR Audit (Invoice Date)
 
             let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
             const storeStats = {}; 
 
             rows.forEach(r => {
-                const dueObj = parseDueDate(r[colMap.date]); 
+                // 1. Filter Logic
+                const filterDateObj = parseDueDate(r[colMap.date]); 
                 if (fromDate && toDate) {
-                    if (!dueObj) return; 
-                    const checkDate = new Date(dueObj); checkDate.setHours(0,0,0,0);
+                    if (!filterDateObj) return; 
+                    const checkDate = new Date(filterDateObj); checkDate.setHours(0,0,0,0);
                     if (checkDate < fromDate || checkDate > toDate) return;
                 }
-
                 if (activeTvCategory === "Feature Space" && subDivFilter) {
                     const rowSubDiv = r[colMap.subdiv] ? String(r[colMap.subdiv]).toLowerCase() : "";
                     if (!rowSubDiv.includes(subDivFilter)) return; 
                 }
 
+                // 2. Init Store
                 const storeName = r[colMap.store] ? String(r[colMap.store]).trim() : "Unknown";
                 if (!storeStats[storeName]) {
                     if (activeTvCategory === "OFR Audit") storeStats[storeName] = { mgr: { t:0, d:0, ld:0, lp:0 }, tl: { t:0, d:0, ld:0, lp:0 } };
                     else storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
                 }
 
-                // [D] LOGIC
-                if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
-                    const assignee = r[colMap.assignee];
-                    if (assignee && assignee.trim() !== "") {
-                        gTotal++;
-                        storeStats[storeName].t++;
-
-                        const doneTimeStr = r[colMap.timestamp]; 
-                        const isDone = (doneTimeStr && doneTimeStr.trim().length > 5);
+                // 3. OFR AUDIT LOGIC (Restored & Fixed)
+                if (activeTvCategory === "OFR Audit") {
+                    // --- Manager Stats ---
+                    const mgrEmail = r[10];
+                    if (mgrEmail && mgrEmail.trim() !== "") {
+                        gTotal++; storeStats[storeName].mgr.t++;
                         
-                        const dueDate = parseDueDate(r[colMap.due]); 
+                        const mgrDone = (r[12] && r[12].trim() !== "");
+                        const mgrDue = parseDueDate(r[4]); // Col E
+                        const mgrTimeStr = r[14]; // Col O
 
-                        if (isDone) {
-                            gDone++;
-                            storeStats[storeName].d++;
-                            
-                            // 🟢 SMART CHECK: Benefit of the Doubt
-                            if (dueDate) {
-                                dueDate.setHours(23, 59, 59, 999);
-                                const candidates = getPossibleDoneDates(doneTimeStr);
-                                
-                                // Check if ANY candidate interpretation is "On Time"
-                                // If yes, we assume that was the correct date format.
-                                const potentiallyOnTime = candidates.some(d => d <= dueDate);
-                                
-                                // Only mark as LATE if ALL interpretations are LATE
-                                if (!potentiallyOnTime) {
-                                    gLateDone++;
-                                    storeStats[storeName].ld++;
-                                }
+                        if (mgrDone) {
+                            gDone++; storeStats[storeName].mgr.d++;
+                            if (mgrDue && mgrTimeStr) {
+                                const candidates = getPossibleDoneDates(mgrTimeStr);
+                                const isTimeOK = candidates.some(d => d <= mgrDue);
+                                if (!isTimeOK) { gLateDone++; storeStats[storeName].mgr.ld++; }
                             }
-                        } else {
-                            if (dueDate && now > dueDate) {
-                                gOverdue++;
-                                storeStats[storeName].lp++;
+                        } else if (mgrDue && now > mgrDue) {
+                            gOverdue++; storeStats[storeName].mgr.lp++;
+                        }
+                    }
+
+                    // --- TL Stats ---
+                    const tlEmail = r[11];
+                    if (tlEmail && tlEmail.trim() !== "") {
+                        gTotal++; storeStats[storeName].tl.t++;
+                        
+                        const tlDone = (r[13] && r[13].trim() !== "");
+                        const tlDue = parseDueDate(r[5]); // Col F
+                        const tlTimeStr = r[15]; // Col P
+
+                        if (tlDone) {
+                            gDone++; storeStats[storeName].tl.d++;
+                            if (tlDue && tlTimeStr) {
+                                const candidates = getPossibleDoneDates(tlTimeStr);
+                                const isTimeOK = candidates.some(d => d <= tlDue);
+                                if (!isTimeOK) { gLateDone++; storeStats[storeName].tl.ld++; }
                             }
+                        } else if (tlDue && now > tlDue) {
+                            gOverdue++; storeStats[storeName].tl.lp++;
                         }
                     }
                 }
-                // (OFR Audit logic omitted for brevity, logic identical)
+
+                // 4. STANDARD LOGIC (Offer Board / Feature Space)
+                else {
+                    const assignee = r[colMap.assignee];
+                    if (assignee && assignee.trim() !== "") {
+                        gTotal++; storeStats[storeName].t++;
+
+                        const doneTimeStr = r[colMap.timestamp]; 
+                        const isDone = (doneTimeStr && doneTimeStr.trim().length > 5);
+                        const dueDate = parseDueDate(r[colMap.due]); 
+
+                        if (isDone) {
+                            gDone++; storeStats[storeName].d++;
+                            if (dueDate) {
+                                const candidates = getPossibleDoneDates(doneTimeStr);
+                                const isTimeOK = candidates.some(d => d <= dueDate);
+                                if (!isTimeOK) { gLateDone++; storeStats[storeName].ld++; }
+                            }
+                        } else if (dueDate && now > dueDate) {
+                            gOverdue++; storeStats[storeName].lp++;
+                        }
+                    }
+                }
             });
 
-            // Update UI
+            // --- 5. RENDER UI ---
             const pct = gTotal > 0 ? Math.round((gDone/gTotal)*100) : 0;
             document.getElementById("tv-stat-total").innerText = gTotal;
             document.getElementById("tv-stat-pending").innerText = gTotal - gDone;
             document.getElementById("tv-stat-completed").innerText = gDone;
             document.getElementById("tv-stat-percent").innerHTML = `${pct}% <div style="font-size:9px; margin-top:2px;"><span style="color:#f57c00;">⚠️ Done: ${gLateDone}</span> | <span style="color:#d32f2f;">⏳ Due: ${gOverdue}</span></div>`;
 
-            // Render Table (Standard)
+            // Table Render
+            let tableHeader = "";
             let tableRows = "";
             const sortedStores = Object.keys(storeStats).sort();
-            const tableHeader = `
-                <tr style="background:#f5f5f5;">
-                    <th style="text-align:left;">Store Name</th>
-                    <th>Total</th>
-                    <th>Done</th>
-                    <th>Late Done ⚠️</th>
-                    <th>Overdue ⏳</th>
-                    <th>Progress</th>
-                </tr>`;
-            
-            sortedStores.forEach(s => {
-                const d = storeStats[s];
-                const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
-                const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
-                tableRows += `
-                <tr>
-                    <td style="font-weight:500;">${s}</td>
-                    <td>${d.t}</td>
-                    <td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td>
-                    <td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td>
-                    <td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td>
-                    <td style="width:100px;">
-                        <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
-                            <div style="width:${p}%; background:${barColor}; height:100%;"></div>
-                        </div>
-                        <div style="font-size:10px; text-align:right;">${p}%</div>
-                    </td>
-                </tr>`;
-            });
+
+            // RENDER: OFR AUDIT TABLE
+            if (activeTvCategory === "OFR Audit") {
+                tableHeader = `
+                    <tr style="background:#f5f5f5;">
+                        <th rowspan="2" style="text-align:left; vertical-align:middle; position:sticky; top:0; background:#e0e0e0; z-index:10; border-bottom:1px solid #ccc;">Store Name</th>
+                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👨‍💼 Merch Manager</th>
+                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👷 Audit TL</th>
+                    </tr>
+                    <tr style="background:#f5f5f5;">
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️</th>
+                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳</th>
+                    </tr>`;
+
+                sortedStores.forEach(s => {
+                    const d = storeStats[s];
+                    // Safety check to ensure d.mgr and d.tl exist
+                    if (!d.mgr) d.mgr = {t:0, d:0, ld:0, lp:0};
+                    if (!d.tl) d.tl = {t:0, d:0, ld:0, lp:0};
+
+                    const mgrColor = d.mgr.t > 0 && d.mgr.t === d.mgr.d ? '#e8f5e9' : '';
+                    const tlColor = d.tl.t > 0 && d.tl.t === d.tl.d ? '#e8f5e9' : '';
+                    tableRows += `
+                    <tr>
+                        <td style="font-weight:500;">${s}</td>
+                        <td style="background:${mgrColor}">${d.mgr.t}</td>
+                        <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
+                        <td style="color:${d.mgr.ld > 0 ? '#f57c00' : '#ccc'}">${d.mgr.ld || '-'}</td>
+                        <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}">${d.mgr.lp || '-'}</td>
+                        <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
+                        <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
+                        <td style="color:${d.tl.ld > 0 ? '#f57c00' : '#ccc'}">${d.tl.ld || '-'}</td>
+                        <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}">${d.tl.lp || '-'}</td>
+                    </tr>`;
+                });
+            } 
+            // RENDER: STANDARD TABLE
+            else {
+                tableHeader = `
+                    <tr style="background:#f5f5f5;">
+                        <th style="text-align:left;">Store Name</th>
+                        <th>Total</th>
+                        <th>Done</th>
+                        <th>Late Done ⚠️</th>
+                        <th>Overdue ⏳</th>
+                        <th>Progress</th>
+                    </tr>`;
+                
+                sortedStores.forEach(s => {
+                    const d = storeStats[s];
+                    const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
+                    const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
+                    tableRows += `
+                    <tr>
+                        <td style="font-weight:500;">${s}</td>
+                        <td>${d.t}</td>
+                        <td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td>
+                        <td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td>
+                        <td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td>
+                        <td style="width:100px;">
+                            <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
+                                <div style="width:${p}%; background:${barColor}; height:100%;"></div>
+                            </div>
+                            <div style="font-size:10px; text-align:right;">${p}%</div>
+                        </td>
+                    </tr>`;
+                });
+            }
 
             container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
         } 
+        
+        // 🅱️ FALLBACK
         else {
             resetStatsToZero();
             container.innerHTML = `<div style="padding:20px; text-align:center;">Simple stats not configured.</div>`;
