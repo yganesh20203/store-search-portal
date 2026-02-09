@@ -3791,17 +3791,20 @@ window.resetCamera = function() {
 
 // 8. DASHBOARD STATS (Fixed for Offer Board)
 
+// ==========================================
+// 8. DASHBOARD STATS (Fixed: Restored Events & Planogram Logic)
+// ==========================================
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
     const config = TV_CONFIG_MAP[activeTvCategory];
     
     if (!config) { console.error("Config missing"); return; }
 
-    // --- 1. FILTER INJECTION ---
+    // --- 1. FILTER INJECTION (Only for Complex Tabs) ---
     if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
         const filterContainer = document.getElementById("tv-dash-filters");
         if (!filterContainer) {
-             const filterDiv = document.createElement("div");
+            const filterDiv = document.createElement("div");
             filterDiv.id = "tv-dash-filters";
             filterDiv.style.marginBottom = "15px";
             filterDiv.style.padding = "15px";
@@ -3824,6 +3827,10 @@ async function loadTvStats() {
             document.getElementById("dash-from").valueAsDate = firstDay;
             document.getElementById("dash-to").valueAsDate = today;
         }
+    } else {
+        // Remove filters if switching to simple tabs (Events/Planogram)
+        const existing = document.getElementById("tv-dash-filters");
+        if(existing) existing.remove();
     }
 
     container.innerHTML = "⏳ Calculating analytics...";
@@ -3842,9 +3849,7 @@ async function loadTvStats() {
         const rows = data.values.slice(1);
         const now = new Date();
 
-        // ============================================================
-        // 🧠 SMART DATE PARSERS
-        // ============================================================
+        // --- Date Helpers ---
         function parseDueDate(dateStr) {
             if (!dateStr) return null;
             const d = new Date(dateStr);
@@ -3852,27 +3857,21 @@ async function loadTvStats() {
             d.setHours(23, 59, 59, 999);
             return d;
         }
-
         function getPossibleDoneDates(dateStr) {
             if (!dateStr || dateStr.trim() === "") return [];
             const cleanStr = dateStr.split(",")[0].trim();
             const parts = cleanStr.split(/[-/]/); 
-            
             if (parts.length === 3) {
-                const p0 = parseInt(parts[0]);
-                const p1 = parseInt(parts[1]);
-                const p2 = parseInt(parts[2]); 
-                if (p1 > 12) return [new Date(p2, p1 - 1, p0)]; // Unambiguous DD/MM
-                else if (p0 > 12) return [new Date(p2, p0 - 1, p1)]; // Unambiguous MM/DD
-                else {
-                    return [new Date(p2, p1 - 1, p0), new Date(p2, p0 - 1, p1)]; // Ambiguous
-                }
+                const p0 = parseInt(parts[0]), p1 = parseInt(parts[1]), p2 = parseInt(parts[2]); 
+                if (p1 > 12) return [new Date(p2, p1 - 1, p0, 0,0,0)];
+                else if (p0 > 12) return [new Date(p2, p0 - 1, p1, 0,0,0)];
+                else return [new Date(p2, p1 - 1, p0, 0,0,0), new Date(p2, p0 - 1, p1, 0,0,0)];
             }
             return [new Date(dateStr)];
         }
 
         // ============================================================
-        // 🅰️ ANALYTICS LOGIC
+        // 🅰️ COMPLEX CATEGORIES (OFR, Offer Board, Feature Space)
         // ============================================================
         if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
             
@@ -3887,82 +3886,34 @@ async function loadTvStats() {
             let colMap = {};
             if (activeTvCategory === "Offer Board") colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 13 }; 
             else if (activeTvCategory === "Feature Space") colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16, subdiv: 8 }; 
-            else colMap = { date: 3, store: 2 }; // OFR Audit (Invoice Date)
+            else colMap = { date: 3, store: 2 }; 
 
             let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
             const storeStats = {}; 
 
             rows.forEach(r => {
-                // 1. Filter Logic
-                const filterDateObj = parseDueDate(r[colMap.date]); 
+                const dueObj = parseDueDate(r[colMap.date]); 
                 if (fromDate && toDate) {
-                    if (!filterDateObj) return; 
-                    const checkDate = new Date(filterDateObj); checkDate.setHours(0,0,0,0);
+                    if (!dueObj) return; 
+                    const checkDate = new Date(dueObj); checkDate.setHours(0,0,0,0);
                     if (checkDate < fromDate || checkDate > toDate) return;
                 }
+
                 if (activeTvCategory === "Feature Space" && subDivFilter) {
                     const rowSubDiv = r[colMap.subdiv] ? String(r[colMap.subdiv]).toLowerCase() : "";
                     if (!rowSubDiv.includes(subDivFilter)) return; 
                 }
 
-                // 2. Init Store
                 const storeName = r[colMap.store] ? String(r[colMap.store]).trim() : "Unknown";
                 if (!storeStats[storeName]) {
                     if (activeTvCategory === "OFR Audit") storeStats[storeName] = { mgr: { t:0, d:0, ld:0, lp:0 }, tl: { t:0, d:0, ld:0, lp:0 } };
                     else storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
                 }
 
-                // 3. OFR AUDIT LOGIC (Restored & Fixed)
-                if (activeTvCategory === "OFR Audit") {
-                    // --- Manager Stats ---
-                    const mgrEmail = r[10];
-                    if (mgrEmail && mgrEmail.trim() !== "") {
-                        gTotal++; storeStats[storeName].mgr.t++;
-                        
-                        const mgrDone = (r[12] && r[12].trim() !== "");
-                        const mgrDue = parseDueDate(r[4]); // Col E
-                        const mgrTimeStr = r[14]; // Col O
-
-                        if (mgrDone) {
-                            gDone++; storeStats[storeName].mgr.d++;
-                            if (mgrDue && mgrTimeStr) {
-                                const candidates = getPossibleDoneDates(mgrTimeStr);
-                                const isTimeOK = candidates.some(d => d <= mgrDue);
-                                if (!isTimeOK) { gLateDone++; storeStats[storeName].mgr.ld++; }
-                            }
-                        } else if (mgrDue && now > mgrDue) {
-                            gOverdue++; storeStats[storeName].mgr.lp++;
-                        }
-                    }
-
-                    // --- TL Stats ---
-                    const tlEmail = r[11];
-                    if (tlEmail && tlEmail.trim() !== "") {
-                        gTotal++; storeStats[storeName].tl.t++;
-                        
-                        const tlDone = (r[13] && r[13].trim() !== "");
-                        const tlDue = parseDueDate(r[5]); // Col F
-                        const tlTimeStr = r[15]; // Col P
-
-                        if (tlDone) {
-                            gDone++; storeStats[storeName].tl.d++;
-                            if (tlDue && tlTimeStr) {
-                                const candidates = getPossibleDoneDates(tlTimeStr);
-                                const isTimeOK = candidates.some(d => d <= tlDue);
-                                if (!isTimeOK) { gLateDone++; storeStats[storeName].tl.ld++; }
-                            }
-                        } else if (tlDue && now > tlDue) {
-                            gOverdue++; storeStats[storeName].tl.lp++;
-                        }
-                    }
-                }
-
-                // 4. STANDARD LOGIC (Offer Board / Feature Space)
-                else {
+                if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
                     const assignee = r[colMap.assignee];
                     if (assignee && assignee.trim() !== "") {
                         gTotal++; storeStats[storeName].t++;
-
                         const doneTimeStr = r[colMap.timestamp]; 
                         const isDone = (doneTimeStr && doneTimeStr.trim().length > 5);
                         const dueDate = parseDueDate(r[colMap.due]); 
@@ -3970,110 +3921,150 @@ async function loadTvStats() {
                         if (isDone) {
                             gDone++; storeStats[storeName].d++;
                             if (dueDate) {
+                                dueDate.setHours(23, 59, 59, 999);
                                 const candidates = getPossibleDoneDates(doneTimeStr);
-                                const isTimeOK = candidates.some(d => d <= dueDate);
-                                if (!isTimeOK) { gLateDone++; storeStats[storeName].ld++; }
+                                const potentiallyOnTime = candidates.some(d => d <= dueDate);
+                                if (!potentiallyOnTime) { gLateDone++; storeStats[storeName].ld++; }
                             }
-                        } else if (dueDate && now > dueDate) {
-                            gOverdue++; storeStats[storeName].lp++;
+                        } else {
+                            if (dueDate && now > dueDate) { gOverdue++; storeStats[storeName].lp++; }
                         }
+                    }
+                }
+                
+                // OFR Audit Logic
+                else if (activeTvCategory === "OFR Audit") {
+                    // Mgr
+                    const mgrEmail = r[10];
+                    if (mgrEmail) {
+                        gTotal++; storeStats[storeName].mgr.t++;
+                        const mgrDone = (r[12] && r[12].trim() !== "");
+                        const mgrDue = parseDueDate(r[4]);
+                        const mgrTimeStr = r[14];
+                        if (mgrDone) {
+                            gDone++; storeStats[storeName].mgr.d++;
+                            if (mgrDue && mgrTimeStr) {
+                                const candidates = getPossibleDoneDates(mgrTimeStr);
+                                if (!candidates.some(d => d <= mgrDue)) { gLateDone++; storeStats[storeName].mgr.ld++; }
+                            }
+                        } else if (mgrDue && now > mgrDue) { gOverdue++; storeStats[storeName].mgr.lp++; }
+                    }
+                    // TL
+                    const tlEmail = r[11];
+                    if (tlEmail) {
+                        gTotal++; storeStats[storeName].tl.t++;
+                        const tlDone = (r[13] && r[13].trim() !== "");
+                        const tlDue = parseDueDate(r[5]);
+                        const tlTimeStr = r[15];
+                        if (tlDone) {
+                            gDone++; storeStats[storeName].tl.d++;
+                            if (tlDue && tlTimeStr) {
+                                const candidates = getPossibleDoneDates(tlTimeStr);
+                                if (!candidates.some(d => d <= tlDue)) { gLateDone++; storeStats[storeName].tl.ld++; }
+                            }
+                        } else if (tlDue && now > tlDue) { gOverdue++; storeStats[storeName].tl.lp++; }
                     }
                 }
             });
 
-            // --- 5. RENDER UI ---
+            // Update UI & Table
             const pct = gTotal > 0 ? Math.round((gDone/gTotal)*100) : 0;
             document.getElementById("tv-stat-total").innerText = gTotal;
             document.getElementById("tv-stat-pending").innerText = gTotal - gDone;
             document.getElementById("tv-stat-completed").innerText = gDone;
             document.getElementById("tv-stat-percent").innerHTML = `${pct}% <div style="font-size:9px; margin-top:2px;"><span style="color:#f57c00;">⚠️ Done: ${gLateDone}</span> | <span style="color:#d32f2f;">⏳ Due: ${gOverdue}</span></div>`;
 
-            // Table Render
-            let tableHeader = "";
             let tableRows = "";
             const sortedStores = Object.keys(storeStats).sort();
-
-            // RENDER: OFR AUDIT TABLE
+            
             if (activeTvCategory === "OFR Audit") {
-                tableHeader = `
-                    <tr style="background:#f5f5f5;">
-                        <th rowspan="2" style="text-align:left; vertical-align:middle; position:sticky; top:0; background:#e0e0e0; z-index:10; border-bottom:1px solid #ccc;">Store Name</th>
-                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👨‍💼 Merch Manager</th>
-                        <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👷 Audit TL</th>
-                    </tr>
-                    <tr style="background:#f5f5f5;">
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️</th>
-                        <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳</th>
-                    </tr>`;
-
-                sortedStores.forEach(s => {
+                 let tableHeader = `<tr style="background:#f5f5f5;"><th rowspan="2">Store</th><th colspan="4">Manager</th><th colspan="4">TL</th></tr><tr style="background:#f5f5f5;"><th>T</th><th>✅</th><th>⚠️</th><th>⏳</th><th>T</th><th>✅</th><th>⚠️</th><th>⏳</th></tr>`;
+                 sortedStores.forEach(s => {
                     const d = storeStats[s];
-                    // Safety check to ensure d.mgr and d.tl exist
-                    if (!d.mgr) d.mgr = {t:0, d:0, ld:0, lp:0};
-                    if (!d.tl) d.tl = {t:0, d:0, ld:0, lp:0};
-
-                    const mgrColor = d.mgr.t > 0 && d.mgr.t === d.mgr.d ? '#e8f5e9' : '';
-                    const tlColor = d.tl.t > 0 && d.tl.t === d.tl.d ? '#e8f5e9' : '';
-                    tableRows += `
-                    <tr>
-                        <td style="font-weight:500;">${s}</td>
-                        <td style="background:${mgrColor}">${d.mgr.t}</td>
-                        <td style="background:${mgrColor}; font-weight:bold; color:${d.mgr.t===d.mgr.d ? 'green' : 'black'}">${d.mgr.d}</td>
-                        <td style="color:${d.mgr.ld > 0 ? '#f57c00' : '#ccc'}">${d.mgr.ld || '-'}</td>
-                        <td style="color:${d.mgr.lp > 0 ? '#d32f2f' : '#ccc'}">${d.mgr.lp || '-'}</td>
-                        <td style="background:${tlColor}; border-left:1px solid #eee;">${d.tl.t}</td>
-                        <td style="background:${tlColor}; font-weight:bold; color:${d.tl.t===d.tl.d ? 'green' : 'black'}">${d.tl.d}</td>
-                        <td style="color:${d.tl.ld > 0 ? '#f57c00' : '#ccc'}">${d.tl.ld || '-'}</td>
-                        <td style="color:${d.tl.lp > 0 ? '#d32f2f' : '#ccc'}">${d.tl.lp || '-'}</td>
-                    </tr>`;
-                });
-            } 
-            // RENDER: STANDARD TABLE
-            else {
-                tableHeader = `
-                    <tr style="background:#f5f5f5;">
-                        <th style="text-align:left;">Store Name</th>
-                        <th>Total</th>
-                        <th>Done</th>
-                        <th>Late Done ⚠️</th>
-                        <th>Overdue ⏳</th>
-                        <th>Progress</th>
-                    </tr>`;
-                
+                    // Safety init
+                    if(!d.mgr) d.mgr = {t:0,d:0,ld:0,lp:0}; if(!d.tl) d.tl = {t:0,d:0,ld:0,lp:0};
+                    const mgrColor = d.mgr.t>0 && d.mgr.t===d.mgr.d ? '#e8f5e9' : '';
+                    const tlColor = d.tl.t>0 && d.tl.t===d.tl.d ? '#e8f5e9' : '';
+                    tableRows += `<tr><td style="font-weight:500;">${s}</td><td style="background:${mgrColor}">${d.mgr.t}</td><td style="background:${mgrColor}">${d.mgr.d}</td><td>${d.mgr.ld||'-'}</td><td>${d.mgr.lp||'-'}</td><td style="background:${tlColor}">${d.tl.t}</td><td style="background:${tlColor}">${d.tl.d}</td><td>${d.tl.ld||'-'}</td><td>${d.tl.lp||'-'}</td></tr>`;
+                 });
+                 container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
+            } else {
+                let tableHeader = `<tr style="background:#f5f5f5;"><th style="text-align:left;">Store Name</th><th>Total</th><th>Done</th><th>Late Done ⚠️</th><th>Overdue ⏳</th><th>Progress</th></tr>`;
                 sortedStores.forEach(s => {
                     const d = storeStats[s];
                     const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
                     const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
-                    tableRows += `
-                    <tr>
-                        <td style="font-weight:500;">${s}</td>
-                        <td>${d.t}</td>
-                        <td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td>
-                        <td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td>
-                        <td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td>
-                        <td style="width:100px;">
-                            <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
-                                <div style="width:${p}%; background:${barColor}; height:100%;"></div>
-                            </div>
-                            <div style="font-size:10px; text-align:right;">${p}%</div>
-                        </td>
-                    </tr>`;
+                    tableRows += `<tr><td style="font-weight:500;">${s}</td><td>${d.t}</td><td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td><td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td><td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td><td style="width:100px;"><div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;"><div style="width:${p}%; background:${barColor}; height:100%;"></div></div><div style="font-size:10px; text-align:right;">${p}%</div></td></tr>`;
                 });
+                container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
             }
-
-            container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
         } 
         
-        // 🅱️ FALLBACK
+        // ============================================================
+        // 🅱️ SIMPLE CATEGORIES (Events, Planogram) - FIXED HERE
+        // ============================================================
         else {
-            resetStatsToZero();
-            container.innerHTML = `<div style="padding:20px; text-align:center;">Simple stats not configured.</div>`;
+            let total = 0, completed = 0;
+            const storeStatsSimple = {};
+
+            rows.forEach(r => {
+                let storeName = r[2] || "Unknown";
+                let isDone = false;
+                
+                // EVENTS: Col K (Index 10) = Status
+                if (activeTvCategory === "Events") isDone = (r[10] && r[10].length > 0);
+                // PLANOGRAM: Col M (Index 12) = Status
+                else if (activeTvCategory === "Planogram") isDone = (r[12] && r[12].length > 0);
+
+                total++;
+                if (isDone) completed++;
+                
+                if (!storeStatsSimple[storeName]) storeStatsSimple[storeName] = { T:0, C:0 };
+                storeStatsSimple[storeName].T++;
+                if (isDone) storeStatsSimple[storeName].C++;
+            });
+
+            // Update Cards
+            const pct = total > 0 ? Math.round((completed/total)*100) : 0;
+            document.getElementById("tv-stat-total").innerText = total;
+            document.getElementById("tv-stat-pending").innerText = total - completed;
+            document.getElementById("tv-stat-completed").innerText = completed;
+            document.getElementById("tv-stat-percent").innerText = pct + "%";
+
+            // Render Table
+            let html = `
+            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;">
+                <table class="data-table" style="width:100%;">
+                    <thead>
+                        <tr style="background:#f5f5f5;">
+                            <th style="text-align:left; position:sticky; top:0; background:#e0e0e0;">Store</th>
+                            <th style="position:sticky; top:0; background:#e0e0e0;">Total</th>
+                            <th style="position:sticky; top:0; background:#e0e0e0;">Done</th>
+                            <th style="position:sticky; top:0; background:#e0e0e0;">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            
+            Object.keys(storeStatsSimple).sort().forEach(s => {
+                const d = storeStatsSimple[s];
+                const p = d.T > 0 ? Math.round((d.C/d.T)*100) : 0;
+                const c = p === 100 ? '#4caf50' : '#ff9800';
+                html += `<tr>
+                    <td style="font-weight:500;">${s}</td>
+                    <td>${d.T}</td>
+                    <td>${d.C}</td>
+                    <td style="width:120px;">
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <div style="flex:1; background:#eee; height:6px; border-radius:3px; overflow:hidden;">
+                                <div style="width:${p}%; background:${c}; height:100%;"></div>
+                            </div>
+                            <span style="font-size:10px;">${p}%</span>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
         }
 
     } catch (e) { console.error(e); container.innerHTML = "Error: " + e.message; }
