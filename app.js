@@ -3792,7 +3792,7 @@ window.resetCamera = function() {
 // 8. DASHBOARD STATS (Fixed for Offer Board)
 
 // ==========================================
-// 8. DASHBOARD STATS (Fixed: Restored Events & Planogram Logic)
+// 8. DASHBOARD STATS (Unified: All Categories with Detailed Analytics)
 // ==========================================
 async function loadTvStats() {
     const container = document.getElementById("tv-stats-table");
@@ -3800,37 +3800,36 @@ async function loadTvStats() {
     
     if (!config) { console.error("Config missing"); return; }
 
-    // --- 1. FILTER INJECTION (Only for Complex Tabs) ---
-    if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
-        const filterContainer = document.getElementById("tv-dash-filters");
-        if (!filterContainer) {
-            const filterDiv = document.createElement("div");
-            filterDiv.id = "tv-dash-filters";
-            filterDiv.style.marginBottom = "15px";
-            filterDiv.style.padding = "15px";
-            filterDiv.style.background = "#e0f2f1";
-            filterDiv.style.borderRadius = "8px";
-            const subDivDisplay = activeTvCategory === "Feature Space" ? "inline-block" : "none";
-            filterDiv.innerHTML = `
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
-                    <strong>📅 Date:</strong>
-                    <input type="date" id="dash-from" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
-                    <span>to</span>
-                    <input type="date" id="dash-to" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
-                    <input type="text" id="dash-subdiv" placeholder="Filter Sub-Div..." style="display:${subDivDisplay}; padding:5px; border-radius:4px; border:1px solid #ccc; width:120px;">
-                    <button onclick="window.loadTvStats()" style="background:#009688; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">🔄 Refresh</button>
-                    <button onclick="window.resetDashFilters()" style="background:#78909c; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">❌ Clear</button>
-                </div>`;
-            container.parentNode.insertBefore(filterDiv, container);
-            const today = new Date();
-            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-            document.getElementById("dash-from").valueAsDate = firstDay;
-            document.getElementById("dash-to").valueAsDate = today;
-        }
-    } else {
-        // Remove filters if switching to simple tabs (Events/Planogram)
-        const existing = document.getElementById("tv-dash-filters");
-        if(existing) existing.remove();
+    // --- 1. FILTER INJECTION (For ALL Categories now) ---
+    const filterContainer = document.getElementById("tv-dash-filters");
+    if (!filterContainer) {
+        const filterDiv = document.createElement("div");
+        filterDiv.id = "tv-dash-filters";
+        filterDiv.style.marginBottom = "15px";
+        filterDiv.style.padding = "15px";
+        filterDiv.style.background = "#e0f2f1";
+        filterDiv.style.borderRadius = "8px";
+        
+        // Show Sub-Div filter only for Feature Space
+        const subDivDisplay = activeTvCategory === "Feature Space" ? "inline-block" : "none";
+        
+        filterDiv.innerHTML = `
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap: wrap;">
+                <strong>📅 Date:</strong>
+                <input type="date" id="dash-from" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
+                <span>to</span>
+                <input type="date" id="dash-to" style="padding:5px; border-radius:4px; border:1px solid #ccc;">
+                <input type="text" id="dash-subdiv" placeholder="Filter Sub-Div..." style="display:${subDivDisplay}; padding:5px; border-radius:4px; border:1px solid #ccc; width:120px;">
+                <button onclick="window.loadTvStats()" style="background:#009688; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">🔄 Refresh</button>
+                <button onclick="window.resetDashFilters()" style="background:#78909c; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">❌ Clear</button>
+            </div>`;
+        container.parentNode.insertBefore(filterDiv, container);
+        
+        // Default Dates (Current Month)
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById("dash-from").valueAsDate = firstDay;
+        document.getElementById("dash-to").valueAsDate = today;
     }
 
     container.innerHTML = "⏳ Calculating analytics...";
@@ -3863,209 +3862,222 @@ async function loadTvStats() {
             const parts = cleanStr.split(/[-/]/); 
             if (parts.length === 3) {
                 const p0 = parseInt(parts[0]), p1 = parseInt(parts[1]), p2 = parseInt(parts[2]); 
-                if (p1 > 12) return [new Date(p2, p1 - 1, p0, 0,0,0)];
-                else if (p0 > 12) return [new Date(p2, p0 - 1, p1, 0,0,0)];
-                else return [new Date(p2, p1 - 1, p0, 0,0,0), new Date(p2, p0 - 1, p1, 0,0,0)];
+                if (p1 > 12) return [new Date(p2, p1 - 1, p0)];
+                else if (p0 > 12) return [new Date(p2, p0 - 1, p1)];
+                else return [new Date(p2, p1 - 1, p0), new Date(p2, p0 - 1, p1)];
             }
             return [new Date(dateStr)];
         }
 
         // ============================================================
-        // 🅰️ COMPLEX CATEGORIES (OFR, Offer Board, Feature Space)
+        // 🅰️ MAIN LOGIC (All Categories)
         // ============================================================
-        if (["OFR Audit", "Offer Board", "Feature Space"].includes(activeTvCategory)) {
+        
+        let fromDate = null; let toDate = null;
+        const fVal = document.getElementById("dash-from")?.value;
+        const tVal = document.getElementById("dash-to")?.value;
+        const subDivFilter = document.getElementById("dash-subdiv")?.value.toLowerCase().trim();
+
+        if (fVal) { fromDate = new Date(fVal); fromDate.setHours(0,0,0,0); }
+        if (tVal) { toDate = new Date(tVal); toDate.setHours(23,59,59,999); }
+
+        // --- COLUMN MAPPING ---
+        let colMap = {};
+        
+        // 1. Offer Board
+        if (activeTvCategory === "Offer Board") {
+            colMap = { store: 2, start: 3, due: 4, timestamp: 13, statusIdx: 11 };
+        } 
+        // 2. Feature Space
+        else if (activeTvCategory === "Feature Space") {
+            colMap = { store: 2, start: 3, due: 4, timestamp: 16, subdiv: 8, statusIdx: 15 };
+        } 
+        // 3. Events (NEW MAPPING)
+        else if (activeTvCategory === "Events") {
+            // Store(2), Start(3), End(4), Status/Link(10), Timestamp(11)
+            colMap = { store: 2, start: 3, due: 4, timestamp: 11, statusIdx: 10 };
+        }
+        // 4. Planogram (NEW MAPPING)
+        else if (activeTvCategory === "Planogram") {
+            // Store(2), Start(3), End(4), Status/Link(12), Timestamp(13)
+            colMap = { store: 2, start: 3, due: 4, timestamp: 13, statusIdx: 12 };
+        }
+        // 5. OFR Audit
+        else { 
+            colMap = { store: 2, start: 3 }; // Special logic inside loop
+        }
+
+        let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
+        const storeStats = {}; 
+
+        rows.forEach(r => {
+            // 1. Filter by Date
+            const filterDateObj = parseDueDate(r[colMap.start]); 
+            if (fromDate && toDate) {
+                if (!filterDateObj) return; 
+                const checkDate = new Date(filterDateObj); checkDate.setHours(0,0,0,0);
+                if (checkDate < fromDate || checkDate > toDate) return;
+            }
+
+            // 2. Filter by SubDiv (Feature Space only)
+            if (activeTvCategory === "Feature Space" && subDivFilter) {
+                const rowSubDiv = r[colMap.subdiv] ? String(r[colMap.subdiv]).toLowerCase() : "";
+                if (!rowSubDiv.includes(subDivFilter)) return; 
+            }
+
+            // 3. Init Store
+            const storeName = r[colMap.store] ? String(r[colMap.store]).trim() : "Unknown";
+            if (!storeStats[storeName]) {
+                if (activeTvCategory === "OFR Audit") storeStats[storeName] = { mgr: { t:0, d:0, ld:0, lp:0 }, tl: { t:0, d:0, ld:0, lp:0 } };
+                else storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
+            }
+
+            // 4. OFR AUDIT SPECIAL LOGIC
+            if (activeTvCategory === "OFR Audit") {
+                // (Keep your existing OFR Logic here - pasted below for completeness)
+                const mgrEmail = r[10];
+                if (mgrEmail && mgrEmail.trim() !== "") {
+                    gTotal++; storeStats[storeName].mgr.t++;
+                    const mgrDone = (r[12] && r[12].trim() !== "");
+                    const mgrDue = parseDueDate(r[4]);
+                    const mgrTimeStr = r[14];
+                    if (mgrDone) {
+                        gDone++; storeStats[storeName].mgr.d++;
+                        if (mgrDue && mgrTimeStr) {
+                            const candidates = getPossibleDoneDates(mgrTimeStr);
+                            if (!candidates.some(d => d <= mgrDue)) { gLateDone++; storeStats[storeName].mgr.ld++; }
+                        }
+                    } else if (mgrDue && now > mgrDue) { gOverdue++; storeStats[storeName].mgr.lp++; }
+                }
+                const tlEmail = r[11];
+                if (tlEmail && tlEmail.trim() !== "") {
+                    gTotal++; storeStats[storeName].tl.t++;
+                    const tlDone = (r[13] && r[13].trim() !== "");
+                    const tlDue = parseDueDate(r[5]);
+                    const tlTimeStr = r[15];
+                    if (tlDone) {
+                        gDone++; storeStats[storeName].tl.d++;
+                        if (tlDue && tlTimeStr) {
+                            const candidates = getPossibleDoneDates(tlTimeStr);
+                            if (!candidates.some(d => d <= tlDue)) { gLateDone++; storeStats[storeName].tl.ld++; }
+                        }
+                    } else if (tlDue && now > tlDue) { gOverdue++; storeStats[storeName].tl.lp++; }
+                }
+            }
             
-            let fromDate = null; let toDate = null;
-            const fVal = document.getElementById("dash-from")?.value;
-            const tVal = document.getElementById("dash-to")?.value;
-            const subDivFilter = document.getElementById("dash-subdiv")?.value.toLowerCase().trim();
+            // 5. GENERIC LOGIC (Events, Planogram, Feature Space, Offer Board)
+            else {
+                // Check if row is valid (has store/data)
+                if (storeName !== "Unknown") {
+                    gTotal++; storeStats[storeName].t++;
 
-            if (fVal) { fromDate = new Date(fVal); fromDate.setHours(0,0,0,0); }
-            if (tVal) { toDate = new Date(tVal); toDate.setHours(23,59,59,999); }
+                    // Determine Status
+                    // Events/Planogram usually have a Link in the status column if done
+                    const statusVal = r[colMap.statusIdx];
+                    const isDone = (statusVal && statusVal.trim().length > 5); // Assuming link or 'Done' text
+                    
+                    const doneTimeStr = r[colMap.timestamp]; 
+                    const dueDate = parseDueDate(r[colMap.due]); 
 
-            let colMap = {};
-            if (activeTvCategory === "Offer Board") colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 13 }; 
-            else if (activeTvCategory === "Feature Space") colMap = { date: 3, store: 2, assignee: 5, due: 4, timestamp: 16, subdiv: 8 }; 
-            else colMap = { date: 3, store: 2 }; 
-
-            let gTotal = 0, gDone = 0, gLateDone = 0, gOverdue = 0;
-            const storeStats = {}; 
-
-            rows.forEach(r => {
-                const dueObj = parseDueDate(r[colMap.date]); 
-                if (fromDate && toDate) {
-                    if (!dueObj) return; 
-                    const checkDate = new Date(dueObj); checkDate.setHours(0,0,0,0);
-                    if (checkDate < fromDate || checkDate > toDate) return;
-                }
-
-                if (activeTvCategory === "Feature Space" && subDivFilter) {
-                    const rowSubDiv = r[colMap.subdiv] ? String(r[colMap.subdiv]).toLowerCase() : "";
-                    if (!rowSubDiv.includes(subDivFilter)) return; 
-                }
-
-                const storeName = r[colMap.store] ? String(r[colMap.store]).trim() : "Unknown";
-                if (!storeStats[storeName]) {
-                    if (activeTvCategory === "OFR Audit") storeStats[storeName] = { mgr: { t:0, d:0, ld:0, lp:0 }, tl: { t:0, d:0, ld:0, lp:0 } };
-                    else storeStats[storeName] = { t:0, d:0, ld:0, lp:0 };
-                }
-
-                if (activeTvCategory === "Offer Board" || activeTvCategory === "Feature Space") {
-                    const assignee = r[colMap.assignee];
-                    if (assignee && assignee.trim() !== "") {
-                        gTotal++; storeStats[storeName].t++;
-                        const doneTimeStr = r[colMap.timestamp]; 
-                        const isDone = (doneTimeStr && doneTimeStr.trim().length > 5);
-                        const dueDate = parseDueDate(r[colMap.due]); 
-
-                        if (isDone) {
-                            gDone++; storeStats[storeName].d++;
-                            if (dueDate) {
-                                dueDate.setHours(23, 59, 59, 999);
-                                const candidates = getPossibleDoneDates(doneTimeStr);
-                                const potentiallyOnTime = candidates.some(d => d <= dueDate);
-                                if (!potentiallyOnTime) { gLateDone++; storeStats[storeName].ld++; }
+                    if (isDone) {
+                        gDone++; storeStats[storeName].d++;
+                        
+                        // Calculate Late Done
+                        if (dueDate && doneTimeStr) {
+                            dueDate.setHours(23, 59, 59, 999);
+                            const candidates = getPossibleDoneDates(doneTimeStr);
+                            // If NO candidate date is <= Due Date, it's Late
+                            const potentiallyOnTime = candidates.some(d => d <= dueDate);
+                            if (!potentiallyOnTime) { 
+                                gLateDone++; 
+                                storeStats[storeName].ld++; 
                             }
-                        } else {
-                            if (dueDate && now > dueDate) { gOverdue++; storeStats[storeName].lp++; }
+                        }
+                    } else {
+                        // Calculate Overdue
+                        if (dueDate && now > dueDate) {
+                            gOverdue++; 
+                            storeStats[storeName].lp++; 
                         }
                     }
                 }
-                
-                // OFR Audit Logic
-                else if (activeTvCategory === "OFR Audit") {
-                    // Mgr
-                    const mgrEmail = r[10];
-                    if (mgrEmail) {
-                        gTotal++; storeStats[storeName].mgr.t++;
-                        const mgrDone = (r[12] && r[12].trim() !== "");
-                        const mgrDue = parseDueDate(r[4]);
-                        const mgrTimeStr = r[14];
-                        if (mgrDone) {
-                            gDone++; storeStats[storeName].mgr.d++;
-                            if (mgrDue && mgrTimeStr) {
-                                const candidates = getPossibleDoneDates(mgrTimeStr);
-                                if (!candidates.some(d => d <= mgrDue)) { gLateDone++; storeStats[storeName].mgr.ld++; }
-                            }
-                        } else if (mgrDue && now > mgrDue) { gOverdue++; storeStats[storeName].mgr.lp++; }
-                    }
-                    // TL
-                    const tlEmail = r[11];
-                    if (tlEmail) {
-                        gTotal++; storeStats[storeName].tl.t++;
-                        const tlDone = (r[13] && r[13].trim() !== "");
-                        const tlDue = parseDueDate(r[5]);
-                        const tlTimeStr = r[15];
-                        if (tlDone) {
-                            gDone++; storeStats[storeName].tl.d++;
-                            if (tlDue && tlTimeStr) {
-                                const candidates = getPossibleDoneDates(tlTimeStr);
-                                if (!candidates.some(d => d <= tlDue)) { gLateDone++; storeStats[storeName].tl.ld++; }
-                            }
-                        } else if (tlDue && now > tlDue) { gOverdue++; storeStats[storeName].tl.lp++; }
-                    }
-                }
-            });
-
-            // Update UI & Table
-            const pct = gTotal > 0 ? Math.round((gDone/gTotal)*100) : 0;
-            document.getElementById("tv-stat-total").innerText = gTotal;
-            document.getElementById("tv-stat-pending").innerText = gTotal - gDone;
-            document.getElementById("tv-stat-completed").innerText = gDone;
-            document.getElementById("tv-stat-percent").innerHTML = `${pct}% <div style="font-size:9px; margin-top:2px;"><span style="color:#f57c00;">⚠️ Done: ${gLateDone}</span> | <span style="color:#d32f2f;">⏳ Due: ${gOverdue}</span></div>`;
-
-            let tableRows = "";
-            const sortedStores = Object.keys(storeStats).sort();
-            
-            if (activeTvCategory === "OFR Audit") {
-                 let tableHeader = `<tr style="background:#f5f5f5;"><th rowspan="2">Store</th><th colspan="4">Manager</th><th colspan="4">TL</th></tr><tr style="background:#f5f5f5;"><th>T</th><th>✅</th><th>⚠️</th><th>⏳</th><th>T</th><th>✅</th><th>⚠️</th><th>⏳</th></tr>`;
-                 sortedStores.forEach(s => {
-                    const d = storeStats[s];
-                    // Safety init
-                    if(!d.mgr) d.mgr = {t:0,d:0,ld:0,lp:0}; if(!d.tl) d.tl = {t:0,d:0,ld:0,lp:0};
-                    const mgrColor = d.mgr.t>0 && d.mgr.t===d.mgr.d ? '#e8f5e9' : '';
-                    const tlColor = d.tl.t>0 && d.tl.t===d.tl.d ? '#e8f5e9' : '';
-                    tableRows += `<tr><td style="font-weight:500;">${s}</td><td style="background:${mgrColor}">${d.mgr.t}</td><td style="background:${mgrColor}">${d.mgr.d}</td><td>${d.mgr.ld||'-'}</td><td>${d.mgr.lp||'-'}</td><td style="background:${tlColor}">${d.tl.t}</td><td style="background:${tlColor}">${d.tl.d}</td><td>${d.tl.ld||'-'}</td><td>${d.tl.lp||'-'}</td></tr>`;
-                 });
-                 container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
-            } else {
-                let tableHeader = `<tr style="background:#f5f5f5;"><th style="text-align:left;">Store Name</th><th>Total</th><th>Done</th><th>Late Done ⚠️</th><th>Overdue ⏳</th><th>Progress</th></tr>`;
-                sortedStores.forEach(s => {
-                    const d = storeStats[s];
-                    const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
-                    const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
-                    tableRows += `<tr><td style="font-weight:500;">${s}</td><td>${d.t}</td><td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td><td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td><td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td><td style="width:100px;"><div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;"><div style="width:${p}%; background:${barColor}; height:100%;"></div></div><div style="font-size:10px; text-align:right;">${p}%</div></td></tr>`;
-                });
-                container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
             }
+        });
+
+        // --- RENDER UI ---
+        const pct = gTotal > 0 ? Math.round((gDone/gTotal)*100) : 0;
+        document.getElementById("tv-stat-total").innerText = gTotal;
+        document.getElementById("tv-stat-pending").innerText = gTotal - gDone;
+        document.getElementById("tv-stat-completed").innerText = gDone;
+        document.getElementById("tv-stat-percent").innerHTML = `${pct}% <div style="font-size:9px; margin-top:2px;"><span style="color:#f57c00;">⚠️ Done: ${gLateDone}</span> | <span style="color:#d32f2f;">⏳ Due: ${gOverdue}</span></div>`;
+
+        // Table Render
+        let tableHeader = "";
+        let tableRows = "";
+        const sortedStores = Object.keys(storeStats).sort();
+
+        // RENDER: OFR AUDIT (Complex Header)
+        if (activeTvCategory === "OFR Audit") {
+             tableHeader = `
+                <tr style="background:#f5f5f5;">
+                    <th rowspan="2" style="text-align:left; vertical-align:middle; position:sticky; top:0; background:#e0e0e0; z-index:10; border-bottom:1px solid #ccc;">Store Name</th>
+                    <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👨‍💼 Merch Manager</th>
+                    <th colspan="4" style="text-align:center; border-bottom:2px solid #ccc; position:sticky; top:0; background:#e0e0e0; z-index:10;">👷 Audit TL</th>
+                </tr>
+                <tr style="background:#f5f5f5;">
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">T</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">✅</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⚠️</th>
+                    <th style="position:sticky; top:35px; background:#f5f5f5; z-index:5; border-bottom:1px solid #ddd;">⏳</th>
+                </tr>`;
+
+             sortedStores.forEach(s => {
+                const d = storeStats[s];
+                if(!d.mgr) d.mgr = {t:0,d:0,ld:0,lp:0}; if(!d.tl) d.tl = {t:0,d:0,ld:0,lp:0};
+                const mgrColor = d.mgr.t>0 && d.mgr.t===d.mgr.d ? '#e8f5e9' : '';
+                const tlColor = d.tl.t>0 && d.tl.t===d.tl.d ? '#e8f5e9' : '';
+                tableRows += `<tr><td style="font-weight:500;">${s}</td><td style="background:${mgrColor}">${d.mgr.t}</td><td style="background:${mgrColor}">${d.mgr.d}</td><td>${d.mgr.ld||'-'}</td><td>${d.mgr.lp||'-'}</td><td style="background:${tlColor}">${d.tl.t}</td><td style="background:${tlColor}">${d.tl.d}</td><td>${d.tl.ld||'-'}</td><td>${d.tl.lp||'-'}</td></tr>`;
+             });
         } 
         
-        // ============================================================
-        // 🅱️ SIMPLE CATEGORIES (Events, Planogram) - FIXED HERE
-        // ============================================================
+        // RENDER: STANDARD DETAILED TABLE (Events, Planogram, etc.)
         else {
-            let total = 0, completed = 0;
-            const storeStatsSimple = {};
-
-            rows.forEach(r => {
-                let storeName = r[2] || "Unknown";
-                let isDone = false;
-                
-                // EVENTS: Col K (Index 10) = Status
-                if (activeTvCategory === "Events") isDone = (r[10] && r[10].length > 0);
-                // PLANOGRAM: Col M (Index 12) = Status
-                else if (activeTvCategory === "Planogram") isDone = (r[12] && r[12].length > 0);
-
-                total++;
-                if (isDone) completed++;
-                
-                if (!storeStatsSimple[storeName]) storeStatsSimple[storeName] = { T:0, C:0 };
-                storeStatsSimple[storeName].T++;
-                if (isDone) storeStatsSimple[storeName].C++;
-            });
-
-            // Update Cards
-            const pct = total > 0 ? Math.round((completed/total)*100) : 0;
-            document.getElementById("tv-stat-total").innerText = total;
-            document.getElementById("tv-stat-pending").innerText = total - completed;
-            document.getElementById("tv-stat-completed").innerText = completed;
-            document.getElementById("tv-stat-percent").innerText = pct + "%";
-
-            // Render Table
-            let html = `
-            <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;">
-                <table class="data-table" style="width:100%;">
-                    <thead>
-                        <tr style="background:#f5f5f5;">
-                            <th style="text-align:left; position:sticky; top:0; background:#e0e0e0;">Store</th>
-                            <th style="position:sticky; top:0; background:#e0e0e0;">Total</th>
-                            <th style="position:sticky; top:0; background:#e0e0e0;">Done</th>
-                            <th style="position:sticky; top:0; background:#e0e0e0;">Progress</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+            tableHeader = `
+                <tr style="background:#f5f5f5;">
+                    <th style="text-align:left; position:sticky; top:0; background:#e0e0e0; z-index:10;">Store Name</th>
+                    <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Total</th>
+                    <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Done</th>
+                    <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Late Done ⚠️</th>
+                    <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Overdue ⏳</th>
+                    <th style="position:sticky; top:0; background:#e0e0e0; z-index:10;">Progress</th>
+                </tr>`;
             
-            Object.keys(storeStatsSimple).sort().forEach(s => {
-                const d = storeStatsSimple[s];
-                const p = d.T > 0 ? Math.round((d.C/d.T)*100) : 0;
-                const c = p === 100 ? '#4caf50' : '#ff9800';
-                html += `<tr>
+            sortedStores.forEach(s => {
+                const d = storeStats[s];
+                const p = d.t > 0 ? Math.round((d.d / d.t) * 100) : 0;
+                const barColor = p === 100 ? '#4caf50' : (p > 50 ? '#ff9800' : '#f44336');
+                tableRows += `
+                <tr>
                     <td style="font-weight:500;">${s}</td>
-                    <td>${d.T}</td>
-                    <td>${d.C}</td>
-                    <td style="width:120px;">
-                        <div style="display:flex; align-items:center; gap:5px;">
-                            <div style="flex:1; background:#eee; height:6px; border-radius:3px; overflow:hidden;">
-                                <div style="width:${p}%; background:${c}; height:100%;"></div>
-                            </div>
-                            <span style="font-size:10px;">${p}%</span>
+                    <td>${d.t}</td>
+                    <td style="font-weight:bold; color:${d.t===d.d ? 'green' : 'black'}">${d.d}</td>
+                    <td style="color:${d.ld > 0 ? '#f57c00' : '#ccc'}">${d.ld || '-'}</td>
+                    <td style="color:${d.lp > 0 ? '#d32f2f' : '#ccc'}">${d.lp || '-'}</td>
+                    <td style="width:100px;">
+                        <div style="width:100%; background:#eee; height:6px; border-radius:10px; overflow:hidden;">
+                            <div style="width:${p}%; background:${barColor}; height:100%;"></div>
                         </div>
+                        <div style="font-size:10px; text-align:right;">${p}%</div>
                     </td>
                 </tr>`;
             });
-            html += `</tbody></table></div>`;
-            container.innerHTML = html;
         }
+
+        container.innerHTML = `<div style="max-height: 500px; overflow-y: auto; border: 1px solid #ccc;"><table class="data-table" style="font-size:12px; width:100%;"><thead>${tableHeader}</thead><tbody>${tableRows}</tbody></table></div>`;
 
     } catch (e) { console.error(e); container.innerHTML = "Error: " + e.message; }
 }
@@ -4355,7 +4367,7 @@ window.renderDownloadOptions = function() {
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    <input type="text" id="filter-cat" placeholder="Category Name" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <input type="text" id="filter-subdiv" placeholder="Sub-Division" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <input type="text" id="filter-item" placeholder="Item Description" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                 </div>
             </div>`;
@@ -4488,7 +4500,7 @@ window.generateTvPPT = async function() {
                 const d = new Date(r[3]); 
                 if (!(d >= fromDate && d <= toDate)) return false;
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
-                if (fCat && !String(r[9]).toLowerCase().includes(fCat)) return false;
+                if (fSubDiv && !String(r[8]).toLowerCase().includes(fSubDiv)) return false;
                 if (fItem && !String(r[11]).toLowerCase().includes(fItem)) return false;
                 if (!r[15] || r[15].trim() === "" || r[15] === "N/A") return false;
                 return true;
