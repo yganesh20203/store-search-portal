@@ -4374,10 +4374,7 @@ window.renderDownloadOptions = function() {
 
 // ==========================================
 // 📊 PPT GENERATION LOGIC
-// ==========================================
-// ==========================================
-// 📊 PPT GENERATION LOGIC (With Timer & Progress)
-// ==========================================
+
 window.generateTvPPT = async function() {
     const fromInput = document.getElementById("tv-rep-from").value;
     const toInput = document.getElementById("tv-rep-to").value;
@@ -4397,7 +4394,6 @@ window.generateTvPPT = async function() {
     btn.style.opacity = "0.6";
     statusEl.innerText = "";
     
-    // Show Progress Bar
     if(progressContainer) progressContainer.classList.remove("hidden");
     if(progressBar) progressBar.style.width = "0%";
     if(timerText) timerText.innerText = "Calculating...";
@@ -4405,7 +4401,6 @@ window.generateTvPPT = async function() {
     try {
         // 1. Fetch Data
         if(statusText) statusText.innerText = "Fetching Sheet Data...";
-        
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
@@ -4419,12 +4414,14 @@ window.generateTvPPT = async function() {
         let filteredData = [];
         let imageColIndex = -1; 
 
-        // --- FILTER LOGIC (Same as before) ---
+        // --- FILTER LOGIC ---
+        
+        // A. PLANOGRAM
         if (activeTvCategory === "Planogram") {
             imageColIndex = 11;
-            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
-            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
-            const fBrand = document.getElementById("filter-brand")?.value.trim().toLowerCase();
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase() || "";
+            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase() || "";
+            const fBrand = document.getElementById("filter-brand")?.value.trim().toLowerCase() || "";
 
             filteredData = rows.filter(r => {
                 const d = new Date(r[3]); 
@@ -4436,27 +4433,36 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
+        
+        // B. FEATURE SPACE (FIXED DEFINITIONS)
         else if (activeTvCategory === "Feature Space") {
             imageColIndex = 15;
-            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
-            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
-            const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase();
+            
+            // Safely get values (default to empty string if element missing)
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase() || "";
+            const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase() || ""; // 🟢 DEFINED HERE
+            const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase() || "";
 
             filteredData = rows.filter(r => {
                 const d = new Date(r[3]); 
                 if (!(d >= fromDate && d <= toDate)) return false;
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
+                
+                // 🟢 USED HERE (Index 8 is Sub-Division)
                 if (fSubDiv && !String(r[8]).toLowerCase().includes(fSubDiv)) return false;
+                
                 if (fItem && !String(r[11]).toLowerCase().includes(fItem)) return false;
                 if (!r[15] || r[15].trim() === "" || r[15] === "N/A") return false;
                 return true;
             });
         }
+        
+        // C. EVENTS
         else if (activeTvCategory === "Events") {
             imageColIndex = 11;
-            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
-            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase();
-            const fOffer = document.getElementById("filter-offer")?.value.trim().toLowerCase();
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase() || "";
+            const fCat = document.getElementById("filter-cat")?.value.trim().toLowerCase() || "";
+            const fOffer = document.getElementById("filter-offer")?.value.trim().toLowerCase() || "";
 
             filteredData = rows.filter(r => {
                 let dateStr = r[3]; 
@@ -4472,9 +4478,11 @@ window.generateTvPPT = async function() {
                 return true;
             });
         }
+        
+        // D. OFFER BOARD
         else if (activeTvCategory === "Offer Board") {
             imageColIndex = 11; 
-            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase();
+            const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase() || "";
 
             filteredData = rows.filter(r => {
                 const d = new Date(r[3]); 
@@ -4491,7 +4499,7 @@ window.generateTvPPT = async function() {
         let pres = new PptxGenJS();
         pres.layout = "LAYOUT_16x9";
 
-        // 3. Process Rows & Fetch Images with TIMER
+        // 3. Process Rows & Fetch Images
         const totalSlides = filteredData.length;
         const startTime = Date.now();
         
@@ -4499,24 +4507,16 @@ window.generateTvPPT = async function() {
             const row = filteredData[i];
             const driveLink = row[imageColIndex];
             
-            // --- TIMER LOGIC ---
-            // Calculate time elapsed so far
-            const elapsed = (Date.now() - startTime) / 1000; // seconds
-            
-            // Average time per slide so far
+            // Timer Logic
+            const elapsed = (Date.now() - startTime) / 1000;
             const avgTime = i > 0 ? (elapsed / i) : 0; 
+            const estSecondsLeft = avgTime > 0 ? Math.ceil(avgTime * (totalSlides - i)) : "Calculating...";
             
-            // Estimated Remaining
-            const remainingSlides = totalSlides - i;
-            const estSecondsLeft = avgTime > 0 ? Math.ceil(avgTime * remainingSlides) : "Calculating...";
-            
-            // Update UI
+            // UI Updates
             const pct = Math.round(((i) / totalSlides) * 100);
             if(progressBar) progressBar.style.width = `${pct}%`;
             if(statusText) statusText.innerText = `Processing Slide ${i+1} of ${totalSlides}`;
-            if(timerText) timerText.innerText = typeof estSecondsLeft === 'number' 
-                ? `Est. Wait: ${estSecondsLeft} sec` 
-                : `Est. Wait: ...`;
+            if(timerText) timerText.innerText = typeof estSecondsLeft === 'number' ? `Est. Wait: ${estSecondsLeft} sec` : `Est. Wait: ...`;
 
             let fileId = null;
             if (driveLink.includes("id=")) fileId = driveLink.split("id=")[1].split("&")[0];
@@ -4543,9 +4543,9 @@ window.generateTvPPT = async function() {
                         tableRows = [
                             ["Store", row[1] + " - " + row[2]],
                             ["Approver", row[5]],
+                            ["Sub-Div", row[8]], 
                             ["Item", row[11]],
                             ["Display Loc", row[12]],
-                            ["Type", row[13]],
                             ["Status", row[14]]
                         ];
                     } else if (activeTvCategory === "Events") {
@@ -4598,14 +4598,10 @@ window.generateTvPPT = async function() {
 
         await pres.writeFile({ fileName: `${activeTvCategory}_Report.pptx` });
         
-        statusEl.innerText = ""; // Clear error text if any
+        statusEl.innerText = "";
         if(statusText) statusText.innerText = "✅ Download Complete!";
         if(timerText) timerText.innerText = "";
-
-        // Hide progress bar after 3 seconds
-        setTimeout(() => {
-            if(progressContainer) progressContainer.classList.add("hidden");
-        }, 5000);
+        setTimeout(() => { if(progressContainer) progressContainer.classList.add("hidden"); }, 5000);
 
     } catch (e) {
         statusEl.innerText = "Error: " + e.message;
