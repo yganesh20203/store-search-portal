@@ -388,6 +388,59 @@
                             <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer; width:100%;">🚀 Search in Gmail</button>
                         </div>
                     </div>
+                    <div id="store-metrics-ui" class="hidden">
+    <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd; max-width:1000px; margin:0 auto;">
+        
+        <div style="text-align:center; margin-bottom:20px;">
+            <h2 style="color:#2e7d32; margin:0;">📊 Store Performance Metrics</h2>
+            <p style="color:#666; font-size:12px;">Track FTD and MTD performance</p>
+        </div>
+
+        <div id="metrics-login-screen" style="max-width:400px; margin:0 auto; padding:30px; border:1px solid #eee; border-radius:8px; background:#f9f9f9;">
+            <h3 style="text-align:center; margin-top:0;">🔒 Store Login</h3>
+            
+            <label style="font-weight:bold; font-size:12px;">Select Store:</label>
+            <select id="metrics-store-select" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
+                <option value="">-- Loading Stores... --</option>
+            </select>
+
+            <label style="font-weight:bold; font-size:12px;">Store Password:</label>
+            <input type="password" id="metrics-store-pass" placeholder="Enter secure code" style="width:100%; padding:10px; margin-bottom:20px; border:1px solid #ccc; border-radius:4px;">
+
+            <button onclick="window.verifyStoreMetricsLogin()" style="width:100%; background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🔓 Access Dashboard</button>
+            <p id="metrics-login-error" style="color:red; font-size:12px; text-align:center; margin-top:10px;"></p>
+        </div>
+
+        <div id="metrics-dashboard-screen" class="hidden">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; background:#e8f5e9; padding:10px; border-radius:4px;">
+                <div>
+                    <span style="font-weight:bold; color:#1b5e20; font-size:16px;" id="metrics-store-title">Store: --</span>
+                </div>
+                <div>
+                    <input type="text" id="metrics-search" onkeyup="window.filterMetricsTable()" placeholder="🔍 Search metric..." style="padding:6px; border:1px solid #ccc; border-radius:4px;">
+                    <button onclick="window.logoutStoreMetrics()" style="background:#d32f2f; color:white; border:none; padding:6px 12px; border-radius:4px; margin-left:10px; cursor:pointer;">🔒 Logout</button>
+                </div>
+            </div>
+
+            <div style="overflow-x:auto; max-height:600px; border:1px solid #ccc;">
+                <table id="metrics-table" class="data-table" style="width:100%; font-size:12px;">
+                    <thead style="position:sticky; top:0; background:#eee; z-index:10;">
+                        <tr>
+                            <th style="text-align:left; padding:10px;">Metric Name</th>
+                            <th style="text-align:center; width:100px;">FTD</th>
+                            <th style="text-align:center; width:100px;">MTD</th>
+                            <th style="text-align:right; width:120px;">Last Updated</th>
+                            <th style="text-align:center; width:80px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="metrics-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
 
                     <div id="trueview-ui" class="hidden">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -418,6 +471,7 @@
                                 🎉 Events
                             </button>
                         </div>
+                      
 
                         <div id="tv-action-container" class="hidden">
                             <h3 id="tv-current-category" style="color:#1e3c72; border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:20px;">Category Name</h3>
