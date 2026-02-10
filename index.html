@@ -1,3 +1,80 @@
+<style>
+    /* 🎨 MODERN TABLE STYLING */
+    .metrics-container {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: white;
+    }
+
+    .styled-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    .styled-table thead tr {
+        background-color: #2e7d32; /* Flipkart Green */
+        color: #ffffff;
+        text-align: left;
+        font-weight: bold;
+    }
+
+    .styled-table th, .styled-table td {
+        padding: 14px 18px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .styled-table tbody tr {
+        border-bottom: 1px solid #dddddd;
+        transition: background 0.2s;
+    }
+
+    .styled-table tbody tr:nth-of-type(even) {
+        background-color: #f9fbf9; /* Very light green tint */
+    }
+
+    .styled-table tbody tr:hover {
+        background-color: #e8f5e9; /* Hover Effect */
+        cursor: default;
+    }
+
+    .styled-table tbody tr:last-of-type {
+        border-bottom: 2px solid #2e7d32;
+    }
+
+    /* ℹ️ INFO ICON STYLE */
+    .info-icon {
+        color: #999;
+        font-size: 14px;
+        cursor: help;
+        margin-left: 6px;
+        transition: color 0.3s;
+    }
+    .info-icon:hover {
+        color: #2e7d32;
+    }
+
+    /* ⚫ GLOBAL FLOATING TOOLTIP (Fixes clipping) */
+    #global-tooltip {
+        position: fixed;
+        background: #333;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        pointer-events: none; /* Mouse ignores it */
+        z-index: 9999; /* Always on top */
+        max-width: 250px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+</style>
+
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -389,59 +466,74 @@
                         </div>
                     </div>
                     <div id="store-metrics-ui" class="hidden">
-    <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd; max-width:1000px; margin:0 auto;">
+    <div style="max-width:1100px; margin:20px auto;">
         
-        <div style="text-align:center; margin-bottom:20px;">
-            <h2 style="color:#2e7d32; margin:0;">📊 Store Performance Metrics</h2>
-            <p style="color:#666; font-size:12px;">Track FTD and MTD performance</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div>
+                <h2 style="color:#2e7d32; margin:0; display:flex; align-items:center; gap:10px;">
+                    📊 Store Performance
+                </h2>
+                <p style="color:#666; margin:5px 0 0 0; font-size:13px;">Real-time FTD & MTD tracking</p>
+            </div>
+            <button id="btn-metrics-logout" onclick="window.logoutStoreMetrics()" class="hidden" style="background:#ef5350; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                🔒 Logout
+            </button>
         </div>
 
-        <div id="metrics-login-screen" style="max-width:400px; margin:0 auto; padding:30px; border:1px solid #eee; border-radius:8px; background:#f9f9f9;">
-            <h3 style="text-align:center; margin-top:0;">🔒 Store Login</h3>
+        <div id="metrics-login-screen" style="max-width:400px; margin:40px auto; padding:40px; border-radius:12px; background:white; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align:center;">
+            <div style="background:#e8f5e9; width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px;">
+                <span style="font-size:30px;">🔐</span>
+            </div>
+            <h3 style="margin-top:0; color:#333;">Store Access</h3>
             
-            <label style="font-weight:bold; font-size:12px;">Select Store:</label>
-            <select id="metrics-store-select" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:4px;">
-                <option value="">-- Loading Stores... --</option>
-            </select>
+            <div style="text-align:left; margin-bottom:15px;">
+                <label style="font-weight:bold; font-size:12px; color:#555; display:block; margin-bottom:5px;">Select Store</label>
+                <select id="metrics-store-select" style="width:100%; padding:12px; border:1px solid #ddd; border-radius:6px; background:#f9f9f9; outline:none;">
+                    <option value="">-- Loading Stores... --</option>
+                </select>
+            </div>
 
-            <label style="font-weight:bold; font-size:12px;">Store Password:</label>
-            <input type="password" id="metrics-store-pass" placeholder="Enter secure code" style="width:100%; padding:10px; margin-bottom:20px; border:1px solid #ccc; border-radius:4px;">
+            <div style="text-align:left; margin-bottom:25px;">
+                <label style="font-weight:bold; font-size:12px; color:#555; display:block; margin-bottom:5px;">Password</label>
+                <input type="password" id="metrics-store-pass" placeholder="••••••••" style="width:100%; padding:12px; border:1px solid #ddd; border-radius:6px; background:#f9f9f9; outline:none;">
+            </div>
 
-            <button onclick="window.verifyStoreMetricsLogin()" style="width:100%; background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🔓 Access Dashboard</button>
-            <p id="metrics-login-error" style="color:red; font-size:12px; text-align:center; margin-top:10px;"></p>
+            <button onclick="window.verifyStoreMetricsLogin()" style="width:100%; background:#2e7d32; color:white; padding:14px; border:none; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px; transition:0.3s;">UNLOCK DASHBOARD</button>
+            <p id="metrics-login-error" style="color:#d32f2f; font-size:12px; margin-top:15px; min-height:18px;"></p>
         </div>
 
         <div id="metrics-dashboard-screen" class="hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; background:#e8f5e9; padding:10px; border-radius:4px;">
-                <div>
-                    <span style="font-weight:bold; color:#1b5e20; font-size:16px;" id="metrics-store-title">Store: --</span>
+            
+            <div style="background:white; padding:15px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="background:#e3f2fd; color:#1565c0; padding:6px 12px; border-radius:20px; font-weight:bold; font-size:13px;" id="metrics-store-badge">Store: --</span>
                 </div>
-                <div>
-                    <input type="text" id="metrics-search" onkeyup="window.filterMetricsTable()" placeholder="🔍 Search metric..." style="padding:6px; border:1px solid #ccc; border-radius:4px;">
-                    <button onclick="window.logoutStoreMetrics()" style="background:#d32f2f; color:white; border:none; padding:6px 12px; border-radius:4px; margin-left:10px; cursor:pointer;">🔒 Logout</button>
+                <div style="position:relative;">
+                    <input type="text" id="metrics-search" onkeyup="window.filterMetricsTable()" placeholder="🔍 Search metric..." style="padding:10px 15px; border:1px solid #ddd; border-radius:30px; width:250px; outline:none; background:#f9f9f9;">
                 </div>
             </div>
 
-            <div style="overflow-x:auto; max-height:600px; border:1px solid #ccc;">
-                <table id="metrics-table" class="data-table" style="width:100%; font-size:12px;">
-                    <thead style="position:sticky; top:0; background:#eee; z-index:10;">
-                        <tr>
-                            <th style="text-align:left; padding:10px;">Metric Name</th>
-                            <th style="text-align:center; width:100px;">FTD</th>
-                            <th style="text-align:center; width:100px;">MTD</th>
-                            <th style="text-align:right; width:120px;">Last Updated</th>
-                            <th style="text-align:center; width:80px;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="metrics-table-body">
-                        </tbody>
-                </table>
+            <div class="metrics-container">
+                <div style="overflow-x:auto; max-height:650px;">
+                    <table id="metrics-table" class="styled-table">
+                        <thead style="position:sticky; top:0; z-index:10;">
+                            <tr>
+                                <th style="border-top-left-radius: 8px;">Metric Name</th>
+                                <th style="text-align:center;">FTD (Today)</th>
+                                <th style="text-align:center;">MTD (Month)</th>
+                                <th style="text-align:right;">Last Update</th>
+                                <th style="text-align:center; border-top-right-radius: 8px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metrics-table-body">
+                            </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
     </div>
 </div>
-
                     <div id="trueview-ui" class="hidden">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                             <div>
@@ -737,5 +829,7 @@
 
     <script src="config.js"></script>
     <script type="module" src="app.js?v=2"></script>
+    <div id="global-tooltip"></div>
+    
 </body>
 </html>
