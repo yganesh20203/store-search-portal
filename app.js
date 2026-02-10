@@ -5837,13 +5837,14 @@ window.logoutStoreMetrics = function() {
 async function showMetricsDashboard() {
     document.getElementById("metrics-login-screen").classList.add("hidden");
     document.getElementById("metrics-dashboard-screen").classList.remove("hidden");
-    document.getElementById("metrics-store-title").innerText = `Store: ${activeStoreId}`;
+    document.getElementById("btn-metrics-logout").classList.remove("hidden");
+    document.getElementById("metrics-store-badge").innerText = `🏪 Store: ${activeStoreId}`;
     
     const tbody = document.getElementById("metrics-table-body");
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">⏳ Loading Metrics & Definitions...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:40px; color:#666;">⏳ Fetching latest performance data...</td></tr>`;
 
     try {
-        // A. Fetch Definitions (Tooltips & Raw Links)
+        // A. Fetch Definitions
         const defUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/Metric_Definitions!A:C`;
         const defResp = await fetch(defUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const defData = await defResp.json();
@@ -5851,58 +5852,94 @@ async function showMetricsDashboard() {
         metricsMetadata = {};
         if (defData.values) {
             defData.values.slice(1).forEach(r => {
-                // Key: Metric Name -> { desc: Col B, rawTab: Col C }
-                metricsMetadata[r[0]] = { desc: r[1] || "No description available", rawTab: r[2] || null };
+                metricsMetadata[r[0]] = { desc: r[1] || "No description", rawTab: r[2] || null };
             });
         }
 
-        // B. Fetch Store Data
+        // B. Fetch Data
         const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/Store_Data!A:E`;
         const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const storeData = await dataResp.json();
 
-        // C. Render Table
         tbody.innerHTML = "";
-        if (!storeData.values) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No data found.</td></tr>`; return; }
+        if (!storeData.values) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">No data found.</td></tr>`; return; }
 
         let count = 0;
-        // Col Mapping: 0=Store, 1=Metric, 2=FTD, 3=MTD, 4=Update
         storeData.values.slice(1).forEach(r => {
-            if (String(r[0]) !== String(activeStoreId)) return; // Filter by Store
+            if (String(r[0]) !== String(activeStoreId)) return;
 
             const metricName = r[1];
-            const meta = metricsMetadata[metricName] || { desc: "", rawTab: null };
-            const hasRaw = meta.rawTab ? true : false;
+            const meta = metricsMetadata[metricName] || { desc: "No details available", rawTab: null };
+            
+            // Safe descriptions (escape quotes)
+            const safeDesc = meta.desc.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
             const rowHtml = `
             <tr>
-                <td style="padding:10px; border-bottom:1px solid #eee;">
-                    <div style="font-weight:500;">${metricName}</div>
-                    <div class="tooltip-container" style="display:inline-block; cursor:help; font-size:10px; color:#999;">
-                        <span style="border:1px solid #ccc; border-radius:50%; width:14px; height:14px; display:inline-block; text-align:center; line-height:14px;">?</span>
-                        <span class="tooltip-text">${meta.desc}</span>
+                <td>
+                    <div style="display:flex; align-items:center;">
+                        <span style="font-weight:600; color:#333;">${metricName}</span>
+                        <span class="info-icon" 
+                              onmouseenter="showGlobalTooltip(event, '${safeDesc}')" 
+                              onmouseleave="hideGlobalTooltip()">
+                              &#9432;
+                        </span>
                     </div>
                 </td>
-                <td style="text-align:center; font-weight:bold; border-bottom:1px solid #eee;">${r[2] || '-'}</td>
-                <td style="text-align:center; font-weight:bold; border-bottom:1px solid #eee;">${r[3] || '-'}</td>
-                <td style="text-align:right; color:#666; font-size:11px; border-bottom:1px solid #eee;">${r[4] || ''}</td>
-                <td style="text-align:center; border-bottom:1px solid #eee;">
-                    ${hasRaw ? 
-                        `<button onclick="window.downloadSpecificRawData('${meta.rawTab}', '${metricName}')" style="background:#e3f2fd; color:#1565c0; border:1px solid #bbdefb; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:10px;">⬇️ Raw</button>` 
-                        : '<span style="color:#ccc;">-</span>'}
+                <td style="text-align:center; font-weight:700; color:#2e7d32; font-size:15px;">${r[2] || '-'}</td>
+                <td style="text-align:center; font-weight:700; color:#1565c0; font-size:15px;">${r[3] || '-'}</td>
+                <td style="text-align:right; color:#888; font-size:12px;">${r[4] || ''}</td>
+                <td style="text-align:center;">
+                    ${meta.rawTab ? 
+                        `<button onclick="window.downloadSpecificRawData('${meta.rawTab}', '${metricName}')" 
+                            style="background:white; color:#333; border:1px solid #ccc; border-radius:4px; padding:6px 12px; cursor:pointer; font-size:11px; transition:0.2s;"
+                            onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">
+                            ⬇️ Data
+                        </button>` 
+                        : '<span style="color:#ddd; font-size:20px;">•</span>'}
                 </td>
             </tr>`;
             tbody.innerHTML += rowHtml;
             count++;
         });
 
-        if(count === 0) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">No metrics found for Store ${activeStoreId}</td></tr>`;
+        if(count === 0) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px;">No metrics configured for this store yet.</td></tr>`;
 
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red;">Error loading data.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red; padding:20px;">Error loading data.</td></tr>`;
     }
 }
+
+window.showGlobalTooltip = function(e, text) {
+    const tooltip = document.getElementById("global-tooltip");
+    tooltip.innerText = text;
+    tooltip.style.opacity = "1";
+    
+    // Position it near the mouse
+    // Offset by 15px so it doesn't cover the cursor
+    const x = e.clientX + 15;
+    const y = e.clientY + 15;
+    
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+};
+
+window.hideGlobalTooltip = function() {
+    const tooltip = document.getElementById("global-tooltip");
+    tooltip.style.opacity = "0";
+    // Move it offscreen to prevent blocking clicks when hidden
+    tooltip.style.left = "-9999px"; 
+};
+
+// 3. LOGOUT (Reset UI)
+window.logoutStoreMetrics = function() {
+    activeStoreId = null;
+    sessionStorage.removeItem("metrics_store_id");
+    document.getElementById("metrics-dashboard-screen").classList.add("hidden");
+    document.getElementById("btn-metrics-logout").classList.add("hidden");
+    document.getElementById("metrics-login-screen").classList.remove("hidden");
+};
 
 // 6. Client-Side Raw Data Filter & Download
 window.downloadSpecificRawData = async function(tabName, metricName) {
