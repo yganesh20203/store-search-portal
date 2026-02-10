@@ -375,3 +375,33 @@ input:focus, select:focus, textarea:focus {
         padding: 0 15px; 
     }
 }
+
+.tooltip-container {
+    position: relative;
+    margin-left: 5px;
+}
+
+.tooltip-container .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%; /* Position above */
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 11px;
+    font-weight: normal;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
