@@ -5202,7 +5202,8 @@ function renderDynamicSidebar() {
         "Member DB":       { icon: "👥", func: "loadMemberDashboard" },
         "Google Sheets":   { icon: "📈", func: "loadTrackerDashboard" },
         "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" },
-        "PO Issues": { icon: "🚨", func: "loadPoIssuesDashboard" }
+        "PO Issues": { icon: "🚨", func: "loadPoIssuesDashboard" },
+        "Store Metrics": { icon: "📊", func: "loadStoreMetrics" }
     };
 
     // 2. Retrieve Permissions
