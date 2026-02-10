@@ -5747,19 +5747,25 @@ async function fetchPoRoutingRules() {
 }
 
 // ==========================================
-// 📊 STORE METRICS MODULE
+// 📊 STORE METRICS MODULE (Complete)
 // ==========================================
 
 let activeStoreId = null;
-let metricsMetadata = {}; // Stores tooltips and raw data links
+let metricsMetadata = {};
 
-// 1. Sidebar Loader
+// 1. Sidebar Loader (Entry Point)
 window.loadStoreMetrics = async function() {
-    resetUI();
-    highlightSidebar("Store Metrics"); // Ensure you add this to your sidebar logic
+    // Basic UI Reset
+    const content = document.getElementById("content-wrapper");
+    Array.from(content.children).forEach(div => div.classList.add("hidden"));
+    
+    // Highlight Sidebar (if function exists)
+    if (typeof highlightSidebar === "function") highlightSidebar("Store Metrics");
+
+    // Show Metrics UI
     document.getElementById("store-metrics-ui").classList.remove("hidden");
     
-    // Check if already logged in (Session persistence)
+    // Check Session
     const sessionStore = sessionStorage.getItem("metrics_store_id");
     if (sessionStore) {
         activeStoreId = sessionStore;
@@ -5767,31 +5773,41 @@ window.loadStoreMetrics = async function() {
     } else {
         document.getElementById("metrics-login-screen").classList.remove("hidden");
         document.getElementById("metrics-dashboard-screen").classList.add("hidden");
-        loadStoreDropdown();
+        document.getElementById("btn-metrics-logout").classList.add("hidden");
+        loadStoreDropdown(); // Load list
     }
 };
 
-// 2. Load Store Dropdown (From Auth Sheet)
+// 2. Load Store Dropdown (From 'Store_Auth' tab)
 async function loadStoreDropdown() {
     const select = document.getElementById("metrics-store-select");
-    select.innerHTML = `<option>Loading...</option>`;
+    
+    // Check Config
+    if (!CONFIG.METRICS_SHEET_ID) {
+        select.innerHTML = `<option>⚠️ Error: Sheet ID Missing in Config</option>`;
+        return;
+    }
+
+    select.innerHTML = `<option>Loading stores...</option>`;
     
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/Store_Auth!A:A`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
         
-        if (data.values) {
+        if (data.values && data.values.length > 1) {
             select.innerHTML = `<option value="">-- Select Store --</option>`;
-            // Skip header row
+            // Skip Header (Row 0)
             data.values.slice(1).forEach(r => {
-                const store = r[0];
+                const store = r[0]; // Col A is Store ID
                 if(store) select.innerHTML += `<option value="${store}">${store}</option>`;
             });
+        } else {
+            select.innerHTML = `<option>No stores found in Sheet</option>`;
         }
     } catch (e) {
-        select.innerHTML = `<option>Error loading stores</option>`;
-        console.error(e);
+        select.innerHTML = `<option>Connection Error</option>`;
+        console.error("Store Load Error:", e);
     }
 }
 
@@ -5805,36 +5821,32 @@ window.verifyStoreMetricsLogin = async function() {
     err.innerText = "Verifying...";
 
     try {
+        // Fetch Auth Data (Col A: Store, Col B: Password)
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/Store_Auth!A:B`;
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
         
-        const authRow = data.values.find(r => String(r[0]) === String(store) && String(r[1]) === String(pass));
+        // Find Match
+        const authRow = data.values.find(r => String(r[0]).trim() === String(store) && String(r[1]).trim() === String(pass));
         
         if (authRow) {
             activeStoreId = store;
-            sessionStorage.setItem("metrics_store_id", store); // Session Cache
+            sessionStorage.setItem("metrics_store_id", store); // Save Session
             err.innerText = "";
-            document.getElementById("metrics-store-pass").value = ""; // Clear pass
+            document.getElementById("metrics-store-pass").value = ""; // Clear Input
             showMetricsDashboard();
         } else {
-            err.innerText = "❌ Invalid Password";
+            err.innerText = "❌ Invalid Password. Try again.";
         }
     } catch (e) {
-        err.innerText = "Connection Error";
+        err.innerText = "⚠️ Network Error. Check Sheet ID.";
+        console.error(e);
     }
 };
 
-// 4. Logout
-window.logoutStoreMetrics = function() {
-    activeStoreId = null;
-    sessionStorage.removeItem("metrics_store_id");
-    document.getElementById("metrics-dashboard-screen").classList.add("hidden");
-    document.getElementById("metrics-login-screen").classList.remove("hidden");
-};
-
-// 5. Load Dashboard Data
+// 4. Show Dashboard (Main Render Logic)
 async function showMetricsDashboard() {
+    // Toggle Screens
     document.getElementById("metrics-login-screen").classList.add("hidden");
     document.getElementById("metrics-dashboard-screen").classList.remove("hidden");
     document.getElementById("btn-metrics-logout").classList.remove("hidden");
@@ -5844,7 +5856,7 @@ async function showMetricsDashboard() {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:40px; color:#666;">⏳ Fetching latest performance data...</td></tr>`;
 
     try {
-        // A. Fetch Definitions
+        // A. Fetch Definitions (Metric Name, Tooltip, Raw Tab)
         const defUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/Metric_Definitions!A:C`;
         const defResp = await fetch(defUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const defData = await defResp.json();
@@ -5852,26 +5864,32 @@ async function showMetricsDashboard() {
         metricsMetadata = {};
         if (defData.values) {
             defData.values.slice(1).forEach(r => {
+                // Key: Metric Name -> { desc: Col B, rawTab: Col C }
                 metricsMetadata[r[0]] = { desc: r[1] || "No description", rawTab: r[2] || null };
             });
         }
 
-        // B. Fetch Data
+        // B. Fetch Store Data
         const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/Store_Data!A:E`;
         const dataResp = await fetch(dataUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const storeData = await dataResp.json();
 
+        // C. Render Table
         tbody.innerHTML = "";
-        if (!storeData.values) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">No data found.</td></tr>`; return; }
+        if (!storeData.values || storeData.values.length < 2) { 
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px;">No data found in 'Store_Data' tab.</td></tr>`; 
+            return; 
+        }
 
         let count = 0;
         storeData.values.slice(1).forEach(r => {
+            // Filter by Active Store ID (Col A)
             if (String(r[0]) !== String(activeStoreId)) return;
 
             const metricName = r[1];
             const meta = metricsMetadata[metricName] || { desc: "No details available", rawTab: null };
             
-            // Safe descriptions (escape quotes)
+            // Sanitize description for HTML attribute
             const safeDesc = meta.desc.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
             const rowHtml = `
@@ -5892,7 +5910,7 @@ async function showMetricsDashboard() {
                 <td style="text-align:center;">
                     ${meta.rawTab ? 
                         `<button onclick="window.downloadSpecificRawData('${meta.rawTab}', '${metricName}')" 
-                            style="background:white; color:#333; border:1px solid #ccc; border-radius:4px; padding:6px 12px; cursor:pointer; font-size:11px; transition:0.2s;"
+                            style="background:white; color:#333; border:1px solid #ccc; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:11px; transition:0.2s;"
                             onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">
                             ⬇️ Data
                         </button>` 
@@ -5903,99 +5921,76 @@ async function showMetricsDashboard() {
             count++;
         });
 
-        if(count === 0) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px;">No metrics configured for this store yet.</td></tr>`;
+        if(count === 0) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px;">No metrics found for Store ${activeStoreId}</td></tr>`;
 
     } catch (e) {
         console.error(e);
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red; padding:20px;">Error loading data.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red; padding:20px;">Error loading data: ${e.message}</td></tr>`;
     }
 }
 
+// 5. Tooltip Helpers
 window.showGlobalTooltip = function(e, text) {
     const tooltip = document.getElementById("global-tooltip");
-    tooltip.innerText = text;
-    tooltip.style.opacity = "1";
-    
-    // Position it near the mouse
-    // Offset by 15px so it doesn't cover the cursor
-    const x = e.clientX + 15;
-    const y = e.clientY + 15;
-    
-    tooltip.style.left = `${x}px`;
-    tooltip.style.top = `${y}px`;
+    if(tooltip) {
+        tooltip.innerText = text;
+        tooltip.style.opacity = "1";
+        tooltip.style.left = `${e.clientX + 15}px`;
+        tooltip.style.top = `${e.clientY + 15}px`;
+    }
 };
 
 window.hideGlobalTooltip = function() {
     const tooltip = document.getElementById("global-tooltip");
-    tooltip.style.opacity = "0";
-    // Move it offscreen to prevent blocking clicks when hidden
-    tooltip.style.left = "-9999px"; 
+    if(tooltip) {
+        tooltip.style.opacity = "0";
+        tooltip.style.left = "-9999px"; 
+    }
 };
 
-// 3. LOGOUT (Reset UI)
+// 6. Raw Data Download
+window.downloadSpecificRawData = async function(tabName, metricName) {
+    if (!confirm(`Download raw data for ${metricName}?`)) return;
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/${tabName}`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values) { alert("No data in sheet."); return; }
+
+        // Filter Rows for this Store ID
+        const filteredRows = data.values.filter((row, index) => {
+            if (index === 0) return true; // Header
+            return String(row[0]) === String(activeStoreId);
+        });
+
+        if (filteredRows.length <= 1) { alert("No raw records found for this store."); return; }
+
+        let csv = "data:text/csv;charset=utf-8," + filteredRows.map(e => e.join(",")).join("\n");
+        const link = document.createElement("a");
+        link.href = encodeURI(csv);
+        link.download = `${metricName}_${activeStoreId}_Raw.csv`;
+        link.click();
+
+    } catch (e) { alert("Error: " + e.message); }
+};
+
+// 7. Search Filter
+window.filterMetricsTable = function() {
+    const filter = document.getElementById("metrics-search").value.toLowerCase();
+    const rows = document.querySelectorAll("#metrics-table-body tr");
+    rows.forEach(row => {
+        const text = row.cells[0].innerText.toLowerCase();
+        row.style.display = text.includes(filter) ? "" : "none";
+    });
+};
+
+// 8. Logout
 window.logoutStoreMetrics = function() {
     activeStoreId = null;
     sessionStorage.removeItem("metrics_store_id");
     document.getElementById("metrics-dashboard-screen").classList.add("hidden");
     document.getElementById("btn-metrics-logout").classList.add("hidden");
     document.getElementById("metrics-login-screen").classList.remove("hidden");
-};
-
-// 6. Client-Side Raw Data Filter & Download
-window.downloadSpecificRawData = async function(tabName, metricName) {
-    if (!confirm(`Download raw data for ${metricName}? This may take a moment.`)) return;
-
-    try {
-        // Fetch the MASTER file (The specific tab configured for this metric)
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/${tabName}`;
-        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        const data = await response.json();
-
-        if (!data.values || data.values.length < 2) { alert("No raw data available."); return; }
-
-        // Filter for ONLY this store
-        // Assumption: Column A (Index 0) of the raw data tab is ALWAYS 'Store_ID'
-        const header = data.values[0];
-        const filteredRows = data.values.filter((row, index) => {
-            if (index === 0) return true; // Keep Header
-            return String(row[0]) === String(activeStoreId); // Match Store ID
-        });
-
-        if (filteredRows.length <= 1) { alert("No raw records found for your store."); return; }
-
-        // Generate CSV
-        let csvContent = "data:text/csv;charset=utf-8," + 
-            filteredRows.map(e => e.join(",")).join("\n");
-        
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `${metricName}_${activeStoreId}_Raw.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-    } catch (e) {
-        alert("Error downloading raw data: " + e.message);
-    }
-};
-
-// 7. Search Filter
-window.filterMetricsTable = function() {
-    const input = document.getElementById("metrics-search");
-    const filter = input.value.toLowerCase();
-    const table = document.getElementById("metrics-table");
-    const tr = table.getElementsByTagName("tr");
-
-    for (let i = 1; i < tr.length; i++) { // Skip header
-        const td = tr[i].getElementsByTagName("td")[0]; // Metric Name Column
-        if (td) {
-            const txtValue = td.textContent || td.innerText;
-            if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                tr[i].style.display = "";
-            } else {
-                tr[i].style.display = "none";
-            }
-        }
-    }
 };
