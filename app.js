@@ -4449,7 +4449,7 @@ window.generateTvPPT = async function() {
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
                 
                 // 🟢 USED HERE (Index 8 is Sub-Division)
-                if (fSubDiv && !String(r[8]).toLowerCase().includes(fSubDiv)) return false;
+                if (fSubDiv && !String(r[7]).toLowerCase().includes(fSubDiv)) return false;
                 
                 if (fItem && !String(r[11]).toLowerCase().includes(fItem)) return false;
                 if (!r[15] || r[15].trim() === "" || r[15] === "N/A") return false;
