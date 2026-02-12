@@ -465,6 +465,49 @@
                             <button onclick="window.redirectMailSearch()" style="background:#2e7d32; color:white; padding:12px; border:none; border-radius:4px; cursor:pointer; width:100%;">🚀 Search in Gmail</button>
                         </div>
                     </div>
+
+
+<div id="task-entry-ui" class="hidden">
+    <div style="background:white; padding:20px; border-radius:8px; border:1px solid #ddd; max-width:1200px; margin:0 auto;">
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #2196f3; padding-bottom:15px; margin-bottom:20px;">
+            <div>
+                <h2 style="color:#1565c0; margin:0;">📝 Distributed Data Entry</h2>
+                <p style="color:#666; margin:5px 0 0 0; font-size:13px;">Select a report to input data for your store.</p>
+            </div>
+            <div style="text-align:right;">
+                <label style="font-weight:bold; font-size:12px; display:block;">Select Report:</label>
+                <select id="task-report-select" onchange="window.loadSelectedReport()" style="padding:8px; border:1px solid #ccc; border-radius:4px; width:250px;">
+                    <option value="">-- Loading Tasks... --</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="task-loading" class="hidden" style="text-align:center; padding:40px; color:#666;">
+            ⏳ Loading Master Data...
+        </div>
+
+        <div id="task-content" class="hidden">
+            <div style="background:#e3f2fd; padding:10px; border-radius:4px; margin-bottom:15px; border:1px solid #bbdefb; font-size:13px; color:#0d47a1;">
+                ℹ️ <b>Instructions:</b> You can only edit the columns highlighted in <span style="background:#fff9c4; padding:2px 5px; border:1px solid #fbc02d; border-radius:3px;">Yellow</span>. All changes are saved directly to the Master Sheet.
+            </div>
+
+            <div style="overflow-x:auto; max-height:600px; border:1px solid #ccc; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                <table id="task-table" class="data-table" style="width:100%; font-size:12px; white-space:nowrap;">
+                    <thead id="task-table-head" style="position:sticky; top:0; background:#eee; z-index:10;"></thead>
+                    <tbody id="task-table-body"></tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="window.saveTaskData()" style="background:#2e7d32; color:white; padding:12px 25px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; font-size:14px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">💾 Save Changes to Master</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+                    
                     <div id="store-metrics-ui" class="hidden">
     <div style="max-width:1100px; margin:20px auto;">
         
