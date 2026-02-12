@@ -5994,3 +5994,159 @@ window.logoutStoreMetrics = function() {
     document.getElementById("btn-metrics-logout").classList.add("hidden");
     document.getElementById("metrics-login-screen").classList.remove("hidden");
 };
+
+// ==========================================
+// 📦 PO ISSUES MODULE (v5: With SLA Timer)
+// ==========================================
+
+// Helper: Calculate Ageing
+function getSlaBadge(dateStr, status) {
+    if (!dateStr) return "";
+    
+    const created = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - created;
+    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    // If Resolved, we don't show a running timer (optional)
+    if (status === "RESOLVED") return `<span style="color:#666; font-size:11px;">(Closed)</span>`;
+
+    let color = "#2e7d32"; // Green (Safe)
+    let icon = "⏱️";
+    let text = `${diffHrs}h ${diffMins}m`;
+
+    if (diffHrs >= 12) {
+        color = "#d32f2f"; // Red (Breach)
+        icon = "🔥";
+        text = `BREACH: ${diffHrs}h ${diffMins}m`;
+    } else if (diffHrs >= 8) {
+        color = "#ef6c00"; // Orange (Warning)
+        icon = "⚠️";
+    }
+
+    return `<span style="background:${color}; color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:bold;">${icon} ${text}</span>`;
+}
+
+// 1. Central Queue (UPDATED with Timer)
+async function loadCentralPoTasks() {
+    const container = document.getElementById("po-central-list");
+    container.innerHTML = "⏳ Loading tasks & calculating SLAs...";
+    const currentUser = localStorage.getItem("portal_user_email");
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values || data.values.length < 2) { container.innerHTML = "No tasks."; return; }
+
+        const rows = data.values.slice(1);
+        let html = "";
+
+        rows.forEach((r, i) => {
+            const status = r[9]; // Col J
+            if (status === "RESOLVED") return; // Hide resolved
+
+            let actionBtn = "";
+            let statusBadge = "";
+            const slaBadge = getSlaBadge(r[1], status); // r[1] is Timestamp
+
+            // Status Logic
+            if (status === "OPEN") {
+                statusBadge = `<span style="background:#e3f2fd; color:#1976d2; padding:2px 6px; border-radius:4px; font-size:10px;">🆕 OPEN</span>`;
+                actionBtn = `<button onclick="window.openRequestModal('${r[0]}', ${i+2}, '${r[3]}')" style="flex:1; padding:8px; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer;">📨 Request Approval</button>`;
+            } else if (status === "PENDING_APPROVAL") {
+                statusBadge = `<span style="background:#fff3e0; color:#e65100; padding:2px 6px; border-radius:4px; font-size:10px;">⏳ PENDING MANAGER</span>`;
+                actionBtn = `<button disabled style="flex:1; padding:8px; background:#ccc; color:#666; border:none; border-radius:4px;">⏳ Waiting...</button>`;
+            } else if (status === "APPROVED") {
+                statusBadge = `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:10px;">✅ APPROVED</span>`;
+                actionBtn = `<button onclick="window.openFinalResolveModal('${r[0]}', ${i+2})" style="flex:1; padding:8px; background:#2e7d32; color:white; border:none; border-radius:4px; cursor:pointer;">💾 Final Resolve</button>`;
+            }
+
+            // Display Store ID (r[2])
+            html += `
+            <div style="background:white; border:1px solid #ddd; padding:15px; border-radius:4px; margin-bottom:10px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div>
+                        <span style="font-weight:bold; font-size:14px;">Store: ${r[2]} | PO: ${r[3]}</span>
+                        <div style="font-size:10px; color:#666;">${r[1]}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        ${statusBadge}
+                        <div style="margin-top:5px;">${slaBadge}</div>
+                    </div>
+                </div>
+                
+                <div style="font-size:12px; color:#444; margin-bottom:10px; background:#f9f9f9; padding:8px; border-radius:4px;">
+                    <b>Issue:</b> ${r[6]} <br>
+                    <b>Cat:</b> ${r[4]} - ${r[5]} <br>
+                    <b>Raised by:</b> ${r[8]}
+                </div>
+                
+                <div style="display:flex; gap:10px;">
+                    <a href="${r[7]}" target="_blank" style="flex:1;"><button style="width:100%; padding:8px; background:#fff; border:1px solid #ccc; border-radius:4px; color:#333; cursor:pointer;">📄 Proof</button></a>
+                    ${actionBtn}
+                </div>
+            </div>`;
+        });
+
+        container.innerHTML = html || "<p>No active tasks.</p>";
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
+}
+
+// 2. Analytics (UPDATED with Breach Count)
+async function renderPoAnalytics(scope, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "⏳ Calculating SLA stats...";
+    const currentUser = localStorage.getItem("portal_user_email").toLowerCase().trim();
+
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/PO_Data`;
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values) { container.innerHTML = "No data."; return; }
+
+        let total = 0, open = 0, resolved = 0, pendingMgr = 0, breached = 0;
+        const now = new Date();
+        
+        data.values.slice(1).forEach(r => {
+            if (scope === 'store' && r[8].toLowerCase().trim() !== currentUser) return;
+
+            total++;
+            const status = r[9]; // Col J
+            const created = new Date(r[1]); // Col B
+
+            // SLA Check (Only for non-resolved items, or check all if you want historical)
+            if (status !== "RESOLVED") {
+                const diffHrs = (now - created) / (1000 * 60 * 60);
+                if (diffHrs > 12) breached++;
+            }
+
+            if (status === "OPEN") open++;
+            else if (status === "RESOLVED") resolved++;
+            else if (status === "PENDING_APPROVAL") pendingMgr++;
+        });
+
+        container.innerHTML = `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <div style="background:#e3f2fd; padding:10px; border-radius:8px; text-align:center;">
+                    <div style="font-size:20px; font-weight:bold; color:#1565c0;">${total}</div>
+                    <div style="font-size:11px; color:#555;">Total</div>
+                </div>
+                <div style="background:#e8f5e9; padding:10px; border-radius:8px; text-align:center;">
+                    <div style="font-size:20px; font-weight:bold; color:#2e7d32;">${resolved}</div>
+                    <div style="font-size:11px; color:#555;">Resolved</div>
+                </div>
+                <div style="background:#ffebee; padding:10px; border-radius:8px; text-align:center; border:1px solid #ffcdd2;">
+                    <div style="font-size:20px; font-weight:bold; color:#c62828;">${breached}</div>
+                    <div style="font-size:11px; color:#c62828;">🔥 SLA Breached</div>
+                </div>
+                <div style="background:#fff3e0; padding:10px; border-radius:8px; text-align:center;">
+                    <div style="font-size:20px; font-weight:bold; color:#e65100;">${open + pendingMgr}</div>
+                    <div style="font-size:11px; color:#555;">Pending</div>
+                </div>
+            </div>`;
+    } catch (e) { container.innerHTML = "Error: " + e.message; }
+}
