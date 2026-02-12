@@ -6067,7 +6067,7 @@ window.loadTaskEntry = async function() {
 };
 
 // 2. Fetch Available Reports from Registry
-// 2. Fetch Available Reports (Robust Version)
+// 2. Fetch Available Reports (Fixed Sheet ID)
 async function fetchActiveReports() {
     const select = document.getElementById("task-report-select");
     select.innerHTML = `<option>Loading...</option>`;
@@ -6075,58 +6075,64 @@ async function fetchActiveReports() {
     console.log("🔍 Starting Task Discovery...");
     console.log("👤 User:", currentUserEmail);
 
+    // 🛑 CHECK CONFIG
+    if (!CONFIG.TASK_REGISTRY_SHEET_ID) {
+        alert("CRITICAL ERROR: TASK_REGISTRY_SHEET_ID is missing in config.js");
+        return;
+    }
+
     try {
-        // A. Get Registry (List of Reports)
-        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/Report_Registry!A:E`;
+        // A. Get Registry (From the Task Register Sheet)
+        // 👇 CHANGED THIS LINE 👇
+        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Registry!A:E`;
         const regResp = await fetch(regUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const regData = await regResp.json();
 
-        // B. Get Assignments (Who sees what)
-        const assignUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/Report_Assignments!A:C`;
+        // B. Get Assignments (From the Task Register Sheet)
+        // 👇 CHANGED THIS LINE 👇
+        const assignUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Assignments!A:C`;
         const assignResp = await fetch(assignUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const assignData = await assignResp.json();
 
+        // Debugging Logs
+        console.log("Registry Data:", regData);
+        console.log("Assignments Data:", assignData);
+
         if (!regData.values || !assignData.values) { 
-            console.warn("⚠️ Registry or Assignments tab is empty.");
+            console.warn("⚠️ Registry or Assignments tab is empty or not found.");
             select.innerHTML = `<option>No tasks configured.</option>`; 
             return; 
         }
 
-        // C. Filter Assignments for Current User (Case Insensitive + Trimmed)
-        // Col C = Email (Index 2)
+        // C. Filter Assignments for Current User (Case Insensitive)
         const validAssignments = assignData.values.filter(r => {
             if (!r[2]) return false;
             const sheetEmail = r[2].toString().toLowerCase().trim();
-            // Check if sheet email contains user email OR matches exactly
             return sheetEmail.includes(currentUserEmail);
         });
 
-        console.log(`✅ Found ${validAssignments.length} assignments for this user.`);
+        console.log(`✅ Found ${validAssignments.length} assignments for user.`);
 
         activeReports = [];
 
-        // D. Map Registry to Assignments (Robust Matching)
-        // Skip Header (Row 0)
+        // D. Map Registry to Assignments
         regData.values.slice(1).forEach(regRow => {
-            // Normalize ID: Trim and Lowercase
-            const regId = regRow[0] ? regRow[0].toString().trim().toLowerCase() : "";
+            if (!regRow[0]) return;
             
-            if (!regId) return;
+            // Normalize ID: Trim and Lowercase for comparison
+            const regId = regRow[0].toString().trim().toLowerCase();
 
-            // Find all stores in 'validAssignments' that match this Report ID
+            // Find match in assignments
             const userStores = validAssignments
-                .filter(a => {
-                    const assignId = a[0] ? a[0].toString().trim().toLowerCase() : "";
-                    return assignId === regId; // "task_001" === "task_001"
-                })
+                .filter(a => a[0].toString().trim().toLowerCase() === regId)
                 .map(a => a[1]); // Col B is Store ID
 
             if (userStores.length > 0) {
                 console.log(`🎉 Match Found: ${regRow[1]} -> Stores: ${userStores.join(", ")}`);
                 activeReports.push({
-                    id: regRow[0], // Keep original casing for display if needed
+                    id: regRow[0], 
                     name: regRow[1],
-                    sheetId: regRow[2],
+                    sheetId: regRow[2], // The Master Sheet ID
                     tabName: regRow[3],
                     editCols: regRow[4] ? regRow[4].split(",").map(c => c.trim().toUpperCase()) : [],
                     allowedStores: userStores
@@ -6135,7 +6141,7 @@ async function fetchActiveReports() {
         });
 
         if (activeReports.length === 0) {
-            console.warn("❌ User exists in assignments, but Report IDs did not match Registry IDs.");
+            console.warn("❌ User matched in assignments, but Report IDs did not align.");
             select.innerHTML = `<option>No tasks assigned.</option>`;
             return;
         }
@@ -6148,7 +6154,7 @@ async function fetchActiveReports() {
 
     } catch (e) {
         console.error("🔥 Task Load Error:", e);
-        select.innerHTML = `<option>Error loading tasks</option>`;
+        select.innerHTML = `<option>Error loading tasks (Check Console)</option>`;
     }
 }
 
