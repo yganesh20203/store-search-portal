@@ -6068,97 +6068,70 @@ window.loadTaskEntry = async function() {
 
 // 2. Fetch Available Reports from Registry
 // 2. Fetch Available Reports (Fixed Sheet ID)
+// 2. Fetch Available Reports (Now reads Dropdown Rules)
 async function fetchActiveReports() {
     const select = document.getElementById("task-report-select");
     select.innerHTML = `<option>Loading...</option>`;
 
-    console.log("🔍 Starting Task Discovery...");
-    console.log("👤 User:", currentUserEmail);
-
-    // 🛑 CHECK CONFIG
-    if (!CONFIG.TASK_REGISTRY_SHEET_ID) {
-        alert("CRITICAL ERROR: TASK_REGISTRY_SHEET_ID is missing in config.js");
-        return;
-    }
+    if (!CONFIG.TASK_REGISTRY_SHEET_ID) { alert("Missing TASK_REGISTRY_SHEET_ID"); return; }
 
     try {
-        // A. Get Registry (From the Task Register Sheet)
-        // 👇 CHANGED THIS LINE 👇
-        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Registry!A:E`;
+        // 👇 CHANGED: Fetch A:F to get Dropdown Rules
+        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Registry!A:F`;
         const regResp = await fetch(regUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const regData = await regResp.json();
 
-        // B. Get Assignments (From the Task Register Sheet)
-        // 👇 CHANGED THIS LINE 👇
         const assignUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Assignments!A:C`;
         const assignResp = await fetch(assignUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const assignData = await assignResp.json();
 
-        // Debugging Logs
-        console.log("Registry Data:", regData);
-        console.log("Assignments Data:", assignData);
+        if (!regData.values || !assignData.values) { select.innerHTML = `<option>No tasks.</option>`; return; }
 
-        if (!regData.values || !assignData.values) { 
-            console.warn("⚠️ Registry or Assignments tab is empty or not found.");
-            select.innerHTML = `<option>No tasks configured.</option>`; 
-            return; 
-        }
-
-        // C. Filter Assignments for Current User (Case Insensitive)
-        const validAssignments = assignData.values.filter(r => {
-            if (!r[2]) return false;
-            const sheetEmail = r[2].toString().toLowerCase().trim();
-            return sheetEmail.includes(currentUserEmail);
-        });
-
-        console.log(`✅ Found ${validAssignments.length} assignments for user.`);
-
+        const validAssignments = assignData.values.filter(r => r[2] && r[2].toString().toLowerCase().includes(currentUserEmail));
+        
         activeReports = [];
+        const colLetterToIndex = (letter) => {
+            let column = 0, length = letter.length;
+            for (let i = 0; i < length; i++) column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+            return column - 1;
+        };
 
-        // D. Map Registry to Assignments
         regData.values.slice(1).forEach(regRow => {
-            if (!regRow[0]) return;
-            
-            // Normalize ID: Trim and Lowercase for comparison
-            const regId = regRow[0].toString().trim().toLowerCase();
-
-            // Find match in assignments
-            const userStores = validAssignments
-                .filter(a => a[0].toString().trim().toLowerCase() === regId)
-                .map(a => a[1]); // Col B is Store ID
+            const regId = regRow[0] ? regRow[0].toString().trim().toLowerCase() : "";
+            const userStores = validAssignments.filter(a => a[0].toString().trim().toLowerCase() === regId).map(a => a[1]);
 
             if (userStores.length > 0) {
-                console.log(`🎉 Match Found: ${regRow[1]} -> Stores: ${userStores.join(", ")}`);
+                // 👇 PARSE DROPDOWNS: "H:Yes,No; I:A,B" -> { 7: ['Yes','No'], 8: ['A','B'] }
+                let dropdownMap = {};
+                if (regRow[5]) { // Column F
+                    const rules = regRow[5].split(";");
+                    rules.forEach(rule => {
+                        const parts = rule.split(":");
+                        if (parts.length === 2) {
+                            const colIdx = colLetterToIndex(parts[0].trim().toUpperCase());
+                            const options = parts[1].split(",").map(o => o.trim());
+                            dropdownMap[colIdx] = options;
+                        }
+                    });
+                }
+
                 activeReports.push({
-                    id: regRow[0], 
-                    name: regRow[1],
-                    sheetId: regRow[2], // The Master Sheet ID
-                    tabName: regRow[3],
+                    id: regRow[0], name: regRow[1], sheetId: regRow[2], tabName: regRow[3],
                     editCols: regRow[4] ? regRow[4].split(",").map(c => c.trim().toUpperCase()) : [],
+                    dropdowns: dropdownMap, // Store the map
                     allowedStores: userStores
                 });
             }
         });
 
-        if (activeReports.length === 0) {
-            console.warn("❌ User matched in assignments, but Report IDs did not align.");
-            select.innerHTML = `<option>No tasks assigned.</option>`;
-            return;
-        }
+        select.innerHTML = `<option value="">-- Select Report --</option>`;
+        activeReports.forEach((r, i) => select.innerHTML += `<option value="${i}">${r.name}</option>`);
 
-        // Render Dropdown
-        select.innerHTML = `<option value="">-- Select a Report --</option>`;
-        activeReports.forEach((r, index) => {
-            select.innerHTML += `<option value="${index}">${r.name} (${r.allowedStores.join(", ")})</option>`;
-        });
-
-    } catch (e) {
-        console.error("🔥 Task Load Error:", e);
-        select.innerHTML = `<option>Error loading tasks (Check Console)</option>`;
-    }
+    } catch (e) { console.error(e); select.innerHTML = `<option>Error</option>`; }
 }
 
 
+// 3. Load Selected Report (Renders Dropdowns)
 window.loadSelectedReport = async function() {
     const index = document.getElementById("task-report-select").value;
     if (index === "") return;
@@ -6170,167 +6143,141 @@ window.loadSelectedReport = async function() {
     document.getElementById("task-loading").classList.remove("hidden");
 
     try {
-        // 👇 UPDATED LINE: Changed '!A:Z' to '!A:ZZ' to capture columns like AR
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A:ZZ`; 
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        if (!data.values) throw new Error("Empty report or invalid range.");
+        if (!data.values) throw new Error("Empty report.");
 
         const headers = data.values[0];
-        const allRows = data.values;
-        
-        // Helper: Convert "A"->0, "Z"->25, "AR"->43
         const colLetterToIndex = (letter) => {
-            let column = 0, length = letter.length;
-            for (let i = 0; i < length; i++) column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+            let column = 0, l = letter.length;
+            for (let i = 0; i < l; i++) column += (letter.charCodeAt(i) - 64) * Math.pow(26, l - i - 1);
             return column - 1;
         };
         const editIndices = config.editCols.map(colLetterToIndex);
-
-        // Find store column
+        
         let storeColIdx = headers.findIndex(h => h && h.toLowerCase().includes("store"));
-        if (storeColIdx === -1) storeColIdx = 0; // Default to Col A
+        if (storeColIdx === -1) storeColIdx = 0;
 
         currentReportData = [];
-        
-        // 👇 NEW LOGIC: Ensure we render enough columns
-        // Find the highest index needed (either from existing headers or from the editable column 'AR')
-        const maxHeaderIdx = headers.length;
         const maxEditIdx = Math.max(...editIndices) + 1; 
-        const totalColsToRender = Math.max(maxHeaderIdx, maxEditIdx);
+        const totalColsToRender = Math.max(headers.length, maxEditIdx);
 
-        // Build Table Header
+        // Header
         let theadHtml = `<tr>`;
         for (let i = 0; i < totalColsToRender; i++) {
-            const h = headers[i] || `(Col ${i+1})`; // Handle missing header text
+            const h = headers[i] || `(Col ${i+1})`;
             const isEditable = editIndices.includes(i);
             const style = isEditable ? "background:#fff9c4; border-bottom:2px solid #fbc02d;" : "background:#eee;";
-            theadHtml += `<th style="${style} padding:10px; text-align:left; border:1px solid #ccc;">${h} ${isEditable ? '✏️' : ''}</th>`;
+            theadHtml += `<th style="${style} padding:10px; text-align:left; border:1px solid #ccc;">${h} ${isEditable?'✏️':''}</th>`;
         }
-        theadHtml += `</tr>`;
-        document.getElementById("task-table-head").innerHTML = theadHtml;
+        document.getElementById("task-table-head").innerHTML = theadHtml + "</tr>";
 
-        // Build Table Body
+        // Body
         let tbodyHtml = "";
-        
-        allRows.forEach((row, rowIndex) => {
-            if (rowIndex === 0) return; // Skip Header
-
+        data.values.slice(1).forEach((row, rowIndex) => {
             const rowStoreId = String(row[storeColIdx] || "").trim();
-            
             if (config.allowedStores.includes(rowStoreId)) {
                 
-                const trackedRow = {
-                    sheetRowIndex: rowIndex + 1, 
-                    originalData: [...row], 
-                    domId: `task-row-${rowIndex}`
-                };
+                const trackedRow = { sheetRowIndex: rowIndex + 1, originalData: [...row], domId: `task-row-${rowIndex}` };
                 currentReportData.push(trackedRow);
 
                 tbodyHtml += `<tr id="${trackedRow.domId}">`;
-                
-                // Render Cells (Loop up to totalColsToRender)
                 for(let i=0; i < totalColsToRender; i++) {
-                    const cellVal = row[i] || "";
-                    const isEditable = editIndices.includes(i);
+                    const cellVal = (row[i] || "").toString().replace(/"/g, '&quot;');
                     
-                    if (isEditable) {
-                        tbodyHtml += `
-                        <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
-                            <input type="text" 
-                                   data-row-id="${rowIndex}" 
-                                   data-col-idx="${i}" 
-                                   value="${cellVal.toString().replace(/"/g, '&quot;')}" 
-                                   style="width:100%; min-width:80px; border:none; padding:10px; background:transparent; outline:none; font-family:inherit;">
-                        </td>`;
+                    if (editIndices.includes(i)) {
+                        // 👇 CHECK: Is there a dropdown rule for this column?
+                        if (config.dropdowns && config.dropdowns[i]) {
+                            // RENDER DROPDOWN
+                            const options = config.dropdowns[i].map(opt => 
+                                `<option value="${opt}" ${opt === cellVal ? "selected" : ""}>${opt}</option>`
+                            ).join("");
+                            
+                            tbodyHtml += `
+                            <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
+                                <select data-row-id="${rowIndex}" data-col-idx="${i}" 
+                                        style="width:100%; padding:10px; border:none; background:transparent; outline:none; cursor:pointer;">
+                                    <option value="">-- Select --</option>
+                                    ${options}
+                                </select>
+                            </td>`;
+                        } else {
+                            // RENDER TEXT INPUT (Default)
+                            tbodyHtml += `
+                            <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
+                                <input type="text" data-row-id="${rowIndex}" data-col-idx="${i}" value="${cellVal}" 
+                                       style="width:100%; padding:10px; border:none; background:transparent; outline:none;">
+                            </td>`;
+                        }
                     } else {
-                        tbodyHtml += `<td style="padding:10px; border:1px solid #ddd; background:#f9f9f9; color:#555;">${cellVal}</td>`;
+                        tbodyHtml += `<td style="padding:10px; border:1px solid #ddd; background:#f9f9f9;">${cellVal}</td>`;
                     }
                 }
                 tbodyHtml += `</tr>`;
             }
         });
+        document.getElementById("task-table-body").innerHTML = tbodyHtml;
 
-        document.getElementById("task-table-body").innerHTML = tbodyHtml || `<tr><td colspan="${totalColsToRender}" style="padding:20px; text-align:center;">No rows found for your assigned stores.</td></tr>`;
-
-    } catch (e) {
-        alert("Error loading report: " + e.message);
-        console.error(e);
-    } finally {
+    } catch (e) { console.error(e); } 
+    finally {
         document.getElementById("task-loading").classList.add("hidden");
         document.getElementById("task-content").classList.remove("hidden");
     }
 };
 
 // 4. Save Changes (Bulk Update)
+// 4. Save Changes (Handles Inputs & Selects)
 window.saveTaskData = async function() {
     const btn = document.querySelector("#task-content button");
     btn.innerText = "⏳ Saving..."; btn.disabled = true;
 
     try {
-        const inputs = document.querySelectorAll("#task-table-body input");
-        const updates = []; // Array of API requests
+        // 👇 UPDATED: Select both input and select elements
+        const inputs = document.querySelectorAll("#task-table-body input, #task-table-body select");
+        const updates = []; 
 
-        // Iterate over inputs to find changes
         inputs.forEach(input => {
             const newVal = input.value;
-            const rowId = input.getAttribute("data-row-id"); // The array index from load
+            const rowId = input.getAttribute("data-row-id");
             const colIdx = parseInt(input.getAttribute("data-col-idx"));
             
-            // Find the tracked row object
             const tracked = currentReportData.find(d => d.domId === `task-row-${rowId}`);
-            
             if (tracked) {
                 const originalVal = tracked.originalData[colIdx] || "";
-                
-                // Only update if changed
                 if (newVal !== originalVal) {
-                    // Convert Col Index to Letter (0->A, 1->B)
-                    const colLetter = String.fromCharCode(65 + colIdx); 
-                    const cellRange = `${currentReportConfig.tabName}!${colLetter}${tracked.sheetRowIndex}`;
-                    
+                    const colLetter = ""; // Helper to convert idx to letter if needed, but we use R1C1 logic or just simple logic
+                    // We need column letter for A1 notation
+                    let letter = "";
+                    let temp = colIdx + 1;
+                    while (temp > 0) {
+                        let mod = (temp - 1) % 26;
+                        letter = String.fromCharCode(65 + mod) + letter;
+                        temp = Math.floor((temp - mod) / 26);
+                    }
+
                     updates.push({
-                        range: cellRange,
+                        range: `${currentReportConfig.tabName}!${letter}${tracked.sheetRowIndex}`,
                         values: [[newVal]]
                     });
                 }
             }
         });
 
-        if (updates.length === 0) {
-            alert("No changes detected.");
-            btn.innerText = "💾 Save Changes to Master"; btn.disabled = false;
-            return;
-        }
+        if (updates.length === 0) { alert("No changes."); btn.disabled = false; return; }
 
-        // BATCH UPDATE API CALL
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${currentReportConfig.sheetId}/values:batchUpdate`;
-        const body = {
-            valueInputOption: "USER_ENTERED",
-            data: updates
-        };
-
-        const response = await fetch(url, {
+        await fetch(url, {
             method: "POST",
-            headers: { 
-                "Authorization": `Bearer ${accessToken}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body)
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates })
         });
 
-        if (response.ok) {
-            alert(`✅ Successfully updated ${updates.length} cells in the Master Sheet.`);
-            window.loadSelectedReport(); // Reload to refresh data
-        } else {
-            throw new Error("API Error");
-        }
+        alert("✅ Saved!");
+        window.loadSelectedReport();
 
-    } catch (e) {
-        alert("Error saving data: " + e.message);
-    } finally {
-        btn.innerText = "💾 Save Changes to Master"; btn.disabled = false;
-    }
+    } catch (e) { alert("Error: " + e.message); } 
+    finally { btn.innerText = "💾 Save Changes"; btn.disabled = false; }
 };
 
