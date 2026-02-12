@@ -5199,7 +5199,8 @@ function renderDynamicSidebar() {
         "Google Sheets":   { icon: "📈", func: "loadTrackerDashboard" },
         "Walkin Data":     { icon: "🚶", func: "loadWalkinDashboard" },
         "PO Issues": { icon: "🚨", func: "loadPoIssuesDashboard" },
-        "Store Metrics": { icon: "📊", func: "loadStoreMetrics" }
+        "Store Metrics": { icon: "📊", func: "loadStoreMetrics" },
+        "Task Entry": { icon: "📝", func: "loadTaskEntry" }
     };
 
     // 2. Retrieve Permissions
@@ -6045,3 +6046,252 @@ function getSlaBadge(dateStr, status) {
 
     return `<span style="background:${color}; color:white; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:bold;">${icon} ${text}</span>`;
 }
+
+// ==========================================
+// 📝 TASK ENTRY MODULE (Distributed Sheets)
+// ==========================================
+
+let activeReports = [];
+let currentReportConfig = null;
+let currentReportData = []; // Stores { rowData: [], originalIndex: 5 }
+let currentUserEmail = "";
+
+// 1. Sidebar Entry Point
+window.loadTaskEntry = async function() {
+    resetUI();
+    // highlightSidebar("Task Entry"); // Ensure sidebar item exists
+    document.getElementById("task-entry-ui").classList.remove("hidden");
+    currentUserEmail = localStorage.getItem("portal_user_email").toLowerCase().trim();
+    
+    await fetchActiveReports();
+};
+
+// 2. Fetch Available Reports from Registry
+async function fetchActiveReports() {
+    const select = document.getElementById("task-report-select");
+    select.innerHTML = `<option>Loading...</option>`;
+
+    try {
+        // A. Get Registry (List of Reports)
+        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/Report_Registry!A:E`;
+        const regResp = await fetch(regUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const regData = await regResp.json();
+
+        // B. Get Assignments (Who sees what)
+        const assignUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/Report_Assignments!A:C`;
+        const assignResp = await fetch(assignUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const assignData = await assignResp.json();
+
+        if (!regData.values || !assignData.values) { select.innerHTML = `<option>No tasks configured.</option>`; return; }
+
+        activeReports = [];
+        const validAssignments = assignData.values.filter(r => 
+            r[2] && r[2].toLowerCase().includes(currentUserEmail)
+        );
+
+        // Map Registry to Assignments
+        regData.values.slice(1).forEach(regRow => {
+            const reportId = regRow[0];
+            // Check if user is assigned to this report for ANY store
+            const userStores = validAssignments
+                .filter(a => a[0] === reportId)
+                .map(a => a[1]); // List of Store IDs
+
+            if (userStores.length > 0) {
+                activeReports.push({
+                    id: reportId,
+                    name: regRow[1],
+                    sheetId: regRow[2],
+                    tabName: regRow[3],
+                    editCols: regRow[4].split(",").map(c => c.trim().toUpperCase()), // e.g. ["H", "I"]
+                    allowedStores: userStores
+                });
+            }
+        });
+
+        // Render Dropdown
+        select.innerHTML = `<option value="">-- Select a Report --</option>`;
+        activeReports.forEach((r, index) => {
+            select.innerHTML += `<option value="${index}">${r.name} (${r.allowedStores.join(", ")})</option>`;
+        });
+
+    } catch (e) {
+        console.error(e);
+        select.innerHTML = `<option>Error loading tasks</option>`;
+    }
+}
+
+// 3. Load Selected Report Data
+window.loadSelectedReport = async function() {
+    const index = document.getElementById("task-report-select").value;
+    if (index === "") return;
+
+    const config = activeReports[index];
+    currentReportConfig = config;
+    
+    document.getElementById("task-content").classList.add("hidden");
+    document.getElementById("task-loading").classList.remove("hidden");
+
+    try {
+        // Fetch Master Sheet Data
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A:Z`; // Fetch wide range
+        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        const data = await response.json();
+
+        if (!data.values) throw new Error("Empty report.");
+
+        const headers = data.values[0];
+        const allRows = data.values;
+        
+        // Helper: Convert "A" to 0, "B" to 1
+        const colLetterToIndex = (letter) => {
+            let column = 0, length = letter.length;
+            for (let i = 0; i < length; i++) column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+            return column - 1;
+        };
+        const editIndices = config.editCols.map(colLetterToIndex);
+
+        // Filter Rows for User's Stores
+        // ASSUMPTION: Column A or B usually contains the Store ID. 
+        // We will scan the header for "Store" or "Store ID" or "Store No".
+        let storeColIdx = headers.findIndex(h => h.toLowerCase().includes("store"));
+        if (storeColIdx === -1) storeColIdx = 0; // Default to Col A if not found
+
+        currentReportData = [];
+        
+        // Build Table Header
+        let theadHtml = `<tr>`;
+        headers.forEach((h, i) => {
+            const isEditable = editIndices.includes(i);
+            const style = isEditable ? "background:#fff9c4; border-bottom:2px solid #fbc02d;" : "background:#eee;";
+            theadHtml += `<th style="${style} padding:10px; text-align:left; border:1px solid #ccc;">${h} ${isEditable ? '✏️' : ''}</th>`;
+        });
+        theadHtml += `</tr>`;
+        document.getElementById("task-table-head").innerHTML = theadHtml;
+
+        // Build Table Body
+        let tbodyHtml = "";
+        
+        allRows.forEach((row, rowIndex) => {
+            if (rowIndex === 0) return; // Skip Header
+
+            const rowStoreId = String(row[storeColIdx]).trim();
+            // Check if this row belongs to a store assigned to the user
+            if (config.allowedStores.includes(rowStoreId)) {
+                
+                // Save reference for Write-Back
+                // We store the 1-based row index (rowIndex + 1)
+                const trackedRow = {
+                    sheetRowIndex: rowIndex + 1, 
+                    originalData: [...row], // Clone
+                    domId: `task-row-${rowIndex}`
+                };
+                currentReportData.push(trackedRow);
+
+                tbodyHtml += `<tr id="${trackedRow.domId}">`;
+                
+                // Render Cells
+                // Ensure we render empty cells if row length < header length
+                for(let i=0; i < headers.length; i++) {
+                    const cellVal = row[i] || "";
+                    const isEditable = editIndices.includes(i);
+                    
+                    if (isEditable) {
+                        tbodyHtml += `
+                        <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
+                            <input type="text" 
+                                   data-row-id="${rowIndex}" 
+                                   data-col-idx="${i}" 
+                                   value="${cellVal.replace(/"/g, '&quot;')}" 
+                                   style="width:100%; border:none; padding:10px; background:transparent; outline:none; font-family:inherit;">
+                        </td>`;
+                    } else {
+                        tbodyHtml += `<td style="padding:10px; border:1px solid #ddd; background:#f9f9f9; color:#555;">${cellVal}</td>`;
+                    }
+                }
+                tbodyHtml += `</tr>`;
+            }
+        });
+
+        document.getElementById("task-table-body").innerHTML = tbodyHtml || `<tr><td colspan="10" style="padding:20px; text-align:center;">No rows found for your assigned stores.</td></tr>`;
+
+    } catch (e) {
+        alert("Error loading report: " + e.message);
+        console.error(e);
+    } finally {
+        document.getElementById("task-loading").classList.add("hidden");
+        document.getElementById("task-content").classList.remove("hidden");
+    }
+};
+
+// 4. Save Changes (Bulk Update)
+window.saveTaskData = async function() {
+    const btn = document.querySelector("#task-content button");
+    btn.innerText = "⏳ Saving..."; btn.disabled = true;
+
+    try {
+        const inputs = document.querySelectorAll("#task-table-body input");
+        const updates = []; // Array of API requests
+
+        // Iterate over inputs to find changes
+        inputs.forEach(input => {
+            const newVal = input.value;
+            const rowId = input.getAttribute("data-row-id"); // The array index from load
+            const colIdx = parseInt(input.getAttribute("data-col-idx"));
+            
+            // Find the tracked row object
+            const tracked = currentReportData.find(d => d.domId === `task-row-${rowId}`);
+            
+            if (tracked) {
+                const originalVal = tracked.originalData[colIdx] || "";
+                
+                // Only update if changed
+                if (newVal !== originalVal) {
+                    // Convert Col Index to Letter (0->A, 1->B)
+                    const colLetter = String.fromCharCode(65 + colIdx); 
+                    const cellRange = `${currentReportConfig.tabName}!${colLetter}${tracked.sheetRowIndex}`;
+                    
+                    updates.push({
+                        range: cellRange,
+                        values: [[newVal]]
+                    });
+                }
+            }
+        });
+
+        if (updates.length === 0) {
+            alert("No changes detected.");
+            btn.innerText = "💾 Save Changes to Master"; btn.disabled = false;
+            return;
+        }
+
+        // BATCH UPDATE API CALL
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${currentReportConfig.sheetId}/values:batchUpdate`;
+        const body = {
+            valueInputOption: "USER_ENTERED",
+            data: updates
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { 
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (response.ok) {
+            alert(`✅ Successfully updated ${updates.length} cells in the Master Sheet.`);
+            window.loadSelectedReport(); // Reload to refresh data
+        } else {
+            throw new Error("API Error");
+        }
+
+    } catch (e) {
+        alert("Error saving data: " + e.message);
+    } finally {
+        btn.innerText = "💾 Save Changes to Master"; btn.disabled = false;
+    }
+};
+
