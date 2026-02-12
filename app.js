@@ -6073,7 +6073,7 @@ async function fetchActiveReports() {
 
     try {
         // A. Get Registry (List of Reports)
-        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/Report_Registry!A:E`;
+        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Registry!A:E`;
         const regResp = await fetch(regUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const regData = await regResp.json();
 
