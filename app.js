@@ -6158,7 +6158,7 @@ async function fetchActiveReports() {
     }
 }
 
-// 3. Load Selected Report Data
+
 window.loadSelectedReport = async function() {
     const index = document.getElementById("task-report-select").value;
     if (index === "") return;
@@ -6170,17 +6170,17 @@ window.loadSelectedReport = async function() {
     document.getElementById("task-loading").classList.remove("hidden");
 
     try {
-        // Fetch Master Sheet Data
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A:Z`; // Fetch wide range
+        // 👇 UPDATED LINE: Changed '!A:Z' to '!A:ZZ' to capture columns like AR
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A:ZZ`; 
         const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const data = await response.json();
 
-        if (!data.values) throw new Error("Empty report.");
+        if (!data.values) throw new Error("Empty report or invalid range.");
 
         const headers = data.values[0];
         const allRows = data.values;
         
-        // Helper: Convert "A" to 0, "B" to 1
+        // Helper: Convert "A"->0, "Z"->25, "AR"->43
         const colLetterToIndex = (letter) => {
             let column = 0, length = letter.length;
             for (let i = 0; i < length; i++) column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
@@ -6188,21 +6188,26 @@ window.loadSelectedReport = async function() {
         };
         const editIndices = config.editCols.map(colLetterToIndex);
 
-        // Filter Rows for User's Stores
-        // ASSUMPTION: Column A or B usually contains the Store ID. 
-        // We will scan the header for "Store" or "Store ID" or "Store No".
-        let storeColIdx = headers.findIndex(h => h.toLowerCase().includes("store"));
-        if (storeColIdx === -1) storeColIdx = 0; // Default to Col A if not found
+        // Find store column
+        let storeColIdx = headers.findIndex(h => h && h.toLowerCase().includes("store"));
+        if (storeColIdx === -1) storeColIdx = 0; // Default to Col A
 
         currentReportData = [];
         
+        // 👇 NEW LOGIC: Ensure we render enough columns
+        // Find the highest index needed (either from existing headers or from the editable column 'AR')
+        const maxHeaderIdx = headers.length;
+        const maxEditIdx = Math.max(...editIndices) + 1; 
+        const totalColsToRender = Math.max(maxHeaderIdx, maxEditIdx);
+
         // Build Table Header
         let theadHtml = `<tr>`;
-        headers.forEach((h, i) => {
+        for (let i = 0; i < totalColsToRender; i++) {
+            const h = headers[i] || `(Col ${i+1})`; // Handle missing header text
             const isEditable = editIndices.includes(i);
             const style = isEditable ? "background:#fff9c4; border-bottom:2px solid #fbc02d;" : "background:#eee;";
             theadHtml += `<th style="${style} padding:10px; text-align:left; border:1px solid #ccc;">${h} ${isEditable ? '✏️' : ''}</th>`;
-        });
+        }
         theadHtml += `</tr>`;
         document.getElementById("task-table-head").innerHTML = theadHtml;
 
@@ -6212,24 +6217,21 @@ window.loadSelectedReport = async function() {
         allRows.forEach((row, rowIndex) => {
             if (rowIndex === 0) return; // Skip Header
 
-            const rowStoreId = String(row[storeColIdx]).trim();
-            // Check if this row belongs to a store assigned to the user
+            const rowStoreId = String(row[storeColIdx] || "").trim();
+            
             if (config.allowedStores.includes(rowStoreId)) {
                 
-                // Save reference for Write-Back
-                // We store the 1-based row index (rowIndex + 1)
                 const trackedRow = {
                     sheetRowIndex: rowIndex + 1, 
-                    originalData: [...row], // Clone
+                    originalData: [...row], 
                     domId: `task-row-${rowIndex}`
                 };
                 currentReportData.push(trackedRow);
 
                 tbodyHtml += `<tr id="${trackedRow.domId}">`;
                 
-                // Render Cells
-                // Ensure we render empty cells if row length < header length
-                for(let i=0; i < headers.length; i++) {
+                // Render Cells (Loop up to totalColsToRender)
+                for(let i=0; i < totalColsToRender; i++) {
                     const cellVal = row[i] || "";
                     const isEditable = editIndices.includes(i);
                     
@@ -6239,8 +6241,8 @@ window.loadSelectedReport = async function() {
                             <input type="text" 
                                    data-row-id="${rowIndex}" 
                                    data-col-idx="${i}" 
-                                   value="${cellVal.replace(/"/g, '&quot;')}" 
-                                   style="width:100%; border:none; padding:10px; background:transparent; outline:none; font-family:inherit;">
+                                   value="${cellVal.toString().replace(/"/g, '&quot;')}" 
+                                   style="width:100%; min-width:80px; border:none; padding:10px; background:transparent; outline:none; font-family:inherit;">
                         </td>`;
                     } else {
                         tbodyHtml += `<td style="padding:10px; border:1px solid #ddd; background:#f9f9f9; color:#555;">${cellVal}</td>`;
@@ -6250,7 +6252,7 @@ window.loadSelectedReport = async function() {
             }
         });
 
-        document.getElementById("task-table-body").innerHTML = tbodyHtml || `<tr><td colspan="10" style="padding:20px; text-align:center;">No rows found for your assigned stores.</td></tr>`;
+        document.getElementById("task-table-body").innerHTML = tbodyHtml || `<tr><td colspan="${totalColsToRender}" style="padding:20px; text-align:center;">No rows found for your assigned stores.</td></tr>`;
 
     } catch (e) {
         alert("Error loading report: " + e.message);
