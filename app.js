@@ -6067,13 +6067,17 @@ window.loadTaskEntry = async function() {
 };
 
 // 2. Fetch Available Reports from Registry
+// 2. Fetch Available Reports (Robust Version)
 async function fetchActiveReports() {
     const select = document.getElementById("task-report-select");
     select.innerHTML = `<option>Loading...</option>`;
 
+    console.log("🔍 Starting Task Discovery...");
+    console.log("👤 User:", currentUserEmail);
+
     try {
         // A. Get Registry (List of Reports)
-        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Registry!A:E`;
+        const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.PO_ISSUES_SHEET_ID}/values/Report_Registry!A:E`;
         const regResp = await fetch(regUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const regData = await regResp.json();
 
@@ -6082,32 +6086,59 @@ async function fetchActiveReports() {
         const assignResp = await fetch(assignUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const assignData = await assignResp.json();
 
-        if (!regData.values || !assignData.values) { select.innerHTML = `<option>No tasks configured.</option>`; return; }
+        if (!regData.values || !assignData.values) { 
+            console.warn("⚠️ Registry or Assignments tab is empty.");
+            select.innerHTML = `<option>No tasks configured.</option>`; 
+            return; 
+        }
+
+        // C. Filter Assignments for Current User (Case Insensitive + Trimmed)
+        // Col C = Email (Index 2)
+        const validAssignments = assignData.values.filter(r => {
+            if (!r[2]) return false;
+            const sheetEmail = r[2].toString().toLowerCase().trim();
+            // Check if sheet email contains user email OR matches exactly
+            return sheetEmail.includes(currentUserEmail);
+        });
+
+        console.log(`✅ Found ${validAssignments.length} assignments for this user.`);
 
         activeReports = [];
-        const validAssignments = assignData.values.filter(r => 
-            r[2] && r[2].toLowerCase().includes(currentUserEmail)
-        );
 
-        // Map Registry to Assignments
+        // D. Map Registry to Assignments (Robust Matching)
+        // Skip Header (Row 0)
         regData.values.slice(1).forEach(regRow => {
-            const reportId = regRow[0];
-            // Check if user is assigned to this report for ANY store
+            // Normalize ID: Trim and Lowercase
+            const regId = regRow[0] ? regRow[0].toString().trim().toLowerCase() : "";
+            
+            if (!regId) return;
+
+            // Find all stores in 'validAssignments' that match this Report ID
             const userStores = validAssignments
-                .filter(a => a[0] === reportId)
-                .map(a => a[1]); // List of Store IDs
+                .filter(a => {
+                    const assignId = a[0] ? a[0].toString().trim().toLowerCase() : "";
+                    return assignId === regId; // "task_001" === "task_001"
+                })
+                .map(a => a[1]); // Col B is Store ID
 
             if (userStores.length > 0) {
+                console.log(`🎉 Match Found: ${regRow[1]} -> Stores: ${userStores.join(", ")}`);
                 activeReports.push({
-                    id: reportId,
+                    id: regRow[0], // Keep original casing for display if needed
                     name: regRow[1],
                     sheetId: regRow[2],
                     tabName: regRow[3],
-                    editCols: regRow[4].split(",").map(c => c.trim().toUpperCase()), // e.g. ["H", "I"]
+                    editCols: regRow[4] ? regRow[4].split(",").map(c => c.trim().toUpperCase()) : [],
                     allowedStores: userStores
                 });
             }
         });
+
+        if (activeReports.length === 0) {
+            console.warn("❌ User exists in assignments, but Report IDs did not match Registry IDs.");
+            select.innerHTML = `<option>No tasks assigned.</option>`;
+            return;
+        }
 
         // Render Dropdown
         select.innerHTML = `<option value="">-- Select a Report --</option>`;
@@ -6116,7 +6147,7 @@ async function fetchActiveReports() {
         });
 
     } catch (e) {
-        console.error(e);
+        console.error("🔥 Task Load Error:", e);
         select.innerHTML = `<option>Error loading tasks</option>`;
     }
 }
