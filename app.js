@@ -4284,9 +4284,7 @@ function resetStatsToZero() {
 // ==========================================
 // 🎛️ DYNAMIC DOWNLOAD VIEW RENDERER
 // ==========================================
-// ==========================================
-// 🎛️ DYNAMIC DOWNLOAD VIEW RENDERER (Updated with Timer UI)
-// ==========================================
+
 window.renderDownloadOptions = function() {
     const container = document.getElementById("tv-view-download");
     if (!container) return;
@@ -4307,14 +4305,43 @@ window.renderDownloadOptions = function() {
         pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#e65100; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
-    // --- B. FEATURE SPACE ---
+    // --- B. FEATURE SPACE (UPDATED: Category Dropdown) ---
     else if (activeTvCategory === "Feature Space") {
+        
+        // 1. Define Categories
+        const categories = [
+            "Flours", "Olive Oil", "Health Oil", "Hair Care/Hair Oil & Treatment", "Personal Wash",
+            "Hair Care/Skin Emerging/Hair Oil & Treatment", "HAIR CARE", "Skin/Hair/Personal wash",
+            "Skin Emerging", "Skin core", "Personal Wash/Skin Emerging", "PC Multiple Cats",
+            "Colgate-Oral Care & Shaving", "Oral Care & Shaving Needs/Skin Emerging", "Baby Care",
+            "Fem Hygiene", "Hair oil", "Oral Care & Shaving Needs", "Hair Oil & Treatment",
+            "Skin Core/Personal Wash/Skin Emerging", "Hair Oil & Treatment/Hair care",
+            "Skin Core/Skin Emerging", "Personal Wash/Skin Core/Skin Emerging", "Cleaning",
+            "Air Care", "Home care", "Pharmacy OTC", "Laundry & Det", "Luggage & Bags",
+            "Home Textiles", "SAVORY", "Juice & Water", "CSD & Sport Drink", "Dry Fruits",
+            "Ingredients", "Culinary", "Paper Goods and Disposables", "Biscuits", "Hot Beverages",
+            "Health Food Drinks", "Houseware", "Tableware", "Confectionery", "Chocolates",
+            "Spices", "Large and Seasonal Appliances", "Dry Foods", "Bakery", "SKIN CARE",
+            "Detergent Bars & Liquid", "Laundry", "Juices & Water", "Ambient Dairy",
+            "Noodles & Pasta", "Rice", "Dry Fruit & Spices", "Cashtill-Processed Food",
+            "Cartrail-FMCG FOOD", "Cartrail-Staples", "Cartrail-GM", "Cartrail-FMCG NON FOOD",
+            "PB NON FOOD POD", "Aircare", "Pharmacy-OTC", "Dry Fruits & Indredients", "CSD",
+            "Chocolate", "Confectionary", "Health Food Drink"
+        ];
+
+        // 2. Generate Options
+        const catOptions = categories.map(c => `<option value="${c}">${c}</option>`).join("");
+
         extraFilters = `
             <div style="margin-bottom: 15px; border-top: 1px solid #ccc; padding-top: 15px;">
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <input type="text" id="filter-store" placeholder="Store No." style="padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <input type="text" id="filter-subdiv" placeholder="Sub-Division" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    <input type="text" id="filter-item" placeholder="Item Description" style="padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    
+                    <select id="filter-category" style="padding:8px; border:1px solid #ddd; border-radius:4px; background:white;">
+                        <option value="">-- All Categories --</option>
+                        ${catOptions}
+                    </select>
                 </div>
             </div>`;
         pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#2196f3; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
@@ -4344,7 +4371,7 @@ window.renderDownloadOptions = function() {
         pptButton = `<button id="btn-ppt-gen" onclick="window.generateTvPPT()" style="width:100%; background:#ff9800; color:white; padding:12px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">📊 Generate & Download PPT</button>`;
     }
 
-    // --- RENDER VIEW (Added Progress Bar & Timer) ---
+    // --- RENDER VIEW ---
     container.innerHTML = `
         <div style="background:#e8eaf6; padding:20px; border-radius:8px; border:1px solid #c5cae9; max-width:500px;">
             <h3 style="margin-top:0;">📅 Export ${activeTvCategory} Report</h3>
@@ -4375,6 +4402,9 @@ window.renderDownloadOptions = function() {
 // ==========================================
 // 📊 PPT GENERATION LOGIC
 
+// ==========================================
+// 📊 PPT GENERATION LOGIC (Fixed Feature Space Category Filter)
+// ==========================================
 window.generateTvPPT = async function() {
     const fromInput = document.getElementById("tv-rep-from").value;
     const toInput = document.getElementById("tv-rep-to").value;
@@ -4434,24 +4464,27 @@ window.generateTvPPT = async function() {
             });
         }
         
-        // B. FEATURE SPACE (FIXED DEFINITIONS)
+        // B. FEATURE SPACE (UPDATED)
         else if (activeTvCategory === "Feature Space") {
             imageColIndex = 15;
             
-            // Safely get values (default to empty string if element missing)
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase() || "";
-            const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase() || ""; // 🟢 DEFINED HERE
-            const fItem = document.getElementById("filter-item")?.value.trim().toLowerCase() || "";
+            const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase() || "";
+            
+            // 🆕 New Category Filter Logic (Dropdown)
+            const fCategory = document.getElementById("filter-category")?.value.trim().toLowerCase() || "";
 
             filteredData = rows.filter(r => {
                 const d = new Date(r[3]); 
                 if (!(d >= fromDate && d <= toDate)) return false;
                 if (fStore && String(r[1]).toLowerCase() !== fStore) return false;
                 
-                // 🟢 USED HERE (Index 8 is Sub-Division)
-                if (fSubDiv && !String(r[7]).toLowerCase().includes(fSubDiv)) return false;
+                // Filter Sub-Division (Index 8)
+                if (fSubDiv && !String(r[8]).toLowerCase().includes(fSubDiv)) return false;
                 
-                if (fItem && !String(r[11]).toLowerCase().includes(fItem)) return false;
+                // 🆕 Filter Category (Col J = Index 9)
+                if (fCategory && !String(r[9]).toLowerCase().includes(fCategory)) return false;
+
                 if (!r[15] || r[15].trim() === "" || r[15] === "N/A") return false;
                 return true;
             });
@@ -4544,8 +4577,8 @@ window.generateTvPPT = async function() {
                             ["Store", row[1] + " - " + row[2]],
                             ["Approver", row[5]],
                             ["Sub-Div", row[8]], 
+                            ["Category", row[9]],  // Added Category to Slide for visibility
                             ["Item", row[11]],
-                            ["Display Loc", row[12]],
                             ["Status", row[14]]
                         ];
                     } else if (activeTvCategory === "Events") {
