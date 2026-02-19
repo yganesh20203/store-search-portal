@@ -6001,34 +6001,27 @@ window.hideGlobalTooltip = function() {
     }
 };
 
-// 6. Raw Data Download
-window.downloadSpecificRawData = async function(tabName, metricName) {
-    if (!confirm(`Download raw data for ${metricName}?`)) return;
 
-    try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.METRICS_SHEET_ID}/values/${tabName}`;
-        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-        const data = await response.json();
+// 6. Raw Data Download (Direct Link Opener)
+window.downloadSpecificRawData = function(fileUrl, metricName) {
+    if (!fileUrl || fileUrl.trim() === "") {
+        alert("⚠️ No link configured for this metric.");
+        return;
+    }
 
-        if (!data.values) { alert("No data in sheet."); return; }
+    // Quick check to ensure it's formatted as a web link
+    let finalUrl = fileUrl.trim();
+    if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
+        finalUrl = "https://" + finalUrl;
+    }
 
-        // Filter Rows for this Store ID
-        const filteredRows = data.values.filter((row, index) => {
-            if (index === 0) return true; // Header
-            return String(row[0]) === String(activeStoreId);
-        });
-
-        if (filteredRows.length <= 1) { alert("No raw records found for this store."); return; }
-
-        let csv = "data:text/csv;charset=utf-8," + filteredRows.map(e => e.join(",")).join("\n");
-        const link = document.createElement("a");
-        link.href = encodeURI(csv);
-        link.download = `${metricName}_${activeStoreId}_Raw.csv`;
-        link.click();
-
-    } catch (e) { alert("Error: " + e.message); }
+    if (confirm(`Open data file for ${metricName}?`)) {
+        // Opens the link in a new tab. 
+        // If it's a direct download link, the browser will automatically download it.
+        // If it's a Google Drive link, it will open the Google Drive preview.
+        window.open(finalUrl, '_blank');
+    }
 };
-
 // 7. Search Filter
 window.filterMetricsTable = function() {
     const filter = document.getElementById("metrics-search").value.toLowerCase();
