@@ -6255,26 +6255,28 @@ window.loadSelectedReport = async function() {
 
 // 4. Save Changes (Bulk Update)
 // 4. Save Changes (Handles Inputs & Selects)
+// 4. Save Changes (Fixed Silently Failing Updates & Tab Names)
 window.saveTaskData = async function() {
     const btn = document.querySelector("#task-content button");
-    btn.innerText = "⏳ Saving..."; btn.disabled = true;
+    btn.innerText = "⏳ Saving..."; 
+    btn.disabled = true;
 
     try {
-        // 👇 UPDATED: Select both input and select elements
         const inputs = document.querySelectorAll("#task-table-body input, #task-table-body select");
         const updates = []; 
 
         inputs.forEach(input => {
-            const newVal = input.value;
+            const newVal = String(input.value).trim();
             const rowId = input.getAttribute("data-row-id");
             const colIdx = parseInt(input.getAttribute("data-col-idx"));
             
             const tracked = currentReportData.find(d => d.domId === `task-row-${rowId}`);
             if (tracked) {
-                const originalVal = tracked.originalData[colIdx] || "";
+                // Force original value to be a string for accurate comparison
+                const originalVal = String(tracked.originalData[colIdx] || "").trim();
+                
                 if (newVal !== originalVal) {
-                    const colLetter = ""; // Helper to convert idx to letter if needed, but we use R1C1 logic or just simple logic
-                    // We need column letter for A1 notation
+                    // Convert Column Index (e.g., 0) to Column Letter (e.g., 'A')
                     let letter = "";
                     let temp = colIdx + 1;
                     while (temp > 0) {
@@ -6283,27 +6285,53 @@ window.saveTaskData = async function() {
                         temp = Math.floor((temp - mod) / 26);
                     }
 
+                    // 🛑 FIXED: Wrap tabName in single quotes to handle spaces (e.g., 'Master Data'!A2)
+                    const safeTabName = `'${currentReportConfig.tabName}'`;
+                    
                     updates.push({
-                        range: `${currentReportConfig.tabName}!${letter}${tracked.sheetRowIndex}`,
+                        range: `${safeTabName}!${letter}${tracked.sheetRowIndex}`,
                         values: [[newVal]]
                     });
                 }
             }
         });
 
-        if (updates.length === 0) { alert("No changes."); btn.disabled = false; return; }
+        if (updates.length === 0) { 
+            alert("No changes detected."); 
+            btn.innerText = "💾 Save Changes to Master"; 
+            btn.disabled = false; 
+            return; 
+        }
 
+        // Send Batch Update
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${currentReportConfig.sheetId}/values:batchUpdate`;
-        await fetch(url, {
+        const response = await fetch(url, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: updates })
+            headers: { 
+                "Authorization": `Bearer ${accessToken}`, 
+                "Content-Type": "application/json" 
+            },
+            body: JSON.stringify({ 
+                valueInputOption: "USER_ENTERED", 
+                data: updates 
+            })
         });
 
-        alert("✅ Saved!");
-        window.loadSelectedReport();
+        const result = await response.json();
 
-    } catch (e) { alert("Error: " + e.message); } 
-    finally { btn.innerText = "💾 Save Changes"; btn.disabled = false; }
+        // 🛑 FIXED: Properly catch Google API errors instead of failing silently
+        if (!response.ok) {
+            throw new Error(result.error ? result.error.message : "Failed to save to Google Sheets.");
+        }
+
+        alert(`✅ Successfully updated ${updates.length} cells!`);
+        window.loadSelectedReport(); // Reload the fresh data
+
+    } catch (e) { 
+        alert("❌ Error saving data: " + e.message); 
+        console.error("Save Error:", e);
+    } finally { 
+        btn.innerText = "💾 Save Changes to Master"; 
+        btn.disabled = false; 
+    }
 };
-
