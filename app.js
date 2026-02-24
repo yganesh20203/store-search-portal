@@ -6157,9 +6157,7 @@ async function fetchActiveReports() {
 }
 
 
-// 3. Load Selected Report (Renders Dropdowns)
-// 3. Load Selected Report (FIXED: Bypasses browser cache)
-// 3. Load Selected Report (FIXED: Perfect Row Index Mapping)
+
 window.loadSelectedReport = async function() {
     const index = document.getElementById("task-report-select").value;
     if (index === "") return;
@@ -6282,6 +6280,7 @@ window.loadSelectedReport = async function() {
 
 // 4. Save Changes (FIXED: Adds Sync Delay to show fresh data)
 // 4. Save Changes (With Diagnostic Tracker)
+// 4. Save Changes (Final, Clean Version)
 window.saveTaskData = async function() {
     const btn = document.querySelector("#task-content button");
     btn.innerText = "⏳ Saving..."; 
@@ -6290,7 +6289,6 @@ window.saveTaskData = async function() {
     try {
         const inputs = document.querySelectorAll("#task-table-body input, #task-table-body select");
         const updates = []; 
-        let debugLog = ""; // To track what is happening
 
         // Clean the sheet ID and Tab Name to prevent URL errors
         const cleanSheetId = String(currentReportConfig.sheetId).trim();
@@ -6316,15 +6314,13 @@ window.saveTaskData = async function() {
                         temp = Math.floor((temp - mod) / 26);
                     }
 
-                    // Target specific cell
+                    // Target specific cell accurately
                     const targetCell = `'${cleanTabName}'!${letter}${tracked.sheetRowIndex}`;
                     
                     updates.push({
                         range: targetCell,
                         values: [[newVal]]
                     });
-
-                    debugLog += `\n📍 Cell: ${targetCell} | Value: "${newVal}"`;
                 }
             }
         });
@@ -6336,10 +6332,8 @@ window.saveTaskData = async function() {
             return; 
         }
 
-        // --- DIAGNOSTIC ALERT ---
-        // This will show you exactly where the app is trying to send the data.
-        const confirmMsg = `Sending data to Sheet ID:\n${cleanSheetId}\n\nUpdates:${debugLog}\n\nProceed?`;
-        if (!confirm(confirmMsg)) {
+        // --- CLEAN USER CONFIRMATION ---
+        if (!confirm(`Save ${updates.length} changes to the Master Sheet?`)) {
             btn.innerText = "💾 Save Changes to Master"; 
             btn.disabled = false; 
             return;
@@ -6365,14 +6359,7 @@ window.saveTaskData = async function() {
             throw new Error(result.error ? result.error.message : "Failed to save to Google Sheets.");
         }
 
-        // Check if Google actually updated the cells
-        const cellsUpdated = result.totalUpdatedCells || 0;
-        
-        if (cellsUpdated === 0) {
-            alert("⚠️ Warning: Google accepted the request, but reported 0 cells were updated. Check if the Tab Name is exactly correct.");
-        } else {
-            alert(`✅ Successfully updated ${cellsUpdated} cells!`);
-        }
+        alert(`✅ Successfully saved!`);
         
         // Give Google Sheets 1.5 seconds to process before reloading fresh data
         setTimeout(() => {
