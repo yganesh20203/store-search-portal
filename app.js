@@ -6159,6 +6159,7 @@ async function fetchActiveReports() {
 
 // 3. Load Selected Report (Renders Dropdowns)
 // 3. Load Selected Report (FIXED: Bypasses browser cache)
+// 3. Load Selected Report (FIXED: Perfect Row Index Mapping)
 window.loadSelectedReport = async function() {
     const index = document.getElementById("task-report-select").value;
     if (index === "") return;
@@ -6170,9 +6171,9 @@ window.loadSelectedReport = async function() {
     document.getElementById("task-loading").classList.remove("hidden");
 
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A:ZZ`; 
+        // Force range to A1 so math aligns perfectly with Google Sheets
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/'${config.tabName}'!A1:ZZ`; 
         
-        // 🛑 FIXED: Added cache prevention headers so users always see fresh data
         const response = await fetch(url, { 
             headers: { 
                 "Authorization": `Bearer ${accessToken}`,
@@ -6184,9 +6185,11 @@ window.loadSelectedReport = async function() {
         
         const data = await response.json();
 
-        if (!data.values) throw new Error("Empty report.");
+        if (!data.values || data.values.length < 2) throw new Error("Empty report.");
 
-        const headers = data.values[0];
+        const allRows = data.values;
+        const headers = allRows[0]; // Row 1 in Sheets
+        
         const colLetterToIndex = (letter) => {
             let column = 0, l = letter.length;
             for (let i = 0; i < l; i++) column += (letter.charCodeAt(i) - 64) * Math.pow(26, l - i - 1);
@@ -6201,7 +6204,7 @@ window.loadSelectedReport = async function() {
         const maxEditIdx = Math.max(...editIndices) + 1; 
         const totalColsToRender = Math.max(headers.length, maxEditIdx);
 
-        // Header
+        // Render Header
         let theadHtml = `<tr>`;
         for (let i = 0; i < totalColsToRender; i++) {
             const h = headers[i] || `(Col ${i+1})`;
@@ -6211,23 +6214,33 @@ window.loadSelectedReport = async function() {
         }
         document.getElementById("task-table-head").innerHTML = theadHtml + "</tr>";
 
-        // Body
+        // Render Body
         let tbodyHtml = "";
-        data.values.slice(1).forEach((row, rowIndex) => {
+        
+        // 🛑 FIXED: We loop through ALL rows without slicing, so the math never shifts.
+        allRows.forEach((row, rowIndex) => {
+            if (rowIndex === 0) return; // Skip Header visually, but keep index intact
+
             const rowStoreId = String(row[storeColIdx] || "").trim();
             if (config.allowedStores.includes(rowStoreId)) {
                 
-                const trackedRow = { sheetRowIndex: rowIndex + 1, originalData: [...row], domId: `task-row-${rowIndex}` };
+                // EXACT MAPPING: Array index 1 = Google Sheets Row 2
+                const exactSheetRowNumber = rowIndex + 1; 
+                
+                const trackedRow = { 
+                    sheetRowIndex: exactSheetRowNumber, 
+                    originalData: [...row], 
+                    domId: `task-row-${rowIndex}` 
+                };
                 currentReportData.push(trackedRow);
 
                 tbodyHtml += `<tr id="${trackedRow.domId}">`;
                 for(let i=0; i < totalColsToRender; i++) {
-                    // 🛑 FIXED: Trim spaces to prevent dropdown matching errors
                     const cellVal = (row[i] || "").toString().trim().replace(/"/g, '&quot;');
                     
                     if (editIndices.includes(i)) {
                         if (config.dropdowns && config.dropdowns[i]) {
-                            // RENDER DROPDOWN (Case insensitive match)
+                            // Render Dropdown
                             const options = config.dropdowns[i].map(opt => {
                                 const isSelected = (opt.toLowerCase() === cellVal.toLowerCase()) ? "selected" : "";
                                 return `<option value="${opt}" ${isSelected}>${opt}</option>`;
@@ -6242,7 +6255,7 @@ window.loadSelectedReport = async function() {
                                 </select>
                             </td>`;
                         } else {
-                            // RENDER TEXT INPUT
+                            // Render Input
                             tbodyHtml += `
                             <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
                                 <input type="text" data-row-id="${rowIndex}" data-col-idx="${i}" value="${cellVal}" 
@@ -6258,8 +6271,10 @@ window.loadSelectedReport = async function() {
         });
         document.getElementById("task-table-body").innerHTML = tbodyHtml;
 
-    } catch (e) { console.error(e); } 
-    finally {
+    } catch (e) { 
+        console.error(e); 
+        document.getElementById("task-table-body").innerHTML = `<tr><td colspan="10" style="color:red; text-align:center;">Error: ${e.message}</td></tr>`;
+    } finally {
         document.getElementById("task-loading").classList.add("hidden");
         document.getElementById("task-content").classList.remove("hidden");
     }
