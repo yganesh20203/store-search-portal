@@ -6158,6 +6158,7 @@ async function fetchActiveReports() {
 
 
 // 3. Load Selected Report (Renders Dropdowns)
+// 3. Load Selected Report (FIXED: Bypasses browser cache)
 window.loadSelectedReport = async function() {
     const index = document.getElementById("task-report-select").value;
     if (index === "") return;
@@ -6170,7 +6171,17 @@ window.loadSelectedReport = async function() {
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${config.tabName}!A:ZZ`; 
-        const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+        
+        // 🛑 FIXED: Added cache prevention headers so users always see fresh data
+        const response = await fetch(url, { 
+            headers: { 
+                "Authorization": `Bearer ${accessToken}`,
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache"
+            },
+            cache: "no-store" 
+        });
+        
         const data = await response.json();
 
         if (!data.values) throw new Error("Empty report.");
@@ -6211,30 +6222,31 @@ window.loadSelectedReport = async function() {
 
                 tbodyHtml += `<tr id="${trackedRow.domId}">`;
                 for(let i=0; i < totalColsToRender; i++) {
-                    const cellVal = (row[i] || "").toString().replace(/"/g, '&quot;');
+                    // 🛑 FIXED: Trim spaces to prevent dropdown matching errors
+                    const cellVal = (row[i] || "").toString().trim().replace(/"/g, '&quot;');
                     
                     if (editIndices.includes(i)) {
-                        // 👇 CHECK: Is there a dropdown rule for this column?
                         if (config.dropdowns && config.dropdowns[i]) {
-                            // RENDER DROPDOWN
-                            const options = config.dropdowns[i].map(opt => 
-                                `<option value="${opt}" ${opt === cellVal ? "selected" : ""}>${opt}</option>`
-                            ).join("");
+                            // RENDER DROPDOWN (Case insensitive match)
+                            const options = config.dropdowns[i].map(opt => {
+                                const isSelected = (opt.toLowerCase() === cellVal.toLowerCase()) ? "selected" : "";
+                                return `<option value="${opt}" ${isSelected}>${opt}</option>`;
+                            }).join("");
                             
                             tbodyHtml += `
                             <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
                                 <select data-row-id="${rowIndex}" data-col-idx="${i}" 
-                                        style="width:100%; padding:10px; border:none; background:transparent; outline:none; cursor:pointer;">
+                                        style="width:100%; min-width:120px; padding:10px; border:none; background:transparent; outline:none; cursor:pointer;">
                                     <option value="">-- Select --</option>
                                     ${options}
                                 </select>
                             </td>`;
                         } else {
-                            // RENDER TEXT INPUT (Default)
+                            // RENDER TEXT INPUT
                             tbodyHtml += `
                             <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
                                 <input type="text" data-row-id="${rowIndex}" data-col-idx="${i}" value="${cellVal}" 
-                                       style="width:100%; padding:10px; border:none; background:transparent; outline:none;">
+                                       style="width:100%; min-width:80px; padding:10px; border:none; background:transparent; outline:none;">
                             </td>`;
                         }
                     } else {
@@ -6253,9 +6265,7 @@ window.loadSelectedReport = async function() {
     }
 };
 
-// 4. Save Changes (Bulk Update)
-// 4. Save Changes (Handles Inputs & Selects)
-// 4. Save Changes (Fixed Silently Failing Updates & Tab Names)
+// 4. Save Changes (FIXED: Adds Sync Delay to show fresh data)
 window.saveTaskData = async function() {
     const btn = document.querySelector("#task-content button");
     btn.innerText = "⏳ Saving..."; 
@@ -6272,11 +6282,9 @@ window.saveTaskData = async function() {
             
             const tracked = currentReportData.find(d => d.domId === `task-row-${rowId}`);
             if (tracked) {
-                // Force original value to be a string for accurate comparison
                 const originalVal = String(tracked.originalData[colIdx] || "").trim();
                 
                 if (newVal !== originalVal) {
-                    // Convert Column Index (e.g., 0) to Column Letter (e.g., 'A')
                     let letter = "";
                     let temp = colIdx + 1;
                     while (temp > 0) {
@@ -6285,7 +6293,6 @@ window.saveTaskData = async function() {
                         temp = Math.floor((temp - mod) / 26);
                     }
 
-                    // 🛑 FIXED: Wrap tabName in single quotes to handle spaces (e.g., 'Master Data'!A2)
                     const safeTabName = `'${currentReportConfig.tabName}'`;
                     
                     updates.push({
@@ -6319,18 +6326,23 @@ window.saveTaskData = async function() {
 
         const result = await response.json();
 
-        // 🛑 FIXED: Properly catch Google API errors instead of failing silently
         if (!response.ok) {
             throw new Error(result.error ? result.error.message : "Failed to save to Google Sheets.");
         }
 
-        alert(`✅ Successfully updated ${updates.length} cells!`);
-        window.loadSelectedReport(); // Reload the fresh data
+        btn.innerText = "✅ Saved!";
+        
+        // 🛑 FIXED: Give Google Sheets 1.5 seconds to process the save before fetching again.
+        // This ensures the next screen reload shows the newly saved data.
+        setTimeout(() => {
+            window.loadSelectedReport(); 
+            btn.innerText = "💾 Save Changes to Master"; 
+            btn.disabled = false;
+        }, 1500);
 
     } catch (e) { 
         alert("❌ Error saving data: " + e.message); 
         console.error("Save Error:", e);
-    } finally { 
         btn.innerText = "💾 Save Changes to Master"; 
         btn.disabled = false; 
     }
