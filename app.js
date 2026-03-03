@@ -6093,8 +6093,7 @@ window.loadTaskEntry = async function() {
 };
 
 // 2. Fetch Available Reports from Registry
-// 2. Fetch Available Reports (Fixed Sheet ID)
-// 2. Fetch Available Reports (Now reads Dropdown Rules)
+// 2. Fetch Available Reports (UPDATED: Supports Cascading Dropdowns)
 async function fetchActiveReports() {
     const select = document.getElementById("task-report-select");
     select.innerHTML = `<option>Loading...</option>`;
@@ -6102,7 +6101,6 @@ async function fetchActiveReports() {
     if (!CONFIG.TASK_REGISTRY_SHEET_ID) { alert("Missing TASK_REGISTRY_SHEET_ID"); return; }
 
     try {
-        // 👇 CHANGED: Fetch A:F to get Dropdown Rules
         const regUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.TASK_REGISTRY_SHEET_ID}/values/Report_Registry!A:F`;
         const regResp = await fetch(regUrl, { headers: { "Authorization": `Bearer ${accessToken}` } });
         const regData = await regResp.json();
@@ -6127,16 +6125,34 @@ async function fetchActiveReports() {
             const userStores = validAssignments.filter(a => a[0].toString().trim().toLowerCase() === regId).map(a => a[1]);
 
             if (userStores.length > 0) {
-                // 👇 PARSE DROPDOWNS: "H:Yes,No; I:A,B" -> { 7: ['Yes','No'], 8: ['A','B'] }
                 let dropdownMap = {};
-                if (regRow[5]) { // Column F
+                if (regRow[5]) { // Column F has the rules
                     const rules = regRow[5].split(";");
                     rules.forEach(rule => {
-                        const parts = rule.split(":");
-                        if (parts.length === 2) {
-                            const colIdx = colLetterToIndex(parts[0].trim().toUpperCase());
-                            const options = parts[1].split(",").map(o => o.trim());
-                            dropdownMap[colIdx] = options;
+                        // Regex to check if it's a dependent rule like "L(K): FMCG=A,B | Staples=C,D"
+                        const depMatch = rule.match(/([A-Z]+)\s*\(\s*([A-Z]+)\s*\)\s*:(.*)/i);
+                        
+                        if (depMatch) {
+                            const targetCol = colLetterToIndex(depMatch[1].trim().toUpperCase());
+                            const parentCol = colLetterToIndex(depMatch[2].trim().toUpperCase());
+                            const mapParts = depMatch[3].split("|");
+                            const depMap = {};
+                            
+                            mapParts.forEach(p => {
+                                const kv = p.split("=");
+                                if (kv.length === 2) {
+                                    depMap[kv[0].trim()] = kv[1].split(",").map(s => s.trim());
+                                }
+                            });
+                            dropdownMap[targetCol] = { type: "dependent", parentCol: parentCol, map: depMap };
+                        } else {
+                            // Normal Rule like "K: A,B,C"
+                            const parts = rule.split(":");
+                            if (parts.length === 2) {
+                                const colIdx = colLetterToIndex(parts[0].trim().toUpperCase());
+                                const options = parts[1].split(",").map(o => o.trim());
+                                dropdownMap[colIdx] = { type: "normal", options: options };
+                            }
                         }
                     });
                 }
@@ -6144,7 +6160,7 @@ async function fetchActiveReports() {
                 activeReports.push({
                     id: regRow[0], name: regRow[1], sheetId: regRow[2], tabName: regRow[3],
                     editCols: regRow[4] ? regRow[4].split(",").map(c => c.trim().toUpperCase()) : [],
-                    dropdowns: dropdownMap, // Store the map
+                    dropdowns: dropdownMap,
                     allowedStores: userStores
                 });
             }
@@ -6158,6 +6174,7 @@ async function fetchActiveReports() {
 
 
 
+// 3. Load Selected Report (UPDATED: Renders Cascading Dropdowns & Event Listeners)
 window.loadSelectedReport = async function() {
     const index = document.getElementById("task-report-select").value;
     if (index === "") return;
@@ -6169,24 +6186,18 @@ window.loadSelectedReport = async function() {
     document.getElementById("task-loading").classList.remove("hidden");
 
     try {
-        // Force range to A1 so math aligns perfectly with Google Sheets
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/'${config.tabName}'!A1:ZZ`; 
         
         const response = await fetch(url, { 
-            headers: { 
-                "Authorization": `Bearer ${accessToken}`,
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache"
-            },
+            headers: { "Authorization": `Bearer ${accessToken}`, "Cache-Control": "no-cache", "Pragma": "no-cache" },
             cache: "no-store" 
         });
         
         const data = await response.json();
-
         if (!data.values || data.values.length < 2) throw new Error("Empty report.");
 
         const allRows = data.values;
-        const headers = allRows[0]; // Row 1 in Sheets
+        const headers = allRows[0]; 
         
         const colLetterToIndex = (letter) => {
             let column = 0, l = letter.length;
@@ -6202,7 +6213,6 @@ window.loadSelectedReport = async function() {
         const maxEditIdx = Math.max(...editIndices) + 1; 
         const totalColsToRender = Math.max(headers.length, maxEditIdx);
 
-        // Render Header
         let theadHtml = `<tr>`;
         for (let i = 0; i < totalColsToRender; i++) {
             const h = headers[i] || `(Col ${i+1})`;
@@ -6212,24 +6222,16 @@ window.loadSelectedReport = async function() {
         }
         document.getElementById("task-table-head").innerHTML = theadHtml + "</tr>";
 
-        // Render Body
         let tbodyHtml = "";
         
-        // 🛑 FIXED: We loop through ALL rows without slicing, so the math never shifts.
         allRows.forEach((row, rowIndex) => {
-            if (rowIndex === 0) return; // Skip Header visually, but keep index intact
+            if (rowIndex === 0) return; 
 
             const rowStoreId = String(row[storeColIdx] || "").trim();
             if (config.allowedStores.includes(rowStoreId)) {
                 
-                // EXACT MAPPING: Array index 1 = Google Sheets Row 2
                 const exactSheetRowNumber = rowIndex + 1; 
-                
-                const trackedRow = { 
-                    sheetRowIndex: exactSheetRowNumber, 
-                    originalData: [...row], 
-                    domId: `task-row-${rowIndex}` 
-                };
+                const trackedRow = { sheetRowIndex: exactSheetRowNumber, originalData: [...row], domId: `task-row-${rowIndex}` };
                 currentReportData.push(trackedRow);
 
                 tbodyHtml += `<tr id="${trackedRow.domId}">`;
@@ -6238,26 +6240,35 @@ window.loadSelectedReport = async function() {
                     
                     if (editIndices.includes(i)) {
                         if (config.dropdowns && config.dropdowns[i]) {
-                            // Render Dropdown
-                            const options = config.dropdowns[i].map(opt => {
+                            const ddRule = config.dropdowns[i];
+                            let optionsList = [];
+                            let selectAttributes = `data-row-id="${rowIndex}" data-col-idx="${i}"`;
+
+                            // CHECK RULE TYPE (Normal vs Dependent)
+                            if (ddRule.type === "normal") {
+                                optionsList = ddRule.options;
+                            } else if (ddRule.type === "dependent") {
+                                const parentVal = (row[ddRule.parentCol] || "").toString().trim();
+                                optionsList = ddRule.map[parentVal] || []; // Only load matching items
+                                selectAttributes += ` data-parent-col="${ddRule.parentCol}"`; // Link to parent
+                            }
+
+                            const optionsHtml = optionsList.map(opt => {
                                 const isSelected = (opt.toLowerCase() === cellVal.toLowerCase()) ? "selected" : "";
                                 return `<option value="${opt}" ${isSelected}>${opt}</option>`;
                             }).join("");
                             
                             tbodyHtml += `
                             <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
-                                <select data-row-id="${rowIndex}" data-col-idx="${i}" 
-                                        style="width:100%; min-width:120px; padding:10px; border:none; background:transparent; outline:none; cursor:pointer;">
+                                <select ${selectAttributes} style="width:100%; min-width:120px; padding:10px; border:none; background:transparent; outline:none; cursor:pointer;">
                                     <option value="">-- Select --</option>
-                                    ${options}
+                                    ${optionsHtml}
                                 </select>
                             </td>`;
                         } else {
-                            // Render Input
                             tbodyHtml += `
                             <td style="padding:0; border:1px solid #ddd; background:#fffde7;">
-                                <input type="text" data-row-id="${rowIndex}" data-col-idx="${i}" value="${cellVal}" 
-                                       style="width:100%; min-width:80px; padding:10px; border:none; background:transparent; outline:none;">
+                                <input type="text" data-row-id="${rowIndex}" data-col-idx="${i}" value="${cellVal}" style="width:100%; min-width:80px; padding:10px; border:none; background:transparent; outline:none;">
                             </td>`;
                         }
                     } else {
@@ -6267,7 +6278,39 @@ window.loadSelectedReport = async function() {
                 tbodyHtml += `</tr>`;
             }
         });
-        document.getElementById("task-table-body").innerHTML = tbodyHtml;
+        
+        const tbodyEl = document.getElementById("task-table-body");
+        tbodyEl.innerHTML = tbodyHtml;
+
+        // 🟢 ATTACH REAL-TIME CASCADING EVENT LISTENER 
+        tbodyEl.onchange = function(e) {
+            if (e.target.tagName === "SELECT") {
+                const changedColIdx = parseInt(e.target.getAttribute("data-col-idx"));
+                const rowId = e.target.getAttribute("data-row-id");
+                const newVal = e.target.value.trim();
+
+                // Find any dependent dropdowns in THIS EXACT ROW that are listening to the changed column
+                const dependentSelects = document.querySelectorAll(`select[data-row-id="${rowId}"][data-parent-col="${changedColIdx}"]`);
+                
+                dependentSelects.forEach(depSelect => {
+                    const targetColIdx = parseInt(depSelect.getAttribute("data-col-idx"));
+                    const rule = currentReportConfig.dropdowns[targetColIdx];
+                    
+                    if (rule && rule.type === "dependent") {
+                        // Swap out the options based on the new parent value
+                        const newOptions = rule.map[newVal] || [];
+                        let html = `<option value="">-- Select --</option>`;
+                        newOptions.forEach(opt => html += `<option value="${opt}">${opt}</option>`);
+                        
+                        depSelect.innerHTML = html;
+                        
+                        // Flash background color green to indicate the child dropdown updated
+                        depSelect.style.backgroundColor = "#e8f5e9";
+                        setTimeout(() => depSelect.style.backgroundColor = "transparent", 800);
+                    }
+                });
+            }
+        };
 
     } catch (e) { 
         console.error(e); 
