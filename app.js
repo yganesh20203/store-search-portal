@@ -4399,12 +4399,10 @@ window.renderDownloadOptions = function() {
     `;
 };
 
-// ==========================================
+
 // 📊 PPT GENERATION LOGIC
 
-// ==========================================
-// 📊 PPT GENERATION LOGIC (Fixed Feature Space Category Filter)
-// ==========================================
+
 window.generateTvPPT = async function() {
     const fromInput = document.getElementById("tv-rep-from").value;
     const toInput = document.getElementById("tv-rep-to").value;
@@ -4464,14 +4462,12 @@ window.generateTvPPT = async function() {
             });
         }
         
-        // B. FEATURE SPACE (UPDATED)
+        // B. FEATURE SPACE
         else if (activeTvCategory === "Feature Space") {
-            imageColIndex = 15;
+            imageColIndex = 15; // Image in Col P
             
             const fStore = document.getElementById("filter-store")?.value.trim().toLowerCase() || "";
             const fSubDiv = document.getElementById("filter-subdiv")?.value.trim().toLowerCase() || "";
-            
-            // 🆕 New Category Filter Logic (Dropdown)
             const fCategory = document.getElementById("filter-category")?.value.trim().toLowerCase() || "";
 
             filteredData = rows.filter(r => {
@@ -4482,7 +4478,7 @@ window.generateTvPPT = async function() {
                 // Filter Sub-Division (Index 8)
                 if (fSubDiv && !String(r[8]).toLowerCase().includes(fSubDiv)) return false;
                 
-                // 🆕 Filter Category (Col J = Index 9)
+                // Filter Category (Col J = Index 9)
                 if (fCategory && !String(r[9]).toLowerCase().includes(fCategory)) return false;
 
                 if (!r[15] || r[15].trim() === "" || r[15] === "N/A") return false;
@@ -4572,16 +4568,19 @@ window.generateTvPPT = async function() {
                             ["Brand", row[8]],
                             ["Status", row[10]]
                         ];
-                    } else if (activeTvCategory === "Feature Space") {
+                    } 
+                    // 👇 UPDATED FEATURE SPACE FIELDS 👇
+                    else if (activeTvCategory === "Feature Space") {
                         tableRows = [
-                            ["Store", row[1] + " - " + row[2]],
-                            ["Approver", row[5]],
-                            ["Sub-Div", row[8]], 
-                            ["Category", row[9]],  // Added Category to Slide for visibility
-                            ["Item", row[11]],
-                            ["Status", row[14]]
+                            ["Store Name", row[2] || ""],            // Column C
+                            ["Category", row[9] || ""],              // Column J
+                            ["Item", row[10] || ""],                 // Column K
+                            ["Item Disp.", row[11] || ""],           // Column L
+                            ["Execution Status", row[14] || ""]      // Column O
                         ];
-                    } else if (activeTvCategory === "Events") {
+                    } 
+                    // 👆 END UPDATED FIELDS 👆
+                    else if (activeTvCategory === "Events") {
                         tableRows = [
                             ["Store", row[1] + " - " + row[2]],
                             ["Date Range", row[3] + " to " + row[4]],
